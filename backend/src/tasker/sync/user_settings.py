@@ -4,6 +4,8 @@ import uuid
 from collections.abc import Mapping
 from typing import Any
 
+import sqlalchemy as sa
+
 from tasker.sync.registry import (
     SyncTableSpec,
     define_sync_table,
@@ -34,3 +36,5 @@ user_settings: SyncTableSpec = define_sync_table(
     ),
     id_rule=_id_rule,
 )
+# One row per key (the id is derived from it): also enforced by the database.
+sa.Index("user_settings_key", user_settings.table.c.key, unique=True)

@@ -7,8 +7,9 @@ import pytest
 
 from tasker.hlc import HlcClock, HlcError, device_of, format_hlc, hlc_ms, parse_hlc
 from tasker.sync.merge import delete_decision, field_decision, tombstone_edit_decision
+from tasker.sync.registry import datetime_column, json_column, text_column
 from tasker.sync.user_settings import settings_id
-from tests.sync_sim.client import collapse, rebase_row
+from tests.sync_sim.client import collapse, epoch_action, rebase_row
 from tests.vectors import load_cases
 
 
@@ -114,3 +115,37 @@ SETTINGS = load_cases("sync", "settings_id")
 @pytest.mark.parametrize("case", SETTINGS, ids=ids(SETTINGS))
 def test_settings_id_vectors(case: dict[str, Any]) -> None:
     assert str(settings_id(case["input"])) == case["expected"]
+
+
+EPOCH = load_cases("sync", "epoch")
+
+
+@pytest.mark.parametrize("case", EPOCH, ids=ids(EPOCH))
+def test_epoch_vectors(case: dict[str, Any]) -> None:
+    data = case["input"]
+    assert epoch_action(data["stored"], data["received"]) == case["expected"]
+
+
+VALIDATION = load_cases("sync", "validation")
+_DATETIME = datetime_column("x").adapter
+_TEXT = text_column("x", max_length=1000).adapter
+_JSON = json_column("x", max_bytes=1_000_000).adapter
+
+
+@pytest.mark.parametrize("case", VALIDATION, ids=ids(VALIDATION))
+def test_validation_vectors(case: dict[str, Any]) -> None:
+    data, expected = case["input"], case["expected"]
+    if data["op"] == "nested_lists":
+        value: Any = []
+        for _ in range(data["depth"] - 1):
+            value = [value]
+        data = {"op": "json", "value": value}
+        expected = value if expected is True else expected
+    adapter = {"datetime": _DATETIME, "text": _TEXT, "json": _JSON}[data["op"]]
+    if expected == {"error": True}:
+        with pytest.raises(ValueError):  # noqa: PT011 - pydantic errors are ValueErrors too
+            adapter.validate_python(data["value"])
+    elif data["op"] == "datetime":
+        assert adapter.dump_python(adapter.validate_python(data["value"]), mode="json") == expected
+    else:
+        assert adapter.validate_python(data["value"]) == expected

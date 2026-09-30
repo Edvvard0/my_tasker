@@ -33,6 +33,7 @@ class OpResultOut(BaseModel):
 class PushOut(BaseModel):
     results: list[OpResultOut]
     head_version: int
+    server_epoch: str
     server_time: str
 
 
@@ -49,6 +50,7 @@ class PullOut(BaseModel):
     has_more: bool
     head_version: int
     purge_watermark: int
+    server_epoch: str
     server_time: str
 
 
@@ -92,6 +94,7 @@ async def push(body: PushIn, device: DeviceDep, session: SessionDep, rt: Runtime
     return PushOut(
         results=[OpResultOut(**item) for item in result.results],
         head_version=result.head_version,
+        server_epoch=result.server_epoch,
         server_time=engine.iso(now) or "",
     )
 

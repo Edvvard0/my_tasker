@@ -7,6 +7,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from tasker.epoch import read_epoch
 from tasker.errors import ApiError
 from tasker.sync.engine import dump_value, iso
 from tasker.sync.registry import SyncRegistry, SyncTableSpec
@@ -57,13 +58,22 @@ async def pull_changes(
         )
     ).one()
     head, watermark = int(state.head_version), int(state.purge_watermark)
+    if since > head:
+        # The client is ahead of this server: it was restored from an older dump (spec 3.6).
+        await session.rollback()
+        raise ApiError(
+            410,
+            "resync_required",
+            "The cursor is ahead of the server; perform a full resync",
+            details={"purge_watermark": watermark, "head_version": head, "reason": "cursor_ahead"},
+        )
     if 0 < since < watermark:
         await session.rollback()
         raise ApiError(
             410,
             "resync_required",
             "The device is behind purged data; perform a full resync",
-            details={"purge_watermark": watermark},
+            details={"purge_watermark": watermark, "head_version": head, "reason": "purged"},
         )
     found: list[tuple[int, SyncTableSpec, Any]] = []
     for spec in registry.tables():
@@ -80,13 +90,14 @@ async def pull_changes(
     page = found[:limit]
     changes = [serialize_change(spec, row) for _, spec, row in page]
     next_since = int(page[-1][0]) if has_more else head
+    epoch = await read_epoch(session)
     await session.rollback()  # end the read-only snapshot
 
     async with session.begin():
         await session.execute(
             sa.update(devices)
             .where(devices.c.id == device_id)
-            .values(last_pulled_version=since, last_seen_at=now)
+            .values(last_pulled_version=min(since, head), last_seen_at=now)
         )
     return {
         "changes": changes,
@@ -94,5 +105,6 @@ async def pull_changes(
         "has_more": has_more,
         "head_version": head,
         "purge_watermark": watermark,
+        "server_epoch": epoch,
         "server_time": iso(now),
     }

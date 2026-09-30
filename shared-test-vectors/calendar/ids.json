@@ -1,0 +1,29 @@
+{
+  "description": "Детерминированные id (docs/specs/stage2_calendar_tasks.md, раздел 2.2): uuid5(uuid5(NAMESPACE_URL, 'urn:my-tasker:<таблица>'), имя). input.kind выбирает правило; expected — id.",
+  "cases": [
+    {"name": "system_calendar_01", "input": {"kind": "system_calendar", "system_key": "personal"}, "expected": "65b96e9c-732e-5003-97de-9739a1af7cd4"},
+    {"name": "system_calendar_02", "input": {"kind": "system_calendar", "system_key": "work"}, "expected": "ac96a757-0b06-58fb-abd0-a67fa2719a98"},
+    {"name": "system_calendar_03", "input": {"kind": "system_calendar", "system_key": "study"}, "expected": "56eb9667-5e6b-5125-ad3f-f590a3c15269"},
+    {"name": "system_calendar_04", "input": {"kind": "system_calendar", "system_key": "tasks"}, "expected": "37fdfafc-71ad-567a-9b4c-eb2b6fce9ce9"},
+    {"name": "system_calendar_05", "input": {"kind": "system_calendar", "system_key": "holidays_ru"}, "expected": "737ff396-bc70-5574-821d-c835777491eb"},
+    {"name": "tag_06", "input": {"kind": "tag", "name": "работа"}, "expected": "c2424cee-6632-5d5a-81e6-158fdd33fcad"},
+    {"name": "tag_07", "input": {"kind": "tag", "name": "Работа"}, "expected": "c2424cee-6632-5d5a-81e6-158fdd33fcad"},
+    {"name": "tag_08", "input": {"kind": "tag", "name": "РАБОТА"}, "expected": "c2424cee-6632-5d5a-81e6-158fdd33fcad"},
+    {"name": "tag_09", "input": {"kind": "tag", "name": "дом"}, "expected": "2a6f2827-37a3-51ec-af9c-a668f9afb2c4"},
+    {"name": "tag_10", "input": {"kind": "tag", "name": "urgent"}, "expected": "f3284004-d251-55c2-9d20-bd4455adf256"},
+    {"name": "tag_11", "input": {"kind": "tag", "name": "Urgent"}, "expected": "f3284004-d251-55c2-9d20-bd4455adf256"},
+    {"name": "tag_12", "input": {"kind": "tag", "name": "a-b_c"}, "expected": "a4609d9f-7e0e-5b7a-b7d3-78be1686d694"},
+    {"name": "tag_13", "input": {"kind": "tag", "name": "тег123"}, "expected": "842c8da0-bc25-50b4-8506-799169269cf8"},
+    {"name": "event_override_14", "input": {"kind": "event_override", "event_id": "0195f2a0-7b1c-7a3e-8f10-0123456789ab", "original_start": "2026-10-05T07:00:00Z"}, "expected": "ba6ae2e1-5816-5530-b9b9-37e29c7ed4dc"},
+    {"name": "event_override_15", "input": {"kind": "event_override", "event_id": "0195f2a0-7b1c-7a3e-8f10-0123456789ab", "original_start": "2026-10-06T07:00:00Z"}, "expected": "deba7bf5-dc98-5d6d-83ea-4e2c99b3b64b"},
+    {"name": "event_override_16", "input": {"kind": "event_override", "event_id": "0195f2a0-7b1c-7a3e-8f10-0123456789ac", "original_start": "2026-10-05T07:00:00Z"}, "expected": "f8524930-8bdd-5c6b-a892-5bef0632d338"},
+    {"name": "event_override_17", "input": {"kind": "event_override", "event_id": "0195f2a0-7b1c-7a3e-8f10-0123456789ab", "original_start": "2026-10-05"}, "expected": "263edb41-7191-56f1-a5c8-cc35272501b2"},
+    {"name": "event_override_18", "input": {"kind": "event_override", "event_id": "0195f2a0-7b1c-7a3e-8f10-0123456789ab", "original_start": "2027-02-28"}, "expected": "8a58aa78-c95b-5114-ad19-be9e792c792e"},
+    {"name": "task_completion_19", "input": {"kind": "task_completion", "task_id": "0195f2a0-7b1c-7a3e-8f10-0123456789ab", "instance_date": "2026-10-05"}, "expected": "f2991c39-c524-57d9-9739-f02d1fa1290d"},
+    {"name": "task_completion_20", "input": {"kind": "task_completion", "task_id": "0195f2a0-7b1c-7a3e-8f10-0123456789ab", "instance_date": "2026-10-06"}, "expected": "382e36e9-30bb-5bd9-bab2-edd842cafd93"},
+    {"name": "task_completion_21", "input": {"kind": "task_completion", "task_id": "0195f2a0-7b1c-7a3e-8f10-0123456789ac", "instance_date": "2026-10-05"}, "expected": "0fb7325b-f54a-503f-9836-ddcde0350456"},
+    {"name": "task_tag_22", "input": {"kind": "task_tag", "task_id": "0195f2a0-7b1c-7a3e-8f10-0123456789ab", "tag_id": "c2424cee-6632-5d5a-81e6-158fdd33fcad"}, "expected": "3c9cdf1d-6650-5c2e-84f7-19c25c0e499c"},
+    {"name": "task_tag_23", "input": {"kind": "task_tag", "task_id": "0195f2a0-7b1c-7a3e-8f10-0123456789ac", "tag_id": "c2424cee-6632-5d5a-81e6-158fdd33fcad"}, "expected": "7863a7ef-f5de-5f7e-8659-640846e413f8"},
+    {"name": "task_tag_24", "input": {"kind": "task_tag", "task_id": "0195f2a0-7b1c-7a3e-8f10-0123456789ab", "tag_id": "2a6f2827-37a3-51ec-af9c-a668f9afb2c4"}, "expected": "02c0eaa5-aecf-54e7-acd3-faecde9af157"}
+  ]
+}

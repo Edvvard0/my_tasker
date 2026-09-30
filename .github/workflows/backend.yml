@@ -98,6 +98,52 @@ jobs:
           docker compose up -d --build --wait --wait-timeout 240
           # The internal CA issues the certificate on first start: retry briefly.
           curl -fsk --retry 15 --retry-delay 2 --retry-all-errors https://127.0.0.1/health/ready
+      - name: Owner via CLI, login through Caddy, authenticated calls
+        working-directory: deploy
+        run: |
+          set -euo pipefail
+          # Throw-away owner password and TOTP secret; masked so they never reach the log.
+          PASSWORD="$(openssl rand -hex 16)"
+          echo "::add-mask::$PASSWORD"
+          printf '%s\n' "$PASSWORD" \
+            | docker compose exec -T api python -m tasker.cli user create --password-stdin --json \
+            > "$RUNNER_TEMP/owner.json"
+          SECRET="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["totp_secret"])' "$RUNNER_TEMP/owner.json")"
+          echo "::add-mask::$SECRET"
+          rm -f "$RUNNER_TEMP/owner.json"
+
+          # RFC 6238 (SHA-1, 6 digits, 30 s): the server accepts the neighbouring steps too.
+          CODE="$(python3 - "$SECRET" <<'PY'
+          import base64, hashlib, hmac, struct, sys, time
+          key = base64.b32decode(sys.argv[1] + "=" * (-len(sys.argv[1]) % 8))
+          digest = hmac.new(key, struct.pack(">Q", int(time.time() // 30)), hashlib.sha1).digest()
+          offset = digest[-1] & 0x0F
+          number = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+          print(str(number % 10**6).zfill(6))
+          PY
+          )"
+          echo "::add-mask::$CODE"
+
+          LOGIN_BODY="$(PASSWORD="$PASSWORD" CODE="$CODE" python3 -c 'import json,os; print(json.dumps({"password": os.environ["PASSWORD"], "totp_code": os.environ["CODE"], "device": {"name": "ci", "platform": "linux"}}))')"
+          LOGIN="$(curl -fsk https://127.0.0.1/auth/login \
+            -H 'Content-Type: application/json' -H 'X-Client-Schema-Version: 1' -d "$LOGIN_BODY")"
+          TOKEN="$(printf '%s' "$LOGIN" | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')"
+          echo "::add-mask::$TOKEN"
+          EPOCH="$(printf '%s' "$LOGIN" | python3 -c 'import json,sys; print(json.load(sys.stdin)["server_epoch"])')"
+
+          # Authenticated endpoints through the proxy.
+          DEVICES="$(curl -fsk https://127.0.0.1/auth/devices -H "Authorization: Bearer $TOKEN")"
+          printf '%s' "$DEVICES" | python3 -c 'import json,sys; d = json.load(sys.stdin)["devices"]; assert len(d) == 1 and d[0]["is_current"], d'
+          PULL="$(curl -fsk 'https://127.0.0.1/sync/pull?since=0' \
+            -H "Authorization: Bearer $TOKEN" -H 'X-Client-Schema-Version: 1')"
+          printf '%s' "$PULL" | EPOCH="$EPOCH" python3 -c 'import json,os,sys; p = json.load(sys.stdin); assert p["server_epoch"] == os.environ["EPOCH"] and p["changes"] == [], p'
+          VERSION="$(curl -fsk https://127.0.0.1/version)"
+          printf '%s' "$VERSION" | EPOCH="$EPOCH" python3 -c 'import json,os,sys; assert json.load(sys.stdin)["server_epoch"] == os.environ["EPOCH"]'
+
+          # Unauthenticated calls are refused, the CLI admin commands work inside the container.
+          test "$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1/auth/devices)" = 401
+          docker compose exec -T api python -m tasker.cli epoch show
+          docker compose exec -T api python -m tasker.cli user unlock
       - name: Dump compose logs on failure
         if: failure()
         working-directory: deploy

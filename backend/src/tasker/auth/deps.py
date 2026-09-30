@@ -10,6 +10,7 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tasker.auth.crypto import TokenError
+from tasker.clock import to_ms
 from tasker.db import SessionDep
 from tasker.errors import ApiError
 from tasker.runtime import Runtime, get_runtime
@@ -53,8 +54,13 @@ def client_ip(request: Request, trust_forwarded_for: bool) -> str:
     if trust_forwarded_for:
         forwarded = request.headers.get("x-forwarded-for", "")
         if forwarded:
-            return forwarded.split(",")[-1].strip()[:64]
-    return request.client.host if request.client else "unknown"
+            return _clean_ip(forwarded.split(",")[-1])
+    return _clean_ip(request.client.host) if request.client else "unknown"
+
+
+def _clean_ip(raw: str) -> str:
+    """The address as a database-safe key (no NUL, bounded)."""
+    return raw.replace("\x00", "").strip()[:64] or "unknown"
 
 
 def _unauthorized(code: str, message: str) -> ApiError:
@@ -68,14 +74,20 @@ async def _authenticate(request: Request, session: AsyncSession, rt: Runtime) ->
         raise _unauthorized("not_authenticated", "Authentication required")
     now = rt.clock.now()
     try:
-        device_id = rt.codec.verify(token.strip(), now)
+        claims = rt.codec.verify_claims(token.strip(), now)
     except TokenError as exc:
         raise _unauthorized(exc.code, "Access token is not valid") from exc
+    device_id = claims.device_id
     async with session.begin():
         device = (
             await session.execute(
                 sa.select(
-                    devices.c.id, devices.c.name, devices.c.revoked_at, devices.c.last_seen_at
+                    devices.c.id,
+                    devices.c.name,
+                    devices.c.revoked_at,
+                    devices.c.last_seen_at,
+                    devices.c.prev_refresh_token_hash,
+                    devices.c.prev_rotated_at,
                 ).where(devices.c.id == device_id)
             )
         ).first()
@@ -83,6 +95,14 @@ async def _authenticate(request: Request, session: AsyncSession, rt: Runtime) ->
             raise _unauthorized("invalid_token", "Access token is not valid")
         if device.revoked_at is not None:
             raise _unauthorized("device_revoked", "This device was revoked")
+        if device.prev_rotated_at is not None and claims.issued_ms >= to_ms(device.prev_rotated_at):
+            # An access token from the successor refresh token is in use: the previous refresh
+            # token loses its grace period (spec 1.3).
+            await session.execute(
+                sa.update(devices)
+                .where(devices.c.id == device_id)
+                .values(prev_refresh_token_hash=None, prev_rotated_at=None)
+            )
         if now - device.last_seen_at >= LAST_SEEN_GRANULARITY:
             await session.execute(
                 sa.update(devices).where(devices.c.id == device_id).values(last_seen_at=now)

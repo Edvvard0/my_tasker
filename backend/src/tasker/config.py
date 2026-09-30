@@ -24,7 +24,9 @@ class Settings(BaseSettings):
 
     # Signs access tokens and (via HKDF) encrypts the TOTP secret. Required in prod for the api.
     app_secret_key: SecretStr | None = None
-    # Trust the first X-Forwarded-For entry as the client address (api sits behind Caddy).
+    # Trust the LAST X-Forwarded-For entry as the client address: the api sits behind Caddy, which
+    # replaces whatever the client sent with the address it saw. Entries to its left are
+    # client-controlled and never used.
     trust_forwarded_for: bool = False
     # argon2id cost; the defaults follow the OWASP minimum. Tests lower them.
     argon2_memory_kib: int = Field(default=19456, ge=8)

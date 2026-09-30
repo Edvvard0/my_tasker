@@ -1,6 +1,7 @@
 import asyncio
 import getpass
 import io
+import json
 import re
 import sys
 
@@ -134,3 +135,62 @@ def test_only_one_owner_row_can_exist(cli_db: str) -> None:
     query(cli_db, insert)
     with pytest.raises(sa.exc.IntegrityError):
         query(cli_db, insert)
+
+
+def test_password_longer_than_the_api_accepts_is_refused(
+    cli_db: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    use_stdin(monkeypatch, "x" * 257 + "\n")
+    assert cli.main(["user", "create", "--password-stdin"]) == 2
+    assert "at most 256" in capsys.readouterr().err
+    assert query(cli_db, "SELECT 1 FROM users") == []
+    use_stdin(monkeypatch, "y" * 256 + "\n")  # exactly the API's bound is fine
+    assert cli.main(["user", "create", "--password-stdin"]) == 0
+
+
+@pytest.mark.parametrize("password", ["with a nul\x00 inside!", "lone \ud800 surrogate!!"])
+def test_password_the_api_would_reject_is_refused(
+    cli_db: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    password: str,
+) -> None:
+    use_stdin(monkeypatch, password + "\n")
+    assert cli.main(["user", "create", "--password-stdin"]) == 2
+    assert "NUL" in capsys.readouterr().err
+
+
+def test_json_output_for_scripts(
+    cli_db: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    use_stdin(monkeypatch, PASSWORD + "\n")
+    assert cli.main(["user", "create", "--password-stdin", "--json"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert set(out) == {"otpauth_uri", "totp_secret"}
+    assert f"secret={out['totp_secret']}" in out["otpauth_uri"]
+    (user,) = query(cli_db, "SELECT totp_secret_enc FROM users")
+    key = derive_key(SECRET_KEY, "secret-box")
+    assert decrypt_secret(key, user.totp_secret_enc, context="totp-secret") == out["totp_secret"]
+
+
+LOCKED = (
+    "INSERT INTO login_failures (scope, key, failures, last_failure_at, locked_until)"
+    " VALUES ('ip', '1.2.3.4', 9, now(), now() + interval '1 hour'),"
+    " ('global', '', 30, now(), now() + interval '1 hour')"
+)
+
+
+def test_unlock_lifts_every_login_lock(cli_db: str, capsys: pytest.CaptureFixture[str]) -> None:
+    query(cli_db, LOCKED)
+    assert cli.main(["user", "unlock"]) == 0
+    assert "2 counters" in capsys.readouterr().out
+    assert query(cli_db, "SELECT 1 FROM login_failures") == []
+
+
+def test_reset_also_clears_login_failures(cli_db: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    use_stdin(monkeypatch, PASSWORD + "\n")
+    cli.main(["user", "create", "--password-stdin"])
+    query(cli_db, LOCKED)
+    use_stdin(monkeypatch, "brand new long password\n")
+    assert cli.main(["user", "reset", "--password-stdin"]) == 0
+    assert query(cli_db, "SELECT 1 FROM login_failures") == []

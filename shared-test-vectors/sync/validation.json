@@ -1,0 +1,29 @@
+{
+  "description": "Что сервер принимает в значениях колонок (spec 4, «Значения»): input.op — datetime (строка ISO 8601 → нормализованная UTC-строка или ошибка), text (строка → она же или ошибка), json (значение → оно же или ошибка), nested_lists (json из input.depth вложенных пустых массивов). Клиент может проверять то же до отправки; сервер в любом случае отклонит операцию с invalid_field, а не всю пачку.",
+  "cases": [
+    {"name": "datetime utc", "input": {"op": "datetime", "value": "2026-10-01T12:00:00Z"}, "expected": "2026-10-01T12:00:00Z"},
+    {"name": "datetime with offset is normalised to UTC", "input": {"op": "datetime", "value": "2026-10-01T12:00:00+03:00"}, "expected": "2026-10-01T09:00:00Z"},
+    {"name": "datetime lower bound is inclusive", "input": {"op": "datetime", "value": "1970-01-01T00:00:00Z"}, "expected": "1970-01-01T00:00:00Z"},
+    {"name": "datetime just before 1970 UTC", "input": {"op": "datetime", "value": "1969-12-31T23:59:59Z"}, "expected": {"error": true}},
+    {"name": "datetime offset moves it below 1970", "input": {"op": "datetime", "value": "1970-01-01T00:00:00+01:00"}, "expected": {"error": true}},
+    {"name": "datetime just below 2200", "input": {"op": "datetime", "value": "2199-12-31T23:59:59.999999Z"}, "expected": "2199-12-31T23:59:59.999999Z"},
+    {"name": "datetime upper bound is exclusive", "input": {"op": "datetime", "value": "2200-01-01T00:00:00Z"}, "expected": {"error": true}},
+    {"name": "datetime year 0001 with +14:00 (no UTC representation)", "input": {"op": "datetime", "value": "0001-01-01T00:00:00+14:00"}, "expected": {"error": true}},
+    {"name": "datetime year 9999 with -12:00", "input": {"op": "datetime", "value": "9999-12-31T23:59:59-12:00"}, "expected": {"error": true}},
+    {"name": "datetime without timezone", "input": {"op": "datetime", "value": "2026-10-01T12:00:00"}, "expected": {"error": true}},
+    {"name": "datetime garbage", "input": {"op": "datetime", "value": "yesterday"}, "expected": {"error": true}},
+    {"name": "text plain", "input": {"op": "text", "value": "купить молоко"}, "expected": "купить молоко"},
+    {"name": "text with an emoji (surrogate pair is fine)", "input": {"op": "text", "value": "ok 😀"}, "expected": "ok 😀"},
+    {"name": "text with NUL", "input": {"op": "text", "value": "a\u0000b"}, "expected": {"error": true}},
+    {"name": "text with a lone high surrogate", "input": {"op": "text", "value": "\ud800"}, "expected": {"error": true}},
+    {"name": "text with a lone low surrogate inside", "input": {"op": "text", "value": "ab\udfffcd"}, "expected": {"error": true}},
+    {"name": "json object", "input": {"op": "json", "value": {"a": [1, "x", null, true, 1.5]}}, "expected": {"a": [1, "x", null, true, 1.5]}},
+    {"name": "json NUL in a value", "input": {"op": "json", "value": {"a": "b\u0000"}}, "expected": {"error": true}},
+    {"name": "json NUL in a key", "input": {"op": "json", "value": {"\u0000": 1}}, "expected": {"error": true}},
+    {"name": "json NUL deep inside", "input": {"op": "json", "value": {"a": [1, {"b": ["x\u0000"]}]}}, "expected": {"error": true}},
+    {"name": "json lone surrogate in a value", "input": {"op": "json", "value": ["\ud800"]}, "expected": {"error": true}},
+    {"name": "json lone surrogate in a key", "input": {"op": "json", "value": {"\udc00": 1}}, "expected": {"error": true}},
+    {"name": "json 64 nested levels are accepted", "input": {"op": "nested_lists", "depth": 64}, "expected": true},
+    {"name": "json 65 nested levels are refused", "input": {"op": "nested_lists", "depth": 65}, "expected": {"error": true}}
+  ]
+}

@@ -1,5 +1,6 @@
 """Alembic helpers shared by the api (readiness), the migrate service and tests."""
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -7,7 +8,10 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
+from tasker.clock import SystemClock
 from tasker.config import Settings
+from tasker.db import create_engine, create_sessionmaker
+from tasker.epoch import ensure_epoch
 from tasker.logging import configure_logging
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
@@ -32,11 +36,24 @@ def upgrade_to_head(database_url: str) -> None:
     command.upgrade(alembic_config(database_url), "head")
 
 
+async def _ensure_epoch(settings: Settings) -> None:
+    engine = create_engine(settings)
+    try:
+        async with create_sessionmaker(engine)() as session, session.begin():
+            await ensure_epoch(session, SystemClock().now())
+    finally:
+        await engine.dispose()
+
+
 def main() -> int:
-    """Entry point of the one-shot ``migrate`` service: ``python -m tasker.db_migrations``."""
+    """Entry point of the one-shot ``migrate`` service: ``python -m tasker.db_migrations``.
+
+    Also detects a database restored into another cluster and gives it a new server epoch.
+    """
     settings = Settings()
     configure_logging(settings.log_level)
     upgrade_to_head(settings.db_url)
+    asyncio.run(_ensure_epoch(settings))
     return 0
 
 

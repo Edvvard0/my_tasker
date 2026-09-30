@@ -8,15 +8,18 @@ import json
 import uuid
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
+import structlog
 from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tasker.clock import from_ms, to_ms
+from tasker.epoch import read_epoch
 from tasker.hlc import HlcError, device_of, hlc_ms, parse_hlc
 from tasker.ids import uuid7
 from tasker.sync.merge import (
@@ -25,8 +28,10 @@ from tasker.sync.merge import (
     is_concurrent,
     tombstone_edit_decision,
 )
-from tasker.sync.registry import SyncRegistry, SyncTableSpec
+from tasker.sync.registry import SyncRegistry, SyncTableSpec, parse_datetime
 from tasker.tables import sync_conflicts, sync_ops, sync_state
+
+log = structlog.get_logger("sync.engine")
 
 BATCH_MAX = 500
 MAX_FUTURE_DRIFT_MS = 600_000
@@ -201,12 +206,11 @@ def _validate_created_at(value: object) -> datetime:
     if not isinstance(value, str):
         raise Reject("invalid_field", "created_at must be a string")
     try:
-        parsed = _DATETIME.validate_python(value)
-    except ValidationError as exc:
-        raise Reject("invalid_field", "created_at is not a datetime") from exc
-    if parsed.tzinfo is None:
-        raise Reject("invalid_field", "created_at must include a timezone")
-    return parsed
+        return parse_datetime(value)
+    except ValueError as exc:  # includes pydantic's ValidationError
+        raise Reject(
+            "invalid_field", "created_at must be a datetime with a timezone, 1970..2200"
+        ) from exc
 
 
 def _validate_value(spec: SyncTableSpec, name: str, value: object) -> Any:
@@ -224,10 +228,25 @@ def _validate_value(spec: SyncTableSpec, name: str, value: object) -> Any:
 # ---------------------------------------------------------------- helpers
 
 
+def _normalise(value: Any) -> Any:
+    """Bring driver-specific classes to the plain ones, so equality is about values.
+
+    asyncpg returns its own ``UUID`` subclass (and datetimes in UTC), while validated input holds
+    ``uuid.UUID`` and datetimes in whatever offset the client wrote.
+    """
+    if isinstance(value, uuid.UUID):
+        return uuid.UUID(int=value.int)
+    if isinstance(value, datetime):
+        return value if value.tzinfo is None else value.astimezone(UTC)
+    return value
+
+
 def _same(a: Any, b: Any) -> bool:
     if isinstance(a, dict | list) or isinstance(b, dict | list):
         return json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
-    return type(a) is type(b) and a == b
+    a, b = _normalise(a), _normalise(b)
+    # The exact type still matters after normalising: ``True`` is not ``1`` and ``"1"`` is not 1.
+    return type(a) is type(b) and bool(a == b)
 
 
 def iso(moment: datetime | None) -> str | None:
@@ -300,10 +319,23 @@ def _validate_row(spec: SyncTableSpec, row: Mapping[str, Any]) -> None:
 # ---------------------------------------------------------------- cascades
 
 
+def _deleted_at(ctx: SyncContext, hlc: str) -> datetime:
+    """When a deletion counts as having happened: never earlier than its arrival on the server.
+
+    A device that deleted a row while offline for 35 days must not see it fall out of the trash
+    at once: the 30 days run from the moment the server got the deletion (spec 3.8).
+    """
+    return max(from_ms(hlc_ms(hlc)), ctx.now)
+
+
 async def _cascade_delete(
-    ctx: SyncContext, spec: SyncTableSpec, row_id: uuid.UUID, hlc: str, device: str
+    ctx: SyncContext,
+    spec: SyncTableSpec,
+    row_id: uuid.UUID,
+    hlc: str,
+    device: str,
+    deleted_at: datetime,
 ) -> None:
-    deleted_at = from_ms(hlc_ms(hlc))
     for child, column in ctx.registry.children_of(spec.name):
         table = child.table
         rows = (
@@ -328,7 +360,7 @@ async def _cascade_delete(
                     origin_device_id=uuid.UUID(device),
                 )
             )
-            await _cascade_delete(ctx, child, row.id, hlc, device)
+            await _cascade_delete(ctx, child, row.id, hlc, device, deleted_at)
 
 
 async def _cascade_restore(
@@ -534,7 +566,10 @@ async def _apply_update(ctx: SyncContext, op: ParsedOp, row: dict[str, Any]) -> 
         tombstone_by = parent
         drafts.append(_parent_deleted_draft(op, parent))
 
-    changed = bool(updates) or restore_from is not None or tombstone_by is not None
+    # A "touch" (same value, newer clock) also counts: the field's clock moved, so the row's
+    # ``updated_at`` must carry it, or a device that only sees the row (pull) would stamp its next
+    # write with an older HLC than the field already has and lose to it.
+    changed = bool(updates) or bool(touched) or restore_from is not None or tombstone_by is not None
     # Even a no-op gets a new version: the client's local row (its own updated_at, deleted_at)
     # may differ from the server's, and only a fresh version makes the row come back in pull.
     version = ctx.next_version()
@@ -630,12 +665,24 @@ async def _apply_delete(ctx: SyncContext, op: ParsedOp, row: dict[str, Any] | No
         # older concurrent restore cannot beat it.
         version = ctx.next_version()
         touched_meta: dict[str, Any] = row["field_meta"]
-        if op.hlc > touched_meta[DELETED]["h"]:
-            touched_meta[DELETED] = {**touched_meta[DELETED], "v": version, "h": op.hlc}
+        entry = touched_meta[DELETED]
+        extra: dict[str, Any] = {}
+        if "by" in entry:
+            # The row is in the trash only because its parent was deleted. An explicit delete
+            # makes it its own deletion: restoring the parent must not bring it back (3.5).
+            touched_meta[DELETED] = {"v": version, "h": max(entry["h"], op.hlc)}
+        elif op.hlc > entry["h"]:
+            touched_meta[DELETED] = {**entry, "v": version, "h": op.hlc}
+        if touched_meta[DELETED]["h"] != entry["h"] or "by" in entry:
+            # The deletion's clock (or owner) changed: let pull carry the newest clock (see above).
+            extra = {
+                "updated_at": max(row["updated_at"], op.hlc),
+                "origin_device_id": uuid.UUID(op.device),
+            }
         await ctx.session.execute(
             sa.update(spec.table)
             .where(spec.table.c.id == op.row_id)
-            .values(server_version=version, field_meta=touched_meta)
+            .values(server_version=version, field_meta=touched_meta, **extra)
         )
         return OpOutcome(server_version=version)
     meta: dict[str, Any] = row["field_meta"]
@@ -654,7 +701,7 @@ async def _apply_delete(ctx: SyncContext, op: ParsedOp, row: dict[str, Any] | No
     if decision == "delete_lost":
         newer = {name: entry for name, entry in concurrent.items() if entry["h"] > op.hlc}
     version = ctx.next_version()
-    deleted_at = from_ms(op.ms)
+    deleted_at = _deleted_at(ctx, op.hlc)
     if newer:
         winner = max(newer.values(), key=lambda e: e["h"])
         draft = ConflictDraft(
@@ -685,7 +732,7 @@ async def _apply_delete(ctx: SyncContext, op: ParsedOp, row: dict[str, Any] | No
             origin_device_id=uuid.UUID(op.device),
         )
     )
-    await _cascade_delete(ctx, spec, op.row_id, op.hlc, op.device)
+    await _cascade_delete(ctx, spec, op.row_id, op.hlc, op.device, deleted_at)
     drafts: list[ConflictDraft] = []
     if concurrent:
         other = next(iter(concurrent.values()))
@@ -712,6 +759,7 @@ async def _apply_delete(ctx: SyncContext, op: ParsedOp, row: dict[str, Any] | No
 class PushResult:
     results: list[dict[str, Any]]
     head_version: int
+    server_epoch: str
 
 
 async def lock_sync_state(session: AsyncSession) -> tuple[int, int]:
@@ -757,7 +805,7 @@ async def apply_push(
         for raw in raw_ops:
             results.append(await _process(ctx, raw, journal))
         await finish_writes(ctx, head)
-        return PushResult(results, ctx.head)
+        return PushResult(results, ctx.head, await read_epoch(session))
 
 
 async def _load_journal(session: AsyncSession, raw_ops: list[Any]) -> dict[uuid.UUID, Any]:
@@ -800,6 +848,15 @@ async def _process(ctx: SyncContext, raw: Any, journal: dict[uuid.UUID, Any]) ->
         del ctx.changed_versions[changed_before:]
         outcome = OpOutcome("rejected", reject.code, reject.message)
         journaled = reject.journal
+    except (DBAPIError, UnicodeError, OverflowError, ValueError, RecursionError) as exc:
+        # Safety net: whatever the validators missed must cost this operation, not the batch.
+        # The savepoint is already rolled back by ``begin_nested``.
+        if isinstance(exc, DBAPIError) and exc.connection_invalidated:
+            raise  # the connection is gone: the whole request fails and the client retries it
+        ctx.head = head_before
+        del ctx.changed_versions[changed_before:]
+        log.warning("sync_op_failed", error_type=type(exc).__name__)
+        outcome = OpOutcome("rejected", "op_failed", "The operation could not be applied")
     if op_id is not None and journaled:
         await ctx.session.execute(
             pg_insert(sync_ops)

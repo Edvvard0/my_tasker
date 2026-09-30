@@ -7,6 +7,7 @@ import uuid
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
+import asyncpg
 import httpx
 import pytest
 import sqlalchemy as sa
@@ -108,7 +109,7 @@ async def test_closing_the_hub_ends_streams(env: Env) -> None:
     stream = await open_stream(env, phone)
     await next_event(stream)
     pending = asyncio.ensure_future(anext(stream))
-    await asyncio.sleep(0.05)
+    await asyncio.sleep(0)  # let it start; closing works whether or not it is already waiting
     await env.rt.hub.close()
     with pytest.raises(StopAsyncIteration):
         await asyncio.wait_for(pending, 5)
@@ -127,8 +128,9 @@ async def test_listener_reconnects_after_the_connection_dies(env: Env) -> None:
                 " WHERE query LIKE 'LISTEN%' AND pid <> pg_backend_pid()"
             )
         )
-    assert (await next_event(stream))[0] == "changes"  # woken up: something may have been missed
-    await asyncio.sleep(0.3)
+    # Woken up because something may have been missed. That wake-up is sent only after the new
+    # listener is attached, so no waiting is needed before the next commit.
+    assert (await next_event(stream))[0] == "changes"
     await pc.push_ok([create_setting(pc)])
     assert (await next_event(stream, wait=10))[0] == "changes"
     await stream.aclose()  # type: ignore[attr-defined]
@@ -140,8 +142,8 @@ async def test_hub_survives_an_unreachable_database() -> None:
     )
 
     async def use() -> None:
-        async with hub.subscribe(uuid.uuid4()):
-            await asyncio.sleep(0.2)
+        async with hub.subscribe(uuid.uuid4()) as subscription:
+            assert subscription.missed_start  # it waited for the listener in vain
 
     await asyncio.wait_for(use(), 20)
     await hub.close()
@@ -164,13 +166,17 @@ def live_server(migrated_db_url: str) -> Iterator[tuple[str, FakeClock]]:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    started = threading.Event()
+
+    class SignallingServer(uvicorn.Server):
+        async def startup(self, sockets: list[socket.socket] | None = None) -> None:
+            await super().startup(sockets=sockets)
+            started.set()
+
+    server = SignallingServer(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
-    for _ in range(100):
-        if server.started:
-            break
-        threading.Event().wait(0.1)
+    assert started.wait(timeout=30), "the test server did not start"
     yield f"http://127.0.0.1:{port}", clock
     server.should_exit = True
     thread.join(timeout=10)
@@ -238,3 +244,91 @@ async def test_events_over_real_http(
 async def test_events_requires_authentication_and_version(env: Env) -> None:
     response = await env.client.get("/events", headers={"X-Client-Schema-Version": "1"})
     assert (response.status_code, error_code(response)) == (401, "not_authenticated")
+
+
+# ------------------------------------------------------------------ listener resilience
+
+
+class AsyncpgProxy:
+    """``asyncpg`` as seen by the hub only (patching the module itself would break SQLAlchemy)."""
+
+    def __init__(self, connect: Any) -> None:
+        self.connect = connect
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(asyncpg, name)
+
+
+class FailingConnect:
+    """Stands in for ``asyncpg.connect``: raises the given errors first, then really connects."""
+
+    def __init__(self, errors: list[BaseException]) -> None:
+        self.errors = errors
+        self.calls = 0
+        self.real = asyncpg.connect
+
+    async def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        self.calls += 1
+        if self.errors:
+            raise self.errors.pop(0)
+        return await self.real(*args, **kwargs)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        asyncpg.InterfaceError("connection is closed"),
+        RuntimeError("something unexpected"),
+        asyncpg.PostgresConnectionError("gone"),
+    ],
+    ids=["interface_error", "runtime_error", "postgres_connection_error"],
+)
+async def test_listener_survives_any_exception_and_recovers(
+    env: Env, monkeypatch: pytest.MonkeyPatch, error: BaseException
+) -> None:
+    """Regression: only some error types were caught, the rest killed the task for good."""
+    fake = FailingConnect([error, error])
+    monkeypatch.setattr("tasker.sync.notify.asyncpg", AsyncpgProxy(fake))
+    env.rt.hub._retry_delay = 0.01
+    env.rt.sse_ping_seconds = 30
+    phone, pc = await env.login("Phone"), await env.login("PC")
+    stream = await open_stream(env, phone)  # subscribes; the listener is retrying meanwhile
+    await next_event(stream)  # hello
+    assert fake.calls >= 3  # two injected failures, then a real connection
+    assert env.rt.hub._task is not None
+    assert not env.rt.hub._task.done()
+    await pc.push_ok([create_setting(pc)])
+    assert (await next_event(stream, wait=10))[0] == "changes"
+    await stream.aclose()  # type: ignore[attr-defined]
+
+
+async def test_subscribers_that_gave_up_waiting_are_woken_when_the_listener_attaches(
+    env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FailingConnect([asyncpg.InterfaceError("down")] * 100)
+    monkeypatch.setattr("tasker.sync.notify.asyncpg", AsyncpgProxy(fake))
+    hub = ChangeHub(env.url, retry_delay=0.01, max_retry_delay=0.02, ready_timeout=0.1)
+    try:
+        async with hub.subscribe(uuid.uuid4()) as subscription:
+            assert subscription.missed_start  # ready_timeout passed without a listener
+            assert not subscription.event.is_set()
+            fake.errors.clear()  # the database is back
+            await asyncio.wait_for(subscription.event.wait(), 10)
+            assert not subscription.missed_start
+    finally:
+        await hub.close()
+
+
+async def test_subscribers_that_saw_a_ready_listener_are_not_woken_needlessly(env: Env) -> None:
+    hub = ChangeHub(env.url, ready_timeout=10)
+    try:
+        async with hub.subscribe(uuid.uuid4()) as subscription:
+            assert not subscription.missed_start
+            assert not subscription.event.is_set()
+    finally:
+        await hub.close()
+
+
+def test_reconnect_backoff_doubles_and_is_capped() -> None:
+    hub = ChangeHub("postgresql://u:p@h/d", retry_delay=1, max_retry_delay=30)
+    assert [hub.backoff(n) for n in (0, 1, 2, 3, 4, 5, 6, 50)] == [1, 1, 2, 4, 8, 16, 30, 30]

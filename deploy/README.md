@@ -62,6 +62,33 @@ curl --cacert ./caddy-root.crt https://<IP>/health/ready     # без -k
 curl -ks https://<IP>/ca/root.crt | openssl x509 -noout -fingerprint -sha256
 ```
 
+## Владелец и блокировки входа
+
+Публичной регистрации нет, единственного владельца создаёт администратор на сервере (спецификация `docs/specs/stage1_sync_and_auth.md`, раздел 1):
+
+```bash
+docker compose exec api python -m tasker.cli user create             # пароль 12-256 символов, спрашивается дважды
+printf '%s\n' "$PASSWORD" | docker compose exec -T api python -m tasker.cli user create --password-stdin --json
+docker compose exec api python -m tasker.cli user reset              # новый пароль и TOTP, все устройства отзываются
+docker compose exec api python -m tasker.cli user unlock             # снять блокировки входа (после серии неудач)
+```
+
+`--json` печатает `{"otpauth_uri", "totp_secret"}` одной строкой (для скриптов и CI). Если после смены `APP_SECRET_KEY` вход отвечает `owner_secret_unreadable`, выполните `user reset`: ключ шифрует секрет TOTP, войти прежним секретом уже нельзя (устройства, которые уже вошли, продолжают работать).
+
+## Восстановление из дампа и эпоха сервера
+
+Клиенты запоминают `server_epoch` (случайный id базы). После восстановления из дампа сервер должен сообщить им «история изменилась», иначе устройства с более новыми данными будут ждать от сервера версий, которых там нет. Порядок:
+
+```bash
+docker compose stop api worker
+# восстановить базу из дампа (pg_restore / psql), том pgdata не трогать вручную
+docker compose run --rm migrate                                      # миграции; если база переехала в другой кластер, эпоха сменится сама
+docker compose run --rm api python -m tasker.cli epoch rotate        # ВСЕГДА выполнять: покрывает и восстановление в ту же базу
+docker compose up -d api worker
+```
+
+После этого каждое устройство при следующей синхронизации получает новую эпоху и делает полную пересинхронизацию, сохраняя неотправленные правки (спецификация 3.10). Данные, которые сервер подтвердил после снятия дампа, потеряны. `docker compose exec api python -m tasker.cli epoch show` печатает текущую эпоху.
+
 ## Переменные окружения
 
 Имена без значений перечислены в `.env.example`. Секреты (`POSTGRES_PASSWORD` и другие) живут только в `deploy/.env` на сервере с правами 600 и никогда не коммитятся. Сервисы `api`, `worker` и `migrate` получают `DATABASE_URL`, собранный из `POSTGRES_*`; `APP_ENV` (по умолчанию `prod`) и `LOG_LEVEL` (по умолчанию `INFO`) необязательны.

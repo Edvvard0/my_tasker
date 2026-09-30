@@ -121,7 +121,8 @@ async def test_a_lagging_device_gets_the_full_resync_signal_after_a_purge(env: E
     await pc.refresh()
     response = await pc.pull(2)
     assert (response.status_code, error_code(response)) == (410, "resync_required")
-    assert response.json()["error"]["details"] == {"purge_watermark": 3}
+    details = response.json()["error"]["details"]
+    assert (details["purge_watermark"], details["reason"]) == (3, "purged")
     fresh = await pc.pull_ok(0)  # the full resync
     assert [c["row"]["key"] for c in fresh["changes"]] == ["b"]
     assert fresh["purge_watermark"] == 3

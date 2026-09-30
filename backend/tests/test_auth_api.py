@@ -207,6 +207,7 @@ async def test_refresh_token_reuse_revokes_the_device(env: Env) -> None:
     rotated = (
         await env.client.post("/auth/refresh", json={"refresh_token": old}, headers=SCHEMA)
     ).json()
+    env.clock.advance(seconds=61)  # past the refresh grace period (spec 1.3)
     reuse = await env.client.post("/auth/refresh", json={"refresh_token": old}, headers=SCHEMA)
     assert (reuse.status_code, error_code(reuse)) == (401, "refresh_reuse_detected")
     # The legitimately rotated token and the access token die with the device.

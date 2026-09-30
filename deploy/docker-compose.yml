@@ -11,7 +11,9 @@ x-backend: &backend
   environment:
     DATABASE_URL: postgresql://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}
     APP_ENV: ${APP_ENV:-prod}
-    # Signs access tokens and encrypts the TOTP secret; keep it stable, changing it logs everyone out.
+    # Signs access tokens and encrypts the TOTP secret. Keep it stable: after a change nobody can
+    # sign in (the TOTP secret is unreadable) until `python -m tasker.cli user reset`; signed-in
+    # devices keep working, they only get new access tokens through their refresh tokens.
     APP_SECRET_KEY: ${APP_SECRET_KEY:?set APP_SECRET_KEY}
     # The api sits behind Caddy, which sets X-Forwarded-For to the real client address.
     TRUST_FORWARDED_FOR: "true"

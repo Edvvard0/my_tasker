@@ -22,6 +22,8 @@ class Subscription:
     def __init__(self, device_id: uuid.UUID) -> None:
         self.device_id = device_id
         self.event = asyncio.Event()
+        # Subscribed while the listener was down: commits before it attached went unseen.
+        self.missed_start = False
 
     def offer(self, origin: str | None) -> None:
         if origin != str(self.device_id):
@@ -30,7 +32,12 @@ class Subscription:
 
 class ChangeHub:
     def __init__(
-        self, database_url: str, *, retry_delay: float = 1.0, ready_timeout: float = 5.0
+        self,
+        database_url: str,
+        *,
+        retry_delay: float = 1.0,
+        max_retry_delay: float = 30.0,
+        ready_timeout: float = 5.0,
     ) -> None:
         self._dsn = (
             make_url(database_url)
@@ -38,6 +45,7 @@ class ChangeHub:
             .render_as_string(hide_password=False)
         )
         self._retry_delay = retry_delay
+        self._max_retry_delay = max_retry_delay
         self._ready_timeout = ready_timeout
         self._subscriptions: set[Subscription] = set()
         self._task: asyncio.Task[None] | None = None
@@ -51,8 +59,10 @@ class ChangeHub:
         if self._task is None:
             self._task = asyncio.create_task(self._run())
         try:
-            with contextlib.suppress(TimeoutError):
+            try:
                 await asyncio.wait_for(self._ready.wait(), timeout=self._ready_timeout)
+            except TimeoutError:
+                subscription.missed_start = True  # woken as soon as the listener attaches
             yield subscription
         finally:
             self._subscriptions.discard(subscription)
@@ -65,23 +75,41 @@ class ChangeHub:
         for subscription in list(self._subscriptions):
             subscription.offer(origin)
 
+    def backoff(self, failures: int) -> float:
+        """Pause before the next connection attempt: doubles per consecutive failure, capped."""
+        doubled = self._retry_delay * 2 ** min(max(failures - 1, 0), 10)
+        return float(min(self._max_retry_delay, doubled))
+
+    def _wake_all(self, *, only_missed: bool) -> None:
+        for subscription in list(self._subscriptions):
+            if not only_missed or subscription.missed_start:
+                subscription.missed_start = False
+                subscription.offer(None)
+
     async def _run(self) -> None:
+        """Keep one LISTEN connection alive; never let an error end the loop (backoff, retry)."""
         reconnecting = False
+        failures = 0
         while not self.closed.is_set():
             connection: asyncpg.Connection | None = None
             try:
                 connection = await asyncpg.connect(self._dsn, timeout=5)
                 await connection.add_listener(NOTIFY_CHANNEL, self._on_notify)
                 self._ready.set()
-                if reconnecting:
-                    # Anything committed while we were not listening is unknown: wake everyone.
-                    for subscription in list(self._subscriptions):
-                        subscription.offer(None)
+                failures = 0
+                # After a reconnect anything committed meanwhile is unknown: wake everyone. On
+                # the first connect only those who subscribed before we were listening.
+                self._wake_all(only_missed=not reconnecting)
                 while not connection.is_closed() and not self.closed.is_set():
                     with contextlib.suppress(TimeoutError):
                         await asyncio.wait_for(self.closed.wait(), timeout=1)
-            except (OSError, asyncpg.PostgresError, TimeoutError) as exc:
-                log.warning("notify_listener_failed", error_type=type(exc).__name__)
+            except Exception as exc:  # the listener must survive any failure
+                failures += 1
+                log.warning(
+                    "notify_listener_failed",
+                    error_type=type(exc).__name__,
+                    exc_info=not isinstance(exc, OSError | asyncpg.PostgresError | TimeoutError),
+                )
             finally:
                 reconnecting = True
                 self._ready.clear()
@@ -89,8 +117,11 @@ class ChangeHub:
                     with contextlib.suppress(Exception):
                         await connection.close(timeout=2)
             if not self.closed.is_set():
+                delay = min(
+                    self._max_retry_delay, self._retry_delay * 2 ** min(max(failures - 1, 0), 10)
+                )
                 with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(self.closed.wait(), timeout=self._retry_delay)
+                    await asyncio.wait_for(self.closed.wait(), timeout=delay)
 
     async def close(self) -> None:
         self.closed.set()

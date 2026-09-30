@@ -4,6 +4,7 @@ import json
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 import sqlalchemy as sa
@@ -13,6 +14,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import TypeEngine
 
 from tasker.ids import is_uuid7
+from tasker.textcheck import require_storable_json, require_storable_text
 
 SERVICE_FIELDS = (
     "id",
@@ -23,8 +25,29 @@ SERVICE_FIELDS = (
     "origin_device_id",
 )
 
+# Accepted range of every datetime (UTC): far outside anything real, well inside what the database
+# and Python can convert without overflow, whatever offset the client wrote.
+MIN_DATETIME = datetime(1970, 1, 1, tzinfo=UTC)
+MAX_DATETIME = datetime(2200, 1, 1, tzinfo=UTC)
+_AWARE_DATETIME: "TypeAdapter[datetime]" = TypeAdapter(AwareDatetime)
+
+
+def parse_datetime(value: str) -> datetime:
+    """An ISO 8601 string with a UTC offset -> UTC datetime within [1970, 2200); else ValueError."""
+    parsed = _AWARE_DATETIME.validate_python(value)  # ValidationError is a ValueError
+    try:
+        utc = parsed.astimezone(UTC)
+    except OverflowError as exc:  # e.g. 0001-01-01T00:00:00+14:00 has no UTC representation
+        raise ValueError("datetime out of range") from exc
+    if not MIN_DATETIME <= utc < MAX_DATETIME:
+        raise ValueError("datetime out of range (1970..2200)")
+    return utc
+
+
 # Returns an error message, or None when the value is fine.
 RowValidator = Callable[[Mapping[str, Any]], str | None]
+# ``values`` holds only the declared columns the client *sent* in the creating operation (all
+# required ones, but optional columns it left out are absent): never index into it blindly.
 IdRule = Callable[[uuid.UUID, Mapping[str, Any]], str | None]
 
 
@@ -54,6 +77,19 @@ class _StringParsed:
         return self._inner.dump_python(value, mode=mode)
 
 
+class _TextAdapter:
+    """Strict string constraints plus what PostgreSQL can store (no NUL, valid UTF-8)."""
+
+    def __init__(self, inner: "TypeAdapter[Any]") -> None:
+        self._inner = inner
+
+    def validate_python(self, value: Any) -> Any:
+        return require_storable_text(self._inner.validate_python(value))
+
+    def dump_python(self, value: Any, *, mode: Literal["json", "python"] = "json") -> Any:
+        return self._inner.dump_python(value, mode=mode)
+
+
 def text_column(
     name: str,
     *,
@@ -68,7 +104,7 @@ def text_column(
     return ColumnSpec(
         name,
         sa.Text(),
-        TypeAdapter(Annotated[str, constraints], config={"strict": True}),
+        _TextAdapter(TypeAdapter(Annotated[str, constraints], config={"strict": True})),
         nullable=nullable,
         required=required,
         immutable=immutable,
@@ -97,10 +133,20 @@ def datetime_column(name: str, *, nullable: bool = False, required: bool = True)
     return ColumnSpec(
         name,
         TIMESTAMP(timezone=True),
-        _StringParsed(TypeAdapter(AwareDatetime)),
+        _DatetimeAdapter(),
         nullable=nullable,
         required=required,
     )
+
+
+class _DatetimeAdapter:
+    def validate_python(self, value: Any) -> Any:
+        if not isinstance(value, str):
+            raise ValueError("expected a string")
+        return parse_datetime(value)
+
+    def dump_python(self, value: Any, *, mode: Literal["json", "python"] = "json") -> Any:
+        return _AWARE_DATETIME.dump_python(value, mode=mode)
 
 
 def enum_column(
@@ -136,8 +182,9 @@ class _JsonAdapter:
 
     def validate_python(self, value: Any) -> Any:
         try:
+            require_storable_json(value)
             encoded = json.dumps(value, allow_nan=False, separators=(",", ":"))
-        except (TypeError, ValueError) as exc:
+        except (TypeError, RecursionError) as exc:
             raise ValueError("not a JSON value") from exc
         if len(encoded.encode()) > self._max_bytes:
             raise ValueError(f"value is larger than {self._max_bytes} bytes")
@@ -148,7 +195,27 @@ class _JsonAdapter:
 
 
 def reference_column(
-    name: str, parent: str, *, nullable: bool = False, required: bool = True
+    name: str,
+    parent: str,
+    *,
+    nullable: bool = False,
+    required: bool = True,
+    immutable: bool = False,
+) -> ColumnSpec:
+    """A link to a row of ``parent`` (foreign key, cascades). ``immutable``: fixed for life."""
+    return ColumnSpec(
+        name,
+        PG_UUID(as_uuid=True),
+        _StringParsed(TypeAdapter(uuid.UUID)),
+        nullable=nullable,
+        required=required,
+        immutable=immutable,
+        parent=parent,
+    )
+
+
+def uuid_column(
+    name: str, *, nullable: bool = False, required: bool = True, immutable: bool = False
 ) -> ColumnSpec:
     return ColumnSpec(
         name,
@@ -156,17 +223,7 @@ def reference_column(
         _StringParsed(TypeAdapter(uuid.UUID)),
         nullable=nullable,
         required=required,
-        parent=parent,
-    )
-
-
-def uuid_column(name: str, *, nullable: bool = False, required: bool = True) -> ColumnSpec:
-    return ColumnSpec(
-        name,
-        PG_UUID(as_uuid=True),
-        _StringParsed(TypeAdapter(uuid.UUID)),
-        nullable=nullable,
-        required=required,
+        immutable=immutable,
     )
 
 
@@ -197,8 +254,19 @@ def define_sync_table(
     *,
     id_rule: IdRule = uuid7_id_rule,
     validators: tuple[RowValidator, ...] = (),
+    tombstone_index: bool = True,
 ) -> SyncTableSpec:
-    """Build the SQLAlchemy table (service columns + declared columns) and its spec."""
+    """Build the SQLAlchemy table (service columns + declared columns) and its spec.
+
+    Besides ``ix_<table>_server_version`` (pull) it declares an index per reference column
+    ``ix_<table>_<column>`` (cascades and the purge look children up by parent id) and, unless
+    ``tombstone_index=False``, the partial index ``<table>_tombstones`` on ``deleted_at IS NOT
+    NULL`` that keeps the purge job from scanning live rows. The alembic migration of a new table
+    must create the same indexes: ``tests/test_migrations_drift.py`` compares them.
+
+    ``id_rule(row_id, values)`` gets only the columns the client sent when it created the row
+    (see ``IdRule``).
+    """
     for column in columns:
         if column.name in SERVICE_FIELDS or column.name == "field_meta":
             raise ValueError(f"{column.name!r} is a reserved service column")
@@ -217,6 +285,15 @@ def define_sync_table(
             args.append(sa.ForeignKey(f"{column.parent}.id"))
         sa_columns.append(sa.Column(*args, nullable=column.nullable or not column.required))
     table = sa.Table(name, metadata, *sa_columns)
+    for column in columns:
+        if column.parent is not None:
+            sa.Index(f"ix_{name}_{column.name}", table.c[column.name])
+    if tombstone_index:
+        sa.Index(
+            f"{name}_tombstones",
+            table.c.deleted_at,
+            postgresql_where=table.c.deleted_at.is_not(None),
+        )
     return SyncTableSpec(name, tuple(columns), table, id_rule, validators)
 
 

@@ -6,6 +6,7 @@ import hmac
 import json
 import os
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 
 from cryptography.hazmat.primitives import hashes
@@ -44,6 +45,12 @@ def decrypt_secret(key: bytes, token: str, *, context: str) -> str:
     return AESGCM(key).decrypt(raw[:12], raw[12:], context.encode()).decode()
 
 
+@dataclass(frozen=True, slots=True)
+class TokenClaims:
+    device_id: uuid.UUID
+    issued_ms: int  # 0 when the token carries no issue time
+
+
 class AccessTokenCodec:
     """Stateless HMAC-signed access tokens ``at1.<payload>.<signature>``."""
 
@@ -55,27 +62,37 @@ class AccessTokenCodec:
 
     def issue(self, device_id: uuid.UUID, now: datetime, expires_at: datetime) -> str:
         body = json.dumps(
-            {"d": str(device_id), "i": int(now.timestamp()), "e": int(expires_at.timestamp())},
+            {
+                "d": str(device_id),
+                "i": int(now.timestamp()),
+                "t": int(now.timestamp() * 1000),
+                "e": int(expires_at.timestamp()),
+            },
             separators=(",", ":"),
         )
         payload = _b64(body.encode())
         return f"at1.{payload}.{self._sign(payload)}"
 
     def verify(self, token: str, now: datetime) -> uuid.UUID:
+        return self.verify_claims(token, now).device_id
+
+    def verify_claims(self, token: str, now: datetime) -> TokenClaims:
         parts = token.split(".")
         if len(parts) != 3 or parts[0] != "at1":
             raise TokenError("invalid_token")
-        if not hmac.compare_digest(self._sign(parts[1]), parts[2]):
+        # Compare bytes: ``compare_digest`` refuses non-ASCII ``str`` (a hostile header).
+        if not hmac.compare_digest(self._sign(parts[1]).encode(), parts[2].encode()):
             raise TokenError("invalid_token")
         try:
             claims = json.loads(_unb64(parts[1]))
             device_id = uuid.UUID(claims["d"])
             expires = int(claims["e"])
-        except (ValueError, KeyError, TypeError) as exc:
+            issued_ms = int(claims.get("t") or int(claims.get("i") or 0) * 1000)
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
             raise TokenError("invalid_token") from exc
         if now.timestamp() >= expires:
             raise TokenError("token_expired")
-        return device_id
+        return TokenClaims(device_id, issued_ms)
 
 
 def new_refresh_token(device_id: uuid.UUID) -> str:
@@ -84,7 +101,7 @@ def new_refresh_token(device_id: uuid.UUID) -> str:
 
 def parse_refresh_token(token: str) -> uuid.UUID:
     parts = token.split(".")
-    if len(parts) != 3 or parts[0] != "rt1" or len(parts[2]) < 32:
+    if not token.isascii() or len(parts) != 3 or parts[0] != "rt1" or len(parts[2]) < 32:
         raise TokenError("invalid_refresh_token")
     try:
         return uuid.UUID(hex=parts[1])

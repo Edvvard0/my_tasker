@@ -33,6 +33,17 @@ def ms_iso(ms: int) -> str:
     return from_ms(ms).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.") + f"{ms % 1000:03d}Z"
 
 
+def epoch_action(stored: str | None, received: str) -> str:
+    """Spec 3.10: what a client does with the ``server_epoch`` of a response.
+
+    ``store`` (first contact: remember it), ``none`` (same server history) or ``full_resync``
+    (the server was restored: resynchronise completely, keeping the outbox).
+    """
+    if stored is None:
+        return "store"
+    return "none" if stored == received else "full_resync"
+
+
 def _state(op: Op) -> str:
     return str(op.get("state", "pending"))
 
@@ -92,6 +103,7 @@ class SimClient:
         self.rows: dict[tuple[str, str], Row] = {}
         self.outbox: list[Op] = []
         self.cursor = 0
+        self.epoch: str | None = None
         self.rejected: list[tuple[Op, str]] = []
         self.written: list[tuple[str, str, str, Any, str, int]] = []  # provenance for the checks
 
@@ -182,6 +194,11 @@ class SimClient:
     async def pull(self, server: ServerPort, limit: int = 1000) -> None:
         while True:
             page = await server.pull(self.device_id, self.cursor, limit)
+            action = epoch_action(self.epoch, page["server_epoch"])
+            if action == "full_resync":
+                await self.full_resync(server)
+                return
+            self.epoch = page["server_epoch"]
             for change in page["changes"]:
                 row = change["row"]
                 self.hlc.receive(row["updated_at"], self.now_ms())
@@ -196,18 +213,27 @@ class SimClient:
 
     async def full_resync(self, server: ServerPort) -> None:
         """Spec 5.3: fetch everything from 0, then replace the store and rebase the outbox."""
-        staged: dict[tuple[str, str], Row] = {}
-        since = 0
         while True:
-            page = await server.pull(self.device_id, since, 1000)
-            for change in page["changes"]:
-                self.hlc.receive(change["row"]["updated_at"], self.now_ms())
-                staged[(change["table"], change["row"]["id"])] = change["row"]
-            since = page["next_since"]
-            if not page["has_more"]:
+            staged: dict[tuple[str, str], Row] = {}
+            since, epoch, restart = 0, None, False
+            while True:
+                page = await server.pull(self.device_id, since, 1000)
+                if epoch is None:
+                    epoch = page["server_epoch"]
+                elif page["server_epoch"] != epoch:
+                    restart = True  # the server was restored while we were downloading
+                    break
+                for change in page["changes"]:
+                    self.hlc.receive(change["row"]["updated_at"], self.now_ms())
+                    staged[(change["table"], change["row"]["id"])] = change["row"]
+                since = page["next_since"]
+                if not page["has_more"]:
+                    break
+            if not restart:
                 break
         self.rows = {key: rebase_row(row, self.outbox) for key, row in staged.items()}
         self.cursor = since
+        self.epoch = epoch
 
     def purge_old_tombstones(self, now_ms: int, days: int = 30) -> None:
         """Spec 3.8: drop local tombstones older than the trash period (nothing pending)."""

@@ -2,24 +2,28 @@ import uuid
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
 
 from tasker.auth import service
 from tasker.auth.deps import DeviceDep, RuntimeDep, SchemaDep, client_ip, require_schema_version
+from tasker.auth.passwords import MAX_PASSWORD_LENGTH
 from tasker.db import SessionDep
 from tasker.errors import ApiError
+from tasker.textcheck import require_storable_text
+
+SafeText = AfterValidator(require_storable_text)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 class DeviceIn(BaseModel):
-    name: Annotated[str, Field(min_length=1, max_length=64)]
+    name: Annotated[str, Field(min_length=1, max_length=64), SafeText]
     platform: Literal["android", "windows", "linux", "macos", "ios", "web", "other"]
-    app_version: Annotated[str, Field(max_length=32)] | None = None
+    app_version: Annotated[str, Field(max_length=32), SafeText] | None = None
 
 
 class LoginIn(BaseModel):
-    password: Annotated[str, Field(min_length=1, max_length=256)]
+    password: Annotated[str, Field(min_length=1, max_length=MAX_PASSWORD_LENGTH), SafeText]
     totp_code: Annotated[str, Field(pattern=r"^[0-9]{6}$")]
     device: DeviceIn
 
@@ -30,6 +34,7 @@ class RefreshIn(BaseModel):
 
 class TokenPairOut(BaseModel):
     device_id: str
+    server_epoch: str
     token_type: str
     access_token: str
     access_expires_at: str

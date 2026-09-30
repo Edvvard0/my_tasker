@@ -111,7 +111,11 @@ async def test_lagging_cursor_gets_resync_required(env: Env) -> None:
     await env.execute("UPDATE sync_state SET purge_watermark = 2")
     response = await phone.pull(1)
     assert (response.status_code, error_code(response)) == (410, "resync_required")
-    assert response.json()["error"]["details"] == {"purge_watermark": 2}
+    assert response.json()["error"]["details"] == {
+        "purge_watermark": 2,
+        "head_version": 3,
+        "reason": "purged",
+    }
     assert (
         await env.scalar("SELECT last_pulled_version FROM devices WHERE id=:i", i=phone.device_id)
         == 0

@@ -1,0 +1,10 @@
+{
+  "description": "Что клиент делает с server_epoch ответа (login, refresh, pull, push, /version): input.stored — эпоха, сохранённая клиентом (null — ещё не было), input.received — эпоха в ответе; expected — store (запомнить), none (ничего), full_resync (полная пересинхронизация с сохранением outbox, затем запомнить новую эпоху). Спецификация: stage1_sync_and_auth.md, 3.10 и 5.3.",
+  "cases": [
+    {"name": "first contact stores the epoch", "input": {"stored": null, "received": "5b0f7f5e-6a0e-4d5b-9d5e-2f0c3a7b1e11"}, "expected": "store"},
+    {"name": "same epoch changes nothing", "input": {"stored": "5b0f7f5e-6a0e-4d5b-9d5e-2f0c3a7b1e11", "received": "5b0f7f5e-6a0e-4d5b-9d5e-2f0c3a7b1e11"}, "expected": "none"},
+    {"name": "different epoch means the server was restored", "input": {"stored": "5b0f7f5e-6a0e-4d5b-9d5e-2f0c3a7b1e11", "received": "0c3d2a9e-1b7f-4c52-8e0a-6d4f9b2a7c33"}, "expected": "full_resync"},
+    {"name": "comparison is exact, not case-insensitive", "input": {"stored": "5b0f7f5e-6a0e-4d5b-9d5e-2f0c3a7b1e11", "received": "5B0F7F5E-6A0E-4D5B-9D5E-2F0C3A7B1E11"}, "expected": "full_resync"},
+    {"name": "an empty stored value is a real value, not first contact", "input": {"stored": "", "received": "5b0f7f5e-6a0e-4d5b-9d5e-2f0c3a7b1e11"}, "expected": "full_resync"}
+  ]
+}

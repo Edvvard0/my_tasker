@@ -12,6 +12,14 @@ def _ts(name: str, *, nullable: bool = False) -> sa.Column[Any]:
     return sa.Column(name, TIMESTAMP(timezone=True), nullable=nullable)
 
 
+app_meta = sa.Table(
+    "app_meta",
+    metadata,
+    sa.Column("key", sa.Text, primary_key=True),
+    sa.Column("value", sa.Text, nullable=False),
+    sa.Column("updated_at", TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
+)
+
 users = sa.Table(
     "users",
     metadata,
@@ -22,6 +30,8 @@ users = sa.Table(
     _ts("created_at"),
     _ts("updated_at"),
 )
+# Exactly one owner: every row has the same constant, so a second row cannot be inserted.
+sa.Index("users_single_owner", sa.text("(true)"), _table=users, unique=True)
 
 devices = sa.Table(
     "devices",
@@ -35,6 +45,10 @@ devices = sa.Table(
     sa.Column("last_pulled_version", sa.BigInteger, nullable=False, server_default="0"),
     sa.Column("refresh_token_hash", sa.Text, nullable=False),
     _ts("refresh_expires_at"),
+    # The token replaced by the last rotation and when: it is honoured for a short grace period
+    # (spec 1.3) so a lost refresh response does not cost the device.
+    sa.Column("prev_refresh_token_hash", sa.Text),
+    _ts("prev_rotated_at", nullable=True),
     _ts("revoked_at", nullable=True),
     sa.Column("revoked_reason", sa.Text),
 )
@@ -55,6 +69,7 @@ sync_state = sa.Table(
     sa.Column("id", sa.SmallInteger, primary_key=True),
     sa.Column("head_version", sa.BigInteger, nullable=False),
     sa.Column("purge_watermark", sa.BigInteger, nullable=False),
+    sa.CheckConstraint("id = 1", name="sync_state_singleton"),
 )
 
 sync_ops = sa.Table(
@@ -65,6 +80,7 @@ sync_ops = sa.Table(
     sa.Column("result", JSONB, nullable=False),
     _ts("created_at"),
 )
+sa.Index("sync_ops_created_at", sync_ops.c.created_at)
 
 sync_conflicts = sa.Table(
     "sync_conflicts",
@@ -84,3 +100,4 @@ sync_conflicts = sa.Table(
     sa.Column("op_id", UUID(as_uuid=True)),
     _ts("reverted_at", nullable=True),
 )
+sa.Index("sync_conflicts_created_at", sync_conflicts.c.created_at)

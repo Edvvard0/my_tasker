@@ -17,6 +17,7 @@ def create_engine(settings: Settings) -> AsyncEngine:
         settings.db_url,
         connect_args={"timeout": settings.db_connect_timeout},
         pool_pre_ping=True,
+        hide_parameters=True,  # a failing statement must not put row values into logs
     )
 
 

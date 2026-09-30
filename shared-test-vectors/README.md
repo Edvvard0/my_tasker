@@ -63,3 +63,18 @@
 | `merge.json` | решение сервера по одному полю (`field`: `noop/touch/apply/apply_conflict/keep_conflict`), по удалению (`delete`) и по правке/восстановлению удалённой строки (`tombstone_edit`); `entry` — `{v, h}` записи поля |
 | `outbox.json` | `collapse` — схлопывание новой операции в outbox (`state` по умолчанию `pending`); `rebase` — накладывание неподтверждённых операций на строку из pull |
 | `settings_id.json` | `user_settings.id = uuid5(NS, key)` |
+| `epoch.json` | что клиент делает с `server_epoch` ответа: `store` / `none` / `full_resync` (`{stored, received}` → действие), спецификация 3.10 |
+| `validation.json` | допустимые значения колонок: `datetime` (диапазон 1970..2200 UTC, нормализация в UTC), `text` и `json` (без NUL и непарных суррогатов, глубина ≤ 64), `nested_lists`; спецификация, раздел 0 |
+
+## Домен `calendar`
+
+Календарь и задачи (спецификация: `docs/specs/stage2_calendar_tasks.md`). Формат файлов — как в `sync`: у случая `input` описан для каждого файла отдельно. Исходные входы лежат в `backend/tests/calendar_vectors_gen.py`, ожидаемые значения получены эталонными реализациями (`backend/src/tasker/calendar/reference_*.py`); пересборка — `cd backend && uv run python -m tests.calendar_vectors_gen` (результат нужно просмотреть глазами). Python: `backend/tests/test_calendar_vectors.py`; Dart: `app/test/`.
+
+| Файл | Что проверяет |
+|---|---|
+| `quick_input.json` | разбор строки быстрого ввода: `input {text, now}` → `{title, priority, project, people, tags, date, time, duration_minutes}` |
+| `rrule_expand.json` | развёртка повторений с исключениями и переопределениями (переход на летнее время, конец месяца, `-1FR`, «весь день», чередование недель): `input {all_day, tz, start, end, rrule, title, cancelled, overrides, window}` → список экземпляров |
+| `rrule_validate.json` | допустимость правила из подмножества RRULE: `input {rrule, all_day}` → `{valid}` |
+| `week_cycle.json` | номер недели цикла (`op: week_number`) и первая подходящая дата (`op: first_date`), в том числе сдвиги чётности |
+| `holidays.json` | нерабочий ли день по `shared-data/calendar/holidays_ru.json` |
+| `ids.json` | детерминированные id (`uuid5`) календарей, тегов, переопределений, связей и отметок |
