@@ -36,7 +36,7 @@ def main() -> int:
     """Entry point of the one-shot ``migrate`` service: ``python -m tasker.db_migrations``."""
     settings = Settings()
     configure_logging(settings.log_level)
-    upgrade_to_head(settings.database_url)
+    upgrade_to_head(settings.db_url)
     return 0
 
 

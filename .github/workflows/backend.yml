@@ -71,6 +71,7 @@ jobs:
           POSTGRES_USER: ci
           POSTGRES_DB: ci
           POSTGRES_PASSWORD: placeholder
+          APP_SECRET_KEY: placeholder
         run: docker compose -f docker-compose.yml config -q
       - name: Build backend image
         run: docker build -f deploy/Dockerfile -t my-tasker-backend:ci backend
@@ -92,6 +93,7 @@ jobs:
             echo "POSTGRES_USER=ci"
             echo "POSTGRES_DB=ci"
             echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "APP_SECRET_KEY=$(openssl rand -hex 32)"
           } > .env
           docker compose up -d --build --wait --wait-timeout 240
           # The internal CA issues the certificate on first start: retry briefly.

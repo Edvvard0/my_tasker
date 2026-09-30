@@ -1,0 +1,1116 @@
+{
+  "description": "Outbox клиента (spec stage1 §5): collapse — схлопывание новой операции в outbox (state по умолчанию pending); rebase — накладывание неподтверждённых операций на строку из pull. Значения op_id/table/id — произвольные строки.",
+  "cases": [
+    {
+      "name": "empty_outbox_appends",
+      "input": {
+        "op": "collapse",
+        "outbox": [],
+        "new": {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 1,
+          "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "a"
+          }
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 1,
+          "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "edits_of_different_fields_merge",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "a"
+            }
+          }
+        ],
+        "new": {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "budget": 5
+          }
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "a",
+            "budget": 5
+          }
+        }
+      ]
+    },
+    {
+      "name": "later_value_of_same_field_wins",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "a"
+            }
+          }
+        ],
+        "new": {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 4,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b"
+          }
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "merged_op_keeps_earliest_base_and_op_id",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-7",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "a"
+            }
+          }
+        ],
+        "new": {
+          "op_id": "op-8",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 9,
+          "hlc": "000000000001500-00002-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b"
+          }
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-7",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000001500-00002-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_then_edit_stays_one_create",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 0,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "a",
+              "created_at": "2026-10-01T00:00:00Z"
+            }
+          }
+        ],
+        "new": {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 0,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b"
+          }
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 0,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b",
+            "created_at": "2026-10-01T00:00:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "edit_then_delete_becomes_delete",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "a"
+            }
+          }
+        ],
+        "new": {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "delete",
+          "base_version": 4,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a"
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "delete",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a"
+        }
+      ]
+    },
+    {
+      "name": "create_then_delete_keeps_both",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 0,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "a",
+              "created_at": "2026-10-01T00:00:00Z"
+            }
+          }
+        ],
+        "new": {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "delete",
+          "base_version": 0,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a"
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 0,
+          "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "a",
+            "created_at": "2026-10-01T00:00:00Z"
+          }
+        },
+        {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "delete",
+          "base_version": 0,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a"
+        }
+      ]
+    },
+    {
+      "name": "delete_then_restore_keeps_both",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "delete",
+            "base_version": 3,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a"
+          }
+        ],
+        "new": {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "deleted_at": null
+          }
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "delete",
+          "base_version": 3,
+          "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a"
+        },
+        {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "deleted_at": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "edit_after_restore_merges_into_restore",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "delete",
+            "base_version": 3,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a"
+          },
+          {
+            "op_id": "op-2",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "deleted_at": null
+            }
+          }
+        ],
+        "new": {
+          "op_id": "op-3",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "x"
+          }
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "delete",
+          "base_version": 3,
+          "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a"
+        },
+        {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "deleted_at": null,
+            "title": "x"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete_then_delete_keeps_both",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "delete",
+            "base_version": 3,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a"
+          }
+        ],
+        "new": {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "delete",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a"
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "delete",
+          "base_version": 3,
+          "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a"
+        },
+        {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "delete",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a"
+        }
+      ]
+    },
+    {
+      "name": "other_row_is_appended",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 1,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "a"
+            }
+          }
+        ],
+        "new": {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r2",
+          "type": "upsert",
+          "base_version": 0,
+          "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b"
+          }
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 1,
+          "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "a"
+          }
+        },
+        {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r2",
+          "type": "upsert",
+          "base_version": 0,
+          "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "merges_into_the_last_op_of_its_row_keeping_order",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "a"
+            }
+          },
+          {
+            "op_id": "op-2",
+            "table": "t",
+            "id": "r2",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000001100-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "b"
+            }
+          }
+        ],
+        "new": {
+          "op_id": "op-3",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "budget": 1
+          }
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "a",
+            "budget": 1
+          }
+        },
+        {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r2",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000001100-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "in_flight_is_never_collapsed_into",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "a"
+            },
+            "state": "in_flight"
+          }
+        ],
+        "new": {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b"
+          }
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "a"
+          },
+          "state": "in_flight"
+        },
+        {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rejected_is_never_collapsed_into",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "a"
+            },
+            "state": "rejected"
+          }
+        ],
+        "new": {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b"
+          }
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "a"
+          },
+          "state": "rejected"
+        },
+        {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "only_the_last_op_of_the_row_is_considered",
+      "input": {
+        "op": "collapse",
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "a"
+            },
+            "state": "in_flight"
+          },
+          {
+            "op_id": "op-2",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000001500-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "b"
+            }
+          }
+        ],
+        "new": {
+          "op_id": "op-3",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "budget": 2
+          }
+        }
+      },
+      "expected": [
+        {
+          "op_id": "op-1",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "a"
+          },
+          "state": "in_flight"
+        },
+        {
+          "op_id": "op-2",
+          "table": "t",
+          "id": "r1",
+          "type": "upsert",
+          "base_version": 3,
+          "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "fields": {
+            "title": "b",
+            "budget": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "no_pending_ops_takes_the_server_row",
+      "input": {
+        "op": "rebase",
+        "server_row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000000500-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        },
+        "outbox": []
+      },
+      "expected": {
+        "row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000000500-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        }
+      }
+    },
+    {
+      "name": "pending_field_is_laid_over_the_server_row",
+      "input": {
+        "op": "rebase",
+        "server_row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000000500-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        },
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "mine"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "row": {
+          "id": "r1",
+          "title": "mine",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "server_version": 7
+        }
+      }
+    },
+    {
+      "name": "untouched_fields_come_from_the_server",
+      "input": {
+        "op": "rebase",
+        "server_row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 99,
+          "deleted_at": null,
+          "updated_at": "000000000000500-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        },
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "mine"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "row": {
+          "id": "r1",
+          "title": "mine",
+          "budget": 99,
+          "deleted_at": null,
+          "updated_at": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "server_version": 7
+        }
+      }
+    },
+    {
+      "name": "ops_apply_in_order",
+      "input": {
+        "op": "rebase",
+        "server_row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000000500-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        },
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "one"
+            }
+          },
+          {
+            "op_id": "op-2",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "two"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "row": {
+          "id": "r1",
+          "title": "two",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "server_version": 7
+        }
+      }
+    },
+    {
+      "name": "pending_delete_marks_the_row_deleted",
+      "input": {
+        "op": "rebase",
+        "server_row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000000500-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        },
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "delete",
+            "base_version": 3,
+            "hlc": "001790856000123-00000-0195f2a0-0000-7000-8000-00000000000a"
+          }
+        ]
+      },
+      "expected": {
+        "row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": "2026-10-01T12:00:00.123Z",
+          "updated_at": "001790856000123-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "server_version": 7
+        }
+      }
+    },
+    {
+      "name": "pending_restore_clears_deleted_at",
+      "input": {
+        "op": "rebase",
+        "server_row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": "2026-10-01T00:00:00Z",
+          "updated_at": "000000000000500-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        },
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "deleted_at": null
+            }
+          }
+        ]
+      },
+      "expected": {
+        "row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "server_version": 7
+        }
+      }
+    },
+    {
+      "name": "server_tombstone_with_pending_edit_stays_deleted",
+      "input": {
+        "op": "rebase",
+        "server_row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": "2026-10-01T00:00:00Z",
+          "updated_at": "000000000000500-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        },
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "mine"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "row": {
+          "id": "r1",
+          "title": "mine",
+          "budget": 1,
+          "deleted_at": "2026-10-01T00:00:00Z",
+          "updated_at": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "server_version": 7
+        }
+      }
+    },
+    {
+      "name": "rejected_ops_are_not_applied",
+      "input": {
+        "op": "rebase",
+        "server_row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000000500-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        },
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "mine"
+            },
+            "state": "rejected"
+          }
+        ]
+      },
+      "expected": {
+        "row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000000500-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        }
+      }
+    },
+    {
+      "name": "server_updated_at_kept_when_newer",
+      "input": {
+        "op": "rebase",
+        "server_row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000009000-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        },
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "mine"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "row": {
+          "id": "r1",
+          "title": "mine",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000009000-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        }
+      }
+    },
+    {
+      "name": "in_flight_ops_are_applied_too",
+      "input": {
+        "op": "rebase",
+        "server_row": {
+          "id": "r1",
+          "title": "srv",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000000500-00000-0195f2a0-0000-7000-8000-00000000000b",
+          "server_version": 7
+        },
+        "outbox": [
+          {
+            "op_id": "op-1",
+            "table": "t",
+            "id": "r1",
+            "type": "upsert",
+            "base_version": 3,
+            "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+            "fields": {
+              "title": "mine"
+            },
+            "state": "in_flight"
+          }
+        ]
+      },
+      "expected": {
+        "row": {
+          "id": "r1",
+          "title": "mine",
+          "budget": 1,
+          "deleted_at": null,
+          "updated_at": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+          "server_version": 7
+        }
+      }
+    }
+  ]
+}

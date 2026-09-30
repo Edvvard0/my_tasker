@@ -1,0 +1,35 @@
+{
+  "description": "user_settings.id = uuid5(11fae5eb-de4a-5a92-88e3-5c86a8c454f4, key). input — ключ, expected — id строки.",
+  "cases": [
+    {
+      "name": "key_0",
+      "input": "ui.theme",
+      "expected": "826e9351-d34d-5a3d-99d0-d20367415629"
+    },
+    {
+      "name": "key_1",
+      "input": "a",
+      "expected": "13548ec2-0de0-5d76-8c4c-af3d7abe57fb"
+    },
+    {
+      "name": "key_2",
+      "input": "sync.interval_minutes",
+      "expected": "69e1b774-e411-504a-86d5-8cb1548ad6f7"
+    },
+    {
+      "name": "key_3",
+      "input": "0.a-b_c",
+      "expected": "a0ca954f-4da5-5840-b789-fdf3ff2a8b2c"
+    },
+    {
+      "name": "key_4",
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expected": "da5eb11e-4c65-597a-9f78-2fa3a33088e5"
+    },
+    {
+      "name": "key_5",
+      "input": "finance.hide_amounts",
+      "expected": "b1e0d7c3-e25d-53aa-9ee3-fac0200060df"
+    }
+  ]
+}

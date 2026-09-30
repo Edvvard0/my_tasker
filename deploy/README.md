@@ -12,7 +12,7 @@ docker compose ps             # migrate: Exited (0), остальные: healthy
 curl -k https://127.0.0.1/health/ready    # {"status":"ok"}
 ```
 
-Для локальной проверки в `.env` достаточно `SERVER_IP=127.0.0.1`, произвольных `POSTGRES_USER`, `POSTGRES_DB` и пароля из букв и цифр (`openssl rand -hex 24`). Пароль попадает в `DATABASE_URL` как есть, поэтому спецсимволы в нём недопустимы.
+В `.env` обязателен `APP_SECRET_KEY` (`openssl rand -hex 32`). Владельца создаёт команда `docker compose exec api python -m tasker.cli user create` (пароль вводится интерактивно, секрет TOTP печатается один раз). Для локальной проверки в `.env` достаточно `SERVER_IP=127.0.0.1`, произвольных `POSTGRES_USER`, `POSTGRES_DB` и пароля из букв и цифр (`openssl rand -hex 24`). Пароль попадает в `DATABASE_URL` как есть, поэтому спецсимволы в нём недопустимы.
 
 Если Docker Hub отвечает 429, задайте зеркала в `.env`:
 

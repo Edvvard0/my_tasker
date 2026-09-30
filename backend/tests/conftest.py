@@ -11,7 +11,7 @@ import secrets
 import subprocess
 import time
 import uuid
-from collections.abc import Awaitable, Iterator
+from collections.abc import AsyncIterator, Awaitable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 
 import asyncpg
@@ -20,6 +20,8 @@ from sqlalchemy.engine import make_url
 
 from tasker.config import Settings
 from tasker.db_migrations import upgrade_to_head
+from tests.api_support import Env, make_env
+from tests.sync_tables import build_test_registry, create_test_tables
 
 DEFAULT_IMAGE = "mirror.gcr.io/library/postgres:17-alpine"
 
@@ -72,7 +74,7 @@ def postgres_server_url() -> Iterator[str]:
     """SQLAlchemy URL of a PostgreSQL server with CREATEDB rights."""
     external = os.environ.get("DATABASE_URL")
     if external:
-        yield Settings(database_url=external).database_url
+        yield Settings(database_url=external).db_url
         return
 
     image = os.environ.get("TEST_POSTGRES_IMAGE", DEFAULT_IMAGE)
@@ -105,7 +107,45 @@ def db_url(postgres_server_url: str) -> Iterator[str]:
     run_async(_admin_execute(postgres_server_url, f'DROP DATABASE "{name}" WITH (FORCE)'))
 
 
+@pytest.fixture(scope="session")
+def template_db_name(postgres_server_url: str) -> Iterator[str]:
+    """A database migrated to head once; per-test databases are cheap copies of it."""
+    name = f"template_{uuid.uuid4().hex}"
+    run_async(_admin_execute(postgres_server_url, f'CREATE DATABASE "{name}"'))
+    url = make_url(postgres_server_url).set(database=name).render_as_string(hide_password=False)
+    upgrade_to_head(url)
+    yield name
+    run_async(_admin_execute(postgres_server_url, f'DROP DATABASE "{name}" WITH (FORCE)'))
+
+
 @pytest.fixture
-async def migrated_db_url(db_url: str) -> str:
-    await asyncio.to_thread(upgrade_to_head, db_url)
-    return db_url
+def migrated_db_url(postgres_server_url: str, template_db_name: str) -> Iterator[str]:
+    name = f"test_{uuid.uuid4().hex}"
+    run_async(
+        _admin_execute(
+            postgres_server_url, f'CREATE DATABASE "{name}" TEMPLATE "{template_db_name}"'
+        )
+    )
+    yield make_url(postgres_server_url).set(database=name).render_as_string(hide_password=False)
+    run_async(_admin_execute(postgres_server_url, f'DROP DATABASE "{name}" WITH (FORCE)'))
+
+
+@pytest.fixture
+async def env(migrated_db_url: str) -> AsyncIterator[Env]:
+    async with make_env(migrated_db_url) as environment:
+        yield environment
+
+
+@pytest.fixture
+async def tree_env(migrated_db_url: str) -> AsyncIterator[Env]:
+    """Environment whose registry also has the test-only parent/child tables."""
+    async with make_env(
+        migrated_db_url, registry=build_test_registry(), extra_setup=create_test_tables
+    ) as environment:
+        yield environment
+
+
+@pytest.fixture
+def _tables(migrated_db_url: str) -> None:
+    """The test-only synchronised tables, created in the migrated database."""
+    run_async(create_test_tables(migrated_db_url))

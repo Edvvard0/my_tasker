@@ -14,7 +14,7 @@ from tasker.config import Settings
 
 def create_engine(settings: Settings) -> AsyncEngine:
     return create_async_engine(
-        settings.database_url,
+        settings.db_url,
         connect_args={"timeout": settings.db_connect_timeout},
         pool_pre_ping=True,
     )

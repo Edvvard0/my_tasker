@@ -52,3 +52,14 @@
 Примеры (`␣` = U+00A0): `123456` → `1␣234,56␣₽`, `100000` → `1␣000␣₽`, `-1` → `-0,01␣₽`.
 
 Для любого допустимого `n` должно выполняться `parse_amount(format_amount(n)) == n`; это проверяют оба набора тестов отдельно от векторов.
+
+## Домен `sync`
+
+Правила синхронизации (спецификация: `docs/specs/stage1_sync_and_auth.md`). Формат файлов отличается от общего: у случая `input.op` (или `input.kind`) выбирает проверяемую функцию. Python: `backend/tests/test_sync_vectors.py`; Dart: `app/test/`.
+
+| Файл | Что проверяет |
+|---|---|
+| `hlc.json` | `compare` (обычное сравнение строк, `-1/0/1`), `format`, `parse` (ошибка — `{"error": true}`), `send(state, device, now)` и `receive(state, remote, now)` с состоянием `{l, c}` |
+| `merge.json` | решение сервера по одному полю (`field`: `noop/touch/apply/apply_conflict/keep_conflict`), по удалению (`delete`) и по правке/восстановлению удалённой строки (`tombstone_edit`); `entry` — `{v, h}` записи поля |
+| `outbox.json` | `collapse` — схлопывание новой операции в outbox (`state` по умолчанию `pending`); `rebase` — накладывание неподтверждённых операций на строку из pull |
+| `settings_id.json` | `user_settings.id = uuid5(NS, key)` |

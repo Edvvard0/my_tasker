@@ -12,7 +12,7 @@ config = context.config
 
 def _database_url() -> str:
     url = config.get_main_option("sqlalchemy.url")
-    return url.replace("%%", "%") if url else Settings().database_url
+    return url.replace("%%", "%") if url else Settings().db_url
 
 
 def _run_migrations(connection: Connection) -> None:

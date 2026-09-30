@@ -1,0 +1,526 @@
+{
+  "description": "HLC: сравнение строк, форматирование, разбор, send и receive (spec stage1 §2). input.op выбирает функцию.",
+  "cases": [
+    {
+      "name": "compare_equal",
+      "input": {
+        "op": "compare",
+        "a": "000000000001000-00001-0195f2a0-0000-7000-8000-00000000000a",
+        "b": "000000000001000-00001-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": 0
+    },
+    {
+      "name": "compare_ms_less",
+      "input": {
+        "op": "compare",
+        "a": "000000000000001-00009-0195f2a0-0000-7000-8000-00000000000a",
+        "b": "000000000000002-00000-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": -1
+    },
+    {
+      "name": "compare_ms_greater",
+      "input": {
+        "op": "compare",
+        "a": "001790000000123-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "b": "001790000000122-99999-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": 1
+    },
+    {
+      "name": "compare_counter_less",
+      "input": {
+        "op": "compare",
+        "a": "000000000001000-00001-0195f2a0-0000-7000-8000-00000000000a",
+        "b": "000000000001000-00002-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": -1
+    },
+    {
+      "name": "compare_counter_greater",
+      "input": {
+        "op": "compare",
+        "a": "000000000001000-00010-0195f2a0-0000-7000-8000-00000000000a",
+        "b": "000000000001000-00009-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": 1
+    },
+    {
+      "name": "compare_device_breaks_tie",
+      "input": {
+        "op": "compare",
+        "a": "000000000001000-00001-0195f2a0-0000-7000-8000-00000000000a",
+        "b": "000000000001000-00001-0195f2a0-0000-7000-8000-00000000000b"
+      },
+      "expected": -1
+    },
+    {
+      "name": "compare_device_breaks_tie_reverse",
+      "input": {
+        "op": "compare",
+        "a": "000000000001000-00001-0195f2a0-0000-7000-8000-00000000000b",
+        "b": "000000000001000-00001-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": 1
+    },
+    {
+      "name": "compare_leading_zeros_matter_not",
+      "input": {
+        "op": "compare",
+        "a": "999999999999999-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "b": "000000000000001-00000-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": 1
+    },
+    {
+      "name": "format_typical",
+      "input": {
+        "op": "format",
+        "ms": 1790000000123,
+        "counter": 2,
+        "device": "0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": "001790000000123-00002-0195f2a0-0000-7000-8000-00000000000a"
+    },
+    {
+      "name": "format_zero",
+      "input": {
+        "op": "format",
+        "ms": 0,
+        "counter": 0,
+        "device": "0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": "000000000000000-00000-0195f2a0-0000-7000-8000-00000000000a"
+    },
+    {
+      "name": "format_max",
+      "input": {
+        "op": "format",
+        "ms": 999999999999999,
+        "counter": 99999,
+        "device": "0195f2a0-0000-7000-8000-00000000000b"
+      },
+      "expected": "999999999999999-99999-0195f2a0-0000-7000-8000-00000000000b"
+    },
+    {
+      "name": "format_counter_overflow_is_error",
+      "input": {
+        "op": "format",
+        "ms": 1,
+        "counter": 100000,
+        "device": "0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "format_negative_ms_is_error",
+      "input": {
+        "op": "format",
+        "ms": -1,
+        "counter": 0,
+        "device": "0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "format_ms_too_large_is_error",
+      "input": {
+        "op": "format",
+        "ms": 1000000000000000,
+        "counter": 0,
+        "device": "0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "parse_typical",
+      "input": {
+        "op": "parse",
+        "value": "001790000000123-00002-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": {
+        "ms": 1790000000123,
+        "counter": 2,
+        "device": "0195f2a0-0000-7000-8000-00000000000a"
+      }
+    },
+    {
+      "name": "parse_zero",
+      "input": {
+        "op": "parse",
+        "value": "000000000000000-00000-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": {
+        "ms": 0,
+        "counter": 0,
+        "device": "0195f2a0-0000-7000-8000-00000000000a"
+      }
+    },
+    {
+      "name": "parse_uppercase_device_is_error",
+      "input": {
+        "op": "parse",
+        "value": "000000000001000-00001-0195F2A0-0000-7000-8000-00000000000A"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "parse_short_ms_is_error",
+      "input": {
+        "op": "parse",
+        "value": "00000000000000-00001-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "parse_long_ms_is_error",
+      "input": {
+        "op": "parse",
+        "value": "0000000000000001-00001-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "parse_short_counter_is_error",
+      "input": {
+        "op": "parse",
+        "value": "000000000001000-0001-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "parse_letters_in_ms_is_error",
+      "input": {
+        "op": "parse",
+        "value": "00000000000100a-00001-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "parse_missing_device_is_error",
+      "input": {
+        "op": "parse",
+        "value": "000000000001000-00001-"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "parse_bad_device_is_error",
+      "input": {
+        "op": "parse",
+        "value": "000000000001000-00001-not-a-uuid"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "parse_trailing_space_is_error",
+      "input": {
+        "op": "parse",
+        "value": "000000000001000-00001-0195f2a0-0000-7000-8000-00000000000a "
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "parse_leading_space_is_error",
+      "input": {
+        "op": "parse",
+        "value": " 000000000001000-00001-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "parse_trailing_newline_is_error",
+      "input": {
+        "op": "parse",
+        "value": "000000000001000-00001-0195f2a0-0000-7000-8000-00000000000a\n"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "parse_empty_is_error",
+      "input": {
+        "op": "parse",
+        "value": ""
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "parse_unicode_digits_are_error",
+      "input": {
+        "op": "parse",
+        "value": "\u0660\u0660\u0660\u0660\u0660\u0660\u0660\u0660\u0660\u0660\u0660\u0661\u0660\u0660\u0660-00001-0195f2a0-0000-7000-8000-00000000000a"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "send_first_tick",
+      "input": {
+        "op": "send",
+        "state": {
+          "l": 0,
+          "c": 0
+        },
+        "device": "0195f2a0-0000-7000-8000-00000000000a",
+        "now": 1000
+      },
+      "expected": {
+        "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "state": {
+          "l": 1000,
+          "c": 0
+        }
+      }
+    },
+    {
+      "name": "send_same_ms_bumps_counter",
+      "input": {
+        "op": "send",
+        "state": {
+          "l": 1000,
+          "c": 5
+        },
+        "device": "0195f2a0-0000-7000-8000-00000000000a",
+        "now": 1000
+      },
+      "expected": {
+        "hlc": "000000000001000-00006-0195f2a0-0000-7000-8000-00000000000a",
+        "state": {
+          "l": 1000,
+          "c": 6
+        }
+      }
+    },
+    {
+      "name": "send_clock_went_back_keeps_logical_time",
+      "input": {
+        "op": "send",
+        "state": {
+          "l": 1000,
+          "c": 5
+        },
+        "device": "0195f2a0-0000-7000-8000-00000000000a",
+        "now": 999
+      },
+      "expected": {
+        "hlc": "000000000001000-00006-0195f2a0-0000-7000-8000-00000000000a",
+        "state": {
+          "l": 1000,
+          "c": 6
+        }
+      }
+    },
+    {
+      "name": "send_time_moved_forward_resets_counter",
+      "input": {
+        "op": "send",
+        "state": {
+          "l": 1000,
+          "c": 5
+        },
+        "device": "0195f2a0-0000-7000-8000-00000000000a",
+        "now": 2000
+      },
+      "expected": {
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "state": {
+          "l": 2000,
+          "c": 0
+        }
+      }
+    },
+    {
+      "name": "send_counter_overflow_advances_ms",
+      "input": {
+        "op": "send",
+        "state": {
+          "l": 1000,
+          "c": 99999
+        },
+        "device": "0195f2a0-0000-7000-8000-00000000000a",
+        "now": 1000
+      },
+      "expected": {
+        "hlc": "000000000001001-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "state": {
+          "l": 1001,
+          "c": 0
+        }
+      }
+    },
+    {
+      "name": "receive_same_ms_takes_max_counter_plus_one",
+      "input": {
+        "op": "receive",
+        "state": {
+          "l": 1000,
+          "c": 3
+        },
+        "remote": "000000000001000-00007-0195f2a0-0000-7000-8000-00000000000b",
+        "now": 500
+      },
+      "expected": {
+        "state": {
+          "l": 1000,
+          "c": 8
+        }
+      }
+    },
+    {
+      "name": "receive_same_ms_local_counter_larger",
+      "input": {
+        "op": "receive",
+        "state": {
+          "l": 1000,
+          "c": 9
+        },
+        "remote": "000000000001000-00007-0195f2a0-0000-7000-8000-00000000000b",
+        "now": 500
+      },
+      "expected": {
+        "state": {
+          "l": 1000,
+          "c": 10
+        }
+      }
+    },
+    {
+      "name": "receive_remote_older_bumps_local_counter",
+      "input": {
+        "op": "receive",
+        "state": {
+          "l": 1000,
+          "c": 3
+        },
+        "remote": "000000000000900-00050-0195f2a0-0000-7000-8000-00000000000b",
+        "now": 500
+      },
+      "expected": {
+        "state": {
+          "l": 1000,
+          "c": 4
+        }
+      }
+    },
+    {
+      "name": "receive_remote_newer_adopts_remote_time",
+      "input": {
+        "op": "receive",
+        "state": {
+          "l": 1000,
+          "c": 3
+        },
+        "remote": "000000000002000-00004-0195f2a0-0000-7000-8000-00000000000b",
+        "now": 500
+      },
+      "expected": {
+        "state": {
+          "l": 2000,
+          "c": 5
+        }
+      }
+    },
+    {
+      "name": "receive_wall_clock_newest_resets_counter",
+      "input": {
+        "op": "receive",
+        "state": {
+          "l": 1000,
+          "c": 3
+        },
+        "remote": "000000000000500-00004-0195f2a0-0000-7000-8000-00000000000b",
+        "now": 3000
+      },
+      "expected": {
+        "state": {
+          "l": 3000,
+          "c": 0
+        }
+      }
+    },
+    {
+      "name": "receive_wall_clock_equals_remote_ms",
+      "input": {
+        "op": "receive",
+        "state": {
+          "l": 1000,
+          "c": 3
+        },
+        "remote": "000000000003000-00009-0195f2a0-0000-7000-8000-00000000000b",
+        "now": 3000
+      },
+      "expected": {
+        "state": {
+          "l": 3000,
+          "c": 10
+        }
+      }
+    },
+    {
+      "name": "receive_all_zero",
+      "input": {
+        "op": "receive",
+        "state": {
+          "l": 0,
+          "c": 0
+        },
+        "remote": "000000000000000-00000-0195f2a0-0000-7000-8000-00000000000b",
+        "now": 0
+      },
+      "expected": {
+        "state": {
+          "l": 0,
+          "c": 1
+        }
+      }
+    },
+    {
+      "name": "receive_counter_overflow_advances_ms",
+      "input": {
+        "op": "receive",
+        "state": {
+          "l": 1000,
+          "c": 99999
+        },
+        "remote": "000000000001000-00005-0195f2a0-0000-7000-8000-00000000000b",
+        "now": 0
+      },
+      "expected": {
+        "state": {
+          "l": 1001,
+          "c": 0
+        }
+      }
+    }
+  ]
+}

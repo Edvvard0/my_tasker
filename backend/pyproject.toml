@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "alembic==1.20.0",
+    "argon2-cffi==25.1.0",
     "asyncpg==0.31.0",
+    "cryptography==50.0.1",
     "fastapi==0.142.1",
     "pydantic==2.13.5",
     "pydantic-settings==2.15.0",
@@ -25,6 +27,7 @@ packages = ["src/tasker"]
 [dependency-groups]
 dev = [
     "httpx==0.28.1",
+    "hypothesis==6.168.3",
     "mypy==2.3.1",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
@@ -42,9 +45,12 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "A", "ASYNC", "S", "C4", "SIM", "P
 ignore = ["PLR2004"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106", "S311", "S603", "S607", "PLR0913", "RUF001", "RUF003"]
+"tests/**" = ["S101", "S105", "S106", "S311", "S603", "S607", "PLR0913", "PLR0917", "SLF001", "RUF001", "RUF003"]
 "src/tasker/money.py" = ["RUF001", "RUF003"]
 "src/tasker/migrations/**" = ["N999"]
+"src/tasker/cli.py" = ["T201"]
+"src/tasker/sync/**" = ["PLR0913", "PLR0917"]
+"src/tasker/auth/service.py" = ["PLR0913"]
 
 [tool.mypy]
 python_version = "3.13"

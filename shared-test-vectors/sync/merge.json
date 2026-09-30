@@ -1,0 +1,457 @@
+{
+  "description": "Решения слияния на сервере (spec stage1 §3.4). input.kind: field | delete | tombstone_edit. entry — {v: server_version поля, h: hlc последней записи}; устройство операции берётся из её hlc.",
+  "cases": [
+    {
+      "name": "field_same_value_is_noop",
+      "input": {
+        "kind": "field",
+        "current": "x",
+        "incoming": "x",
+        "entry": {
+          "v": 5,
+          "h": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "noop"
+    },
+    {
+      "name": "field_dict_key_order_is_irrelevant",
+      "input": {
+        "kind": "field",
+        "current": {
+          "a": 1,
+          "b": 2
+        },
+        "incoming": {
+          "b": 2,
+          "a": 1
+        },
+        "entry": {
+          "v": 5,
+          "h": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "noop"
+    },
+    {
+      "name": "field_same_value_newer_hlc_refreshes_the_clock",
+      "input": {
+        "kind": "field",
+        "current": "x",
+        "incoming": "x",
+        "entry": {
+          "v": 5,
+          "h": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "touch"
+    },
+    {
+      "name": "field_same_value_without_entry_touches",
+      "input": {
+        "kind": "field",
+        "current": "x",
+        "incoming": "x",
+        "entry": null,
+        "hlc": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "touch"
+    },
+    {
+      "name": "field_same_value_equal_hlc_is_noop",
+      "input": {
+        "kind": "field",
+        "current": "x",
+        "incoming": "x",
+        "entry": {
+          "v": 5,
+          "h": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000a"
+        },
+        "hlc": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "noop"
+    },
+    {
+      "name": "field_true_is_not_one",
+      "input": {
+        "kind": "field",
+        "current": 1,
+        "incoming": true,
+        "entry": {
+          "v": 5,
+          "h": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 5
+      },
+      "expected": "apply"
+    },
+    {
+      "name": "field_no_entry_applies",
+      "input": {
+        "kind": "field",
+        "current": null,
+        "incoming": "x",
+        "entry": null,
+        "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 0
+      },
+      "expected": "apply"
+    },
+    {
+      "name": "field_not_concurrent_applies_even_with_older_hlc",
+      "input": {
+        "kind": "field",
+        "current": "old",
+        "incoming": "new",
+        "entry": {
+          "v": 5,
+          "h": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 5
+      },
+      "expected": "apply"
+    },
+    {
+      "name": "field_base_before_but_same_device_applies",
+      "input": {
+        "kind": "field",
+        "current": "old",
+        "incoming": "new",
+        "entry": {
+          "v": 5,
+          "h": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a"
+        },
+        "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "apply"
+    },
+    {
+      "name": "field_concurrent_newer_hlc_wins",
+      "input": {
+        "kind": "field",
+        "current": "old",
+        "incoming": "new",
+        "entry": {
+          "v": 5,
+          "h": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 4
+      },
+      "expected": "apply_conflict"
+    },
+    {
+      "name": "field_concurrent_older_hlc_loses",
+      "input": {
+        "kind": "field",
+        "current": "old",
+        "incoming": "new",
+        "entry": {
+          "v": 5,
+          "h": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 4
+      },
+      "expected": "keep_conflict"
+    },
+    {
+      "name": "field_concurrent_counter_decides",
+      "input": {
+        "kind": "field",
+        "current": "old",
+        "incoming": "new",
+        "entry": {
+          "v": 5,
+          "h": "000000000002000-00001-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000002000-00002-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 0
+      },
+      "expected": "apply_conflict"
+    },
+    {
+      "name": "field_concurrent_device_decides_tie",
+      "input": {
+        "kind": "field",
+        "current": "old",
+        "incoming": "new",
+        "entry": {
+          "v": 5,
+          "h": "000000000002000-00001-0195f2a0-0000-7000-8000-00000000000a"
+        },
+        "hlc": "000000000002000-00001-0195f2a0-0000-7000-8000-00000000000b",
+        "base_version": 0
+      },
+      "expected": "apply_conflict"
+    },
+    {
+      "name": "field_concurrent_json_values",
+      "input": {
+        "kind": "field",
+        "current": {
+          "a": [
+            1
+          ]
+        },
+        "incoming": {
+          "a": [
+            2
+          ]
+        },
+        "entry": {
+          "v": 9,
+          "h": "000000000005000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000004000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 8
+      },
+      "expected": "keep_conflict"
+    },
+    {
+      "name": "delete_of_deleted_row_is_noop",
+      "input": {
+        "kind": "delete",
+        "deleted": true,
+        "fields": {
+          "title": {
+            "v": 2,
+            "h": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000b"
+          }
+        },
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "noop"
+    },
+    {
+      "name": "delete_without_concurrent_edits",
+      "input": {
+        "kind": "delete",
+        "deleted": false,
+        "fields": {
+          "title": {
+            "v": 1,
+            "h": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000b"
+          },
+          "deleted_at": {
+            "v": 1,
+            "h": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000b"
+          }
+        },
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "delete"
+    },
+    {
+      "name": "delete_after_seeing_the_edit",
+      "input": {
+        "kind": "delete",
+        "deleted": false,
+        "fields": {
+          "title": {
+            "v": 2,
+            "h": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000b"
+          }
+        },
+        "hlc": "000000000004000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 2
+      },
+      "expected": "delete"
+    },
+    {
+      "name": "delete_ignores_own_earlier_edit",
+      "input": {
+        "kind": "delete",
+        "deleted": false,
+        "fields": {
+          "title": {
+            "v": 2,
+            "h": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000a"
+          }
+        },
+        "hlc": "000000000004000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "delete"
+    },
+    {
+      "name": "delete_newer_than_concurrent_edit",
+      "input": {
+        "kind": "delete",
+        "deleted": false,
+        "fields": {
+          "title": {
+            "v": 2,
+            "h": "000000000001500-00000-0195f2a0-0000-7000-8000-00000000000b"
+          }
+        },
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "delete_edit_conflict"
+    },
+    {
+      "name": "delete_older_than_concurrent_edit_loses",
+      "input": {
+        "kind": "delete",
+        "deleted": false,
+        "fields": {
+          "title": {
+            "v": 2,
+            "h": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000b"
+          }
+        },
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "delete_lost"
+    },
+    {
+      "name": "delete_lost_if_any_concurrent_edit_is_newer",
+      "input": {
+        "kind": "delete",
+        "deleted": false,
+        "fields": {
+          "title": {
+            "v": 2,
+            "h": "000000000001500-00000-0195f2a0-0000-7000-8000-00000000000b"
+          },
+          "budget": {
+            "v": 3,
+            "h": "000000000002500-00000-0195f2a0-0000-7000-8000-00000000000b"
+          }
+        },
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "delete_lost"
+    },
+    {
+      "name": "delete_ignores_deleted_at_entry",
+      "input": {
+        "kind": "delete",
+        "deleted": false,
+        "fields": {
+          "deleted_at": {
+            "v": 9,
+            "h": "000000000009000-00000-0195f2a0-0000-7000-8000-00000000000b"
+          }
+        },
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1
+      },
+      "expected": "delete"
+    },
+    {
+      "name": "tombstone_edit_that_saw_the_deletion_stays_deleted",
+      "input": {
+        "kind": "tombstone_edit",
+        "entry": {
+          "v": 2,
+          "h": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 2,
+        "restore": false
+      },
+      "expected": "stay_deleted"
+    },
+    {
+      "name": "tombstone_restore_that_saw_the_deletion_restores",
+      "input": {
+        "kind": "tombstone_edit",
+        "entry": {
+          "v": 2,
+          "h": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000000500-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 2,
+        "restore": true
+      },
+      "expected": "restore"
+    },
+    {
+      "name": "tombstone_concurrent_newer_edit_resurrects",
+      "input": {
+        "kind": "tombstone_edit",
+        "entry": {
+          "v": 2,
+          "h": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1,
+        "restore": false
+      },
+      "expected": "resurrect_conflict"
+    },
+    {
+      "name": "tombstone_concurrent_older_edit_stays_deleted",
+      "input": {
+        "kind": "tombstone_edit",
+        "entry": {
+          "v": 2,
+          "h": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1,
+        "restore": false
+      },
+      "expected": "stay_deleted_conflict"
+    },
+    {
+      "name": "tombstone_concurrent_newer_restore_resurrects",
+      "input": {
+        "kind": "tombstone_edit",
+        "entry": {
+          "v": 2,
+          "h": "000000000001000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1,
+        "restore": true
+      },
+      "expected": "resurrect_conflict"
+    },
+    {
+      "name": "tombstone_concurrent_older_restore_loses",
+      "input": {
+        "kind": "tombstone_edit",
+        "entry": {
+          "v": 2,
+          "h": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000b"
+        },
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1,
+        "restore": true
+      },
+      "expected": "stay_deleted_conflict"
+    },
+    {
+      "name": "tombstone_own_deletion_is_not_concurrent",
+      "input": {
+        "kind": "tombstone_edit",
+        "entry": {
+          "v": 2,
+          "h": "000000000003000-00000-0195f2a0-0000-7000-8000-00000000000a"
+        },
+        "hlc": "000000000002000-00000-0195f2a0-0000-7000-8000-00000000000a",
+        "base_version": 1,
+        "restore": true
+      },
+      "expected": "restore"
+    }
+  ]
+}

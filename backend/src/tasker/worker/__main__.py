@@ -2,6 +2,7 @@ import asyncio
 import signal
 import sys
 
+import tasker.sync.jobs  # noqa: F401  (registers the housekeeping job)
 from tasker.config import Settings
 from tasker.logging import configure_logging
 from tasker.worker.registry import registry
