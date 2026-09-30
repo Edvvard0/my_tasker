@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -56,4 +57,32 @@ async def test_ready_503_on_timeout(migrated_db_url: str) -> None:
         response = await client.get("/health/ready")
     assert response.status_code == 503
     assert response.json()["reason"] == "database_unavailable"
-    await asyncio.sleep(0)
+
+
+async def test_ready_503_within_timeout_when_database_accepts_but_never_answers() -> None:
+    # A DB that completes the TCP handshake and then says nothing (hung server, half-open
+    # network): the readiness probe must still answer 503 in about ready_timeout.
+    connections: list[asyncio.StreamWriter] = []
+
+    async def hang(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        connections.append(writer)
+        await asyncio.sleep(3600)
+
+    server = await asyncio.start_server(hang, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    settings = make_settings(f"postgresql+asyncpg://user:pw@127.0.0.1:{port}/none").model_copy(
+        update={"ready_timeout": 0.5}
+    )
+    try:
+        async with app_client(settings) as client:
+            started = time.perf_counter()
+            response = await asyncio.wait_for(client.get("/health/ready"), timeout=5)
+            elapsed = time.perf_counter() - started
+    finally:
+        for writer in connections:
+            writer.close()
+        server.close()
+    assert response.status_code == 503
+    assert response.json() == {"status": "unavailable", "reason": "database_unavailable"}
+    assert 0.4 <= elapsed < 3
+    assert connections, "the probe never reached the fake database"

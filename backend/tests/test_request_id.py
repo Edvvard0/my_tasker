@@ -72,3 +72,31 @@ async def test_non_http_scopes_pass_through() -> None:
 
     await RequestIdMiddleware(inner)({"type": "lifespan"}, receive, send)
     assert seen == ["lifespan"]
+
+
+@pytest.mark.parametrize("raw", [b"abc\n", b"abc\r", b"abc\n\n", b"\nabc", b"a" * 129])
+async def test_raw_scope_request_id_with_trailing_newline_is_replaced(raw: bytes) -> None:
+    # HTTP clients refuse to send a newline in a header value, so use a raw ASGI scope.
+    async def inner(scope: Scope, receive: Receive, send: Send) -> None:
+        await send({"type": "http.response.start", "status": 204, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    async def receive() -> Message:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    sent: list[Message] = []
+
+    async def send(message: Message) -> None:
+        sent.append(message)
+
+    scope: Scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "headers": [(b"x-request-id", raw)],
+    }
+    await RequestIdMiddleware(inner)(scope, receive, send)
+    start = next(m for m in sent if m["type"] == "http.response.start")
+    returned = dict(start["headers"])[b"x-request-id"]
+    assert returned != raw
+    assert len(returned) == 32

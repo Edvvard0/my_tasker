@@ -100,6 +100,16 @@
       "name": "smallest parseable value",
       "input": -99999999999999,
       "expected": "-999\u00a0999\u00a0999\u00a0999,99\u00a0₽"
+    },
+    {
+      "name": "above the maximum is an error",
+      "input": 100000000000000,
+      "expected": {"error": true}
+    },
+    {
+      "name": "below the minimum is an error",
+      "input": -100000000000000,
+      "expected": {"error": true}
     }
   ]
 }

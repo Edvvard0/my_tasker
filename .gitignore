@@ -1,0 +1,28 @@
+# Secrets: only *.env.example (no values) may be committed.
+.env
+*.env
+!*.env.example
+deploy/.env
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage/
+coverage.xml
+htmlcov/
+
+# Flutter / Dart (pubspec.lock and platform folders stay committed)
+.dart_tool/
+build/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

@@ -6,6 +6,16 @@
 	default_sni {$SERVER_IP}
 }
 
+# Headers for every response of every site (including the port-80 redirect).
+# HSTS is deliberately absent: browsers ignore it for IP addresses. Add
+# `Strict-Transport-Security "max-age=31536000"` here once the service has a domain name.
+(common_headers) {
+	header {
+		X-Content-Type-Options nosniff
+		-Server
+	}
+}
+
 # HTTPS by IP address, no domain: the certificate is issued by Caddy's own internal CA.
 # Clients pin the root CA of that CA (see deploy/README.md).
 https://{$SERVER_IP} {
@@ -15,14 +25,12 @@ https://{$SERVER_IP} {
 		max_size 10MB
 	}
 
-	header {
-		Strict-Transport-Security "max-age=31536000"
-		-Server
-	}
+	import common_headers
 
 	# The public root certificate (never the key) so a client can fetch it once and show its
 	# fingerprint for manual comparison.
 	handle /ca/root.crt {
+		header Content-Type application/x-x509-ca-cert
 		rewrite * /root.crt
 		root * /data/caddy/pki/authorities/local
 		file_server
@@ -37,5 +45,6 @@ https://{$SERVER_IP} {
 }
 
 http://{$SERVER_IP} {
+	import common_headers
 	redir https://{$SERVER_IP}{uri} permanent
 }

@@ -132,6 +132,41 @@
       "expected": 705
     },
     {
+      "name": "tab is not a space, trailing",
+      "input": "12\t",
+      "expected": {"error": true}
+    },
+    {
+      "name": "newline is not a space, trailing",
+      "input": "12\n",
+      "expected": {"error": true}
+    },
+    {
+      "name": "tab inside the number",
+      "input": "1\t2",
+      "expected": {"error": true}
+    },
+    {
+      "name": "suffix 'руб.' uppercase",
+      "input": "12 РУБ.",
+      "expected": 1200
+    },
+    {
+      "name": "suffix 'руб.' mixed case",
+      "input": "12 Руб.",
+      "expected": 1200
+    },
+    {
+      "name": "spaces anywhere between digits are removed",
+      "input": "1 2 3",
+      "expected": 12300
+    },
+    {
+      "name": "spaces around the separator are removed",
+      "input": "1 , 5",
+      "expected": 150
+    },
+    {
       "name": "empty string",
       "input": "",
       "expected": {

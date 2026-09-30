@@ -9,6 +9,7 @@ RUB_SIGN = "₽"
 # Longest first so that "руб." wins over "р".
 _CURRENCY_SUFFIXES = (RUB_SIGN, "руб.", "руб", "р.", "р")
 _MAX_INTEGER_DIGITS = 12
+MAX_KOPECKS = 99_999_999_999_999
 _AMOUNT = re.compile(r"([+\-−]?)([0-9]+)(?:[.,]([0-9]{1,2}))?")
 
 
@@ -36,7 +37,15 @@ def parse_amount(text: str) -> int:
 
 
 def format_amount(kopecks: int) -> str:
-    """Format kopecks as ``"1 234,56 ₽"`` (NBSP thousands separator and before the sign)."""
+    """Format kopecks as ``"1 234,56 ₽"`` (NBSP thousands separator and before the sign).
+
+    Raises :class:`TypeError` for anything but a real ``int`` (``bool`` included) and
+    :class:`AmountError` when ``abs(kopecks) > MAX_KOPECKS``.
+    """
+    if type(kopecks) is not int:
+        raise TypeError(f"kopecks must be int, got {type(kopecks).__name__}")
+    if abs(kopecks) > MAX_KOPECKS:
+        raise AmountError(f"amount out of range: {kopecks}")
     rubles, rest = divmod(abs(kopecks), 100)
     grouped = f"{rubles:,}".replace(",", NBSP)
     fraction = f",{rest:02d}" if rest else ""

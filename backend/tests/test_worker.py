@@ -135,9 +135,24 @@ def test_module_exits_cleanly_on_signal(sig: signal.Signals) -> None:
 
 def test_main_runs_until_signalled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@127.0.0.1:1/d")
-    timer = threading.Timer(0.3, os.kill, args=(os.getpid(), signal.SIGTERM))
-    timer.start()
+    running = threading.Event()
+
+    async def run_and_announce(registry: JobRegistry, stop: asyncio.Event) -> None:
+        # amain installed the signal handlers before calling run_worker, so from here on a
+        # signal is safe: it is signalled only once the worker is really running.
+        running.set()
+        await run_worker(registry, stop)
+
+    monkeypatch.setattr("tasker.worker.__main__.run_worker", run_and_announce)
+
+    def signal_when_running() -> None:
+        if running.wait(timeout=10):
+            os.kill(os.getpid(), signal.SIGTERM)
+
+    sender = threading.Thread(target=signal_when_running, daemon=True)
+    sender.start()
     try:
         assert main() == 0
     finally:
-        timer.cancel()
+        running.set()  # release the sender if main() failed before starting the worker
+        sender.join(timeout=5)
