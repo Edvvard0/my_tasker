@@ -70,4 +70,12 @@ curl -k https://127.0.0.1/health/ready
 
 ### Клиент (из `app/`)
 
-Дополняется по итогам клиентской части этапа 0.
+```bash
+export PATH=/opt/flutter/bin:$PATH          # Flutter 3.47.5
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs   # Drift *.g.dart, в git не хранится
+dart format --output=none --set-exit-if-changed $(git ls-files 'lib/**.dart' 'test/**.dart' 'tool/**.dart')
+flutter analyze                                            # 0 замечаний
+flutter test --coverage && dart tool/check_coverage.dart --min=90
+flutter test --update-goldens test/goldens                 # эталоны: только Linux, смотреть PNG глазами
+```
