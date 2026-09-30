@@ -1,0 +1,3 @@
+# False positive: 'db_encryption_key_v1' is the NAME of the secure-storage slot, not a secret.
+# The real database key is random and generated on-device.
+c683e95bba5055da4b023e089dd103d9b84dfe76:app/lib/core/db/database_key_store.dart:generic-api-key:19

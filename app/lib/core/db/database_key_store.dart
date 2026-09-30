@@ -16,7 +16,7 @@ class SecureDatabaseKeyStore implements DatabaseKeyStore {
     : _storage = storage ?? const FlutterSecureStorage(),
       _random = random ?? Random.secure();
 
-  static const storageKey = 'db_encryption_key_v1';
+  static const storageKey = 'db_encryption_key_v1'; // gitleaks:allow
   static const keyBytes = 32;
 
   final FlutterSecureStorage _storage;
