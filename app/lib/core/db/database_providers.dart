@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_tasker/core/db/app_database.dart';
 import 'package:my_tasker/core/db/database_key_store.dart';
@@ -18,7 +20,10 @@ final databaseOpenerProvider = Provider<AppDatabaseOpener>(
 /// Единственный экземпляр БД на время жизни приложения.
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase(ref.watch(databaseOpenerProvider).open());
-  ref.onDispose(db.close);
+  // Закрытие не открывшейся (сломанной) БД может бросить: не мешаем сбросу.
+  ref.onDispose(
+    () => unawaited(db.close().then((_) {}, onError: (Object _) {})),
+  );
   return db;
 });
 

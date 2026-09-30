@@ -3,6 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:my_tasker/core/layout/window_class.dart';
 import 'package:my_tasker/core/theme/app_spacing.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
+import 'package:my_tasker/features/sync/presentation/sync_indicator.dart';
 
 /// Каркас экрана: верхняя панель (56 на телефоне / 64 на десктопе) и
 /// контент с полями по классу ширины (02, 2.3 и 3.2).
@@ -93,12 +94,15 @@ class ScreenScaffold extends StatelessWidget {
                       ],
                     ),
                   ),
+                  // Индикатор синхронизации: справа в верхней панели (02, 4.12).
+                  const SyncIndicator(),
                   ...actions,
                 ],
               ),
             ),
           ),
         ),
+        const SyncBanner(),
         Expanded(
           child: Align(
             alignment: Alignment.topCenter,

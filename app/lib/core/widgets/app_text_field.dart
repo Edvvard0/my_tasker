@@ -17,6 +17,7 @@ class AppTextField extends StatefulWidget {
     this.minLines,
     this.maxLines = 1,
     this.autocorrect = true,
+    this.obscureText = false,
     this.enableSuggestions = true,
     this.inputFormatters,
     super.key,
@@ -29,6 +30,7 @@ class AppTextField extends StatefulWidget {
   final int? minLines;
   final int? maxLines;
   final bool autocorrect;
+  final bool obscureText;
   final bool enableSuggestions;
   final List<TextInputFormatter>? inputFormatters;
 
@@ -66,6 +68,7 @@ class _AppTextFieldState extends State<AppTextField> {
             minLines: widget.minLines,
             maxLines: widget.maxLines,
             autocorrect: widget.autocorrect,
+            obscureText: widget.obscureText,
             enableSuggestions: widget.enableSuggestions,
             inputFormatters: widget.inputFormatters,
           ),

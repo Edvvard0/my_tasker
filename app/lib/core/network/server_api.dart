@@ -8,17 +8,22 @@ class ServerVersion {
     required this.appVersion,
     required this.apiSchemaVersion,
     required this.minClientSchemaVersion,
+    this.serverEpoch,
   });
 
   factory ServerVersion.fromJson(Map<String, dynamic> json) => ServerVersion(
     appVersion: json['app_version'] as String,
     apiSchemaVersion: json['api_schema_version'] as int,
     minClientSchemaVersion: json['min_client_schema_version'] as int,
+    serverEpoch: json['server_epoch']?.toString(),
   );
 
   final String appVersion;
   final int apiSchemaVersion;
   final int minClientSchemaVersion;
+
+  /// Идентификатор «эпохи» сервера (см. `server_epoch.dart`).
+  final String? serverEpoch;
 }
 
 /// Тонкая обёртка над Dio для эндпоинтов, нужных на этапе 0.

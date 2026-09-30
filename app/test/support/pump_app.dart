@@ -3,11 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/app.dart';
+import 'package:my_tasker/core/auth/auth_controller.dart';
+import 'package:my_tasker/core/auth/token_store.dart';
 import 'package:my_tasker/core/config/app_config.dart';
+import 'package:my_tasker/core/config/clock.dart';
+import 'package:my_tasker/core/db/database_opener.dart';
 import 'package:my_tasker/core/db/database_providers.dart';
+import 'package:my_tasker/core/network/api_providers.dart';
 import 'package:my_tasker/core/network/connection_checker.dart';
+import 'package:my_tasker/core/sync/sync_providers.dart';
+import 'package:my_tasker/features/settings/data/server_connection_repository.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 
+import 'fake_server/fake_backend.dart';
+import 'fakes.dart';
 import 'in_memory_opener.dart';
 
 /// Телефон (Galaxy A55 ≈ 411 dp; берём типовые 390×844).
@@ -25,6 +34,12 @@ const desktopSize = Size(1440, 900);
 /// Запускает приложение на экране заданного размера с БД в памяти.
 ///
 /// [checker] подменяет проверку соединения (сеть в тестах не ходит).
+/// [signedIn] — сразу войти (токены в памяти); [gated] — настоящий роутер с
+/// правилом входа (`authRedirect`), а не «голый» без redirect.
+/// [backend] — вместо сети фейковый сервер (тогда `http://localhost`
+/// разрешён); [serverUrl] — сохранить адрес сервера в БД до старта;
+/// [now] — зафиксировать «текущее время» (стабильные подписи «5 мин назад»);
+/// [opener] — свой способ открыть БД (например, «сломанную»).
 Future<ProviderContainer> pumpApp(
   WidgetTester tester, {
   Size size = phoneSize,
@@ -32,6 +47,12 @@ Future<ProviderContainer> pumpApp(
   List<Override> overrides = const [],
   ConnectionChecker? checker,
   bool settle = true,
+  bool signedIn = true,
+  bool gated = false,
+  FakeBackend? backend,
+  String? serverUrl,
+  DateTime? now,
+  AppDatabaseOpener? opener,
 }) async {
   tester.view
     ..physicalSize = size
@@ -40,21 +61,39 @@ Future<ProviderContainer> pumpApp(
 
   final container = ProviderContainer(
     overrides: [
-      databaseOpenerProvider.overrideWithValue(InMemoryDatabaseOpener()),
-      routerProvider.overrideWith((ref) {
-        final router = createRouter(initialLocation: location);
-        ref.onDispose(router.dispose);
-        return router;
-      }),
+      databaseOpenerProvider.overrideWithValue(
+        opener ?? InMemoryDatabaseOpener(),
+      ),
+      tokenStoreProvider.overrideWithValue(
+        MemoryTokenStore(signedIn ? fakeSession() : null),
+      ),
+      connectivityMonitorProvider.overrideWithValue(FakeConnectivity()),
+      syncAutostartProvider.overrideWithValue(false),
+      if (!gated)
+        routerProvider.overrideWith((ref) {
+          final router = createRouter(initialLocation: location);
+          ref.onDispose(router.dispose);
+          return router;
+        }),
       if (checker != null) connectionCheckerProvider.overrideWithValue(checker),
       appConfigProvider.overrideWithValue(
-        const AppConfig(allowInsecureLocalhost: false),
+        AppConfig(allowInsecureLocalhost: backend != null),
       ),
+      if (backend != null)
+        plainAdapterFactoryProvider.overrideWithValue(() => backend),
+      if (now != null) clockProvider.overrideWithValue(() => now),
       ...overrides,
     ],
   );
   addTearDown(container.dispose);
 
+  if (serverUrl != null) {
+    await tester.runAsync(
+      () => container
+          .read(serverConnectionRepositoryProvider)
+          .save(ServerConnectionSettings(url: serverUrl)),
+    );
+  }
   await tester.pumpWidget(
     UncontrolledProviderScope(container: container, child: const MyTaskerApp()),
   );

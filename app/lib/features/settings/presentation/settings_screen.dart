@@ -10,7 +10,8 @@ import 'package:my_tasker/core/widgets/screen_scaffold.dart';
 import 'package:my_tasker/features/settings/application/server_connection_controller.dart';
 import 'package:my_tasker/features/shell/sections_screen.dart';
 
-/// «Настройки»: пока только подключение к серверу, справочник темы и версия.
+/// «Настройки»: сервер, вход и устройства, синхронизация, корзина,
+/// справочник темы и версия.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -35,6 +36,42 @@ class SettingsScreen extends ConsumerWidget {
               title: 'Сервер',
               subtitle: saved?.url ?? 'Не настроен',
               onTap: () => context.go('/settings/server'),
+            ),
+            Divider(
+              color: c.borderDefault,
+              indent: AppSpacing.s4,
+              endIndent: AppSpacing.s4,
+            ),
+            _SettingsTile(
+              key: const Key('settings-devices'),
+              icon: LucideIcons.smartphone,
+              title: 'Мои устройства',
+              subtitle: 'Вход, отзыв устройств, выход',
+              onTap: () => context.go('/settings/devices'),
+            ),
+            Divider(
+              color: c.borderDefault,
+              indent: AppSpacing.s4,
+              endIndent: AppSpacing.s4,
+            ),
+            _SettingsTile(
+              key: const Key('settings-sync'),
+              icon: LucideIcons.refreshCw,
+              title: 'Синхронизация',
+              subtitle: 'Состояние, очередь, журнал конфликтов',
+              onTap: () => context.go('/settings/sync'),
+            ),
+            Divider(
+              color: c.borderDefault,
+              indent: AppSpacing.s4,
+              endIndent: AppSpacing.s4,
+            ),
+            _SettingsTile(
+              key: const Key('settings-trash'),
+              icon: LucideIcons.trash2,
+              title: 'Корзина',
+              subtitle: 'Удалённое хранится 30 дней',
+              onTap: () => context.go('/settings/trash'),
             ),
             Divider(
               color: c.borderDefault,

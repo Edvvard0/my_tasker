@@ -1,8 +1,12 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:my_tasker/core/auth/auth_controller.dart';
+import 'package:my_tasker/core/auth/auth_models.dart';
 import 'package:my_tasker/features/ai_chat/ai_chat_screen.dart';
+import 'package:my_tasker/features/auth/presentation/login_screen.dart';
 import 'package:my_tasker/features/calendar/calendar_screen.dart';
+import 'package:my_tasker/features/devices/presentation/devices_screen.dart';
 import 'package:my_tasker/features/finance/finance_screen.dart';
 import 'package:my_tasker/features/settings/presentation/server_connection_screen.dart';
 import 'package:my_tasker/features/settings/presentation/settings_screen.dart';
@@ -11,19 +15,54 @@ import 'package:my_tasker/features/shell/app_shell.dart';
 import 'package:my_tasker/features/shell/sections_screen.dart';
 import 'package:my_tasker/features/sleep/sleep_screen.dart';
 import 'package:my_tasker/features/study/study_screen.dart';
+import 'package:my_tasker/features/sync/presentation/conflicts_screen.dart';
+import 'package:my_tasker/features/sync/presentation/sync_screen.dart';
 import 'package:my_tasker/features/today/today_screen.dart';
+import 'package:my_tasker/features/trash/presentation/trash_screen.dart';
 import 'package:my_tasker/features/work/servers_screen.dart';
 import 'package:my_tasker/features/work/work_screen.dart';
 
 /// Ключ корневого навигатора: экраны поверх оболочки (сетка «Разделы»).
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
+/// Экраны, доступные без входа: сам вход и настройка сервера (без сервера
+/// войти нельзя).
+const Set<String> publicLocations = {'/login', '/setup/server'};
+
+/// Правило входа: без сессии — только [publicLocations]; с сессией экран
+/// входа не нужен. Пока токены читаются ([AuthUnknown]), ничего не решаем
+/// (корень приложения показывает заставку).
+String? authRedirect(AuthState auth, String location) {
+  if (auth is SignedOut && !publicLocations.contains(location)) {
+    return '/login';
+  }
+  if (auth is SignedIn && location == '/login') return '/today';
+  return null;
+}
+
 /// Строит роутер. Порядок веток = порядок `AppSection.values`.
-GoRouter createRouter({String initialLocation = '/today'}) => GoRouter(
+GoRouter createRouter({
+  String initialLocation = '/today',
+  GoRouterRedirect? redirect,
+  Listenable? refreshListenable,
+}) => GoRouter(
   navigatorKey: rootNavigatorKey,
   initialLocation: initialLocation,
+  redirect: redirect,
+  refreshListenable: refreshListenable,
   routes: [
     GoRoute(path: '/', redirect: (_, _) => '/today'),
+    GoRoute(
+      path: '/login',
+      parentNavigatorKey: rootNavigatorKey,
+      builder: (_, _) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/setup/server',
+      parentNavigatorKey: rootNavigatorKey,
+      builder: (_, _) =>
+          const Scaffold(body: ServerConnectionScreen(backLocation: '/login')),
+    ),
     GoRoute(
       path: '/sections',
       parentNavigatorKey: rootNavigatorKey,
@@ -96,6 +135,21 @@ GoRouter createRouter({String initialLocation = '/today'}) => GoRouter(
                   path: 'theme',
                   builder: (_, _) => const ThemeShowcaseScreen(),
                 ),
+                GoRoute(
+                  path: 'devices',
+                  builder: (_, _) => const DevicesScreen(),
+                ),
+                GoRoute(
+                  path: 'sync',
+                  builder: (_, _) => const SyncScreen(),
+                  routes: [
+                    GoRoute(
+                      path: 'conflicts',
+                      builder: (_, _) => const ConflictsScreen(),
+                    ),
+                  ],
+                ),
+                GoRoute(path: 'trash', builder: (_, _) => const TrashScreen()),
               ],
             ),
           ],
@@ -106,7 +160,17 @@ GoRouter createRouter({String initialLocation = '/today'}) => GoRouter(
 );
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final router = createRouter();
-  ref.onDispose(router.dispose);
+  // Роутер живёт, пока живёт приложение; смена состояния входа лишь
+  // перевычисляет redirect (стек экранов не пересоздаётся).
+  final auth = ValueNotifier<AuthState>(ref.read(authControllerProvider));
+  ref.listen<AuthState>(authControllerProvider, (_, next) => auth.value = next);
+  final router = createRouter(
+    redirect: (_, state) => authRedirect(auth.value, state.matchedLocation),
+    refreshListenable: auth,
+  );
+  ref.onDispose(() {
+    router.dispose();
+    auth.dispose();
+  });
   return router;
 });

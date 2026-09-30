@@ -2,11 +2,20 @@ import 'dart:math';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+/// Ключ шифрования БД в защищённом хранилище повреждён (не 64 hex-символа).
+/// Молча создавать новый нельзя: старая БД стала бы нечитаемой.
+class DatabaseKeyCorruptedException extends StateError {
+  DatabaseKeyCorruptedException() : super('Ключ шифрования БД повреждён');
+}
+
 /// Хранилище ключа шифрования локальной БД.
 abstract interface class DatabaseKeyStore {
   /// Возвращает 256-битный ключ в виде 64 hex-символов; при первом запуске
   /// генерирует и сохраняет его.
   Future<String> getOrCreateKey();
+
+  /// Стирает сохранённый ключ и создаёт новый (сброс локальных данных).
+  Future<String> resetKey();
 }
 
 /// Ключ в защищённом хранилище ОС: Android Keystore, Windows DPAPI
@@ -28,10 +37,18 @@ class SecureDatabaseKeyStore implements DatabaseKeyStore {
     if (existing != null) {
       if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(existing)) {
         // Не пересоздаём молча: новый ключ сделал бы старую БД нечитаемой.
-        throw StateError('Ключ шифрования БД повреждён');
+        throw DatabaseKeyCorruptedException();
       }
       return existing;
     }
+    final key = generateKey(_random);
+    await _storage.write(key: storageKey, value: key);
+    return key;
+  }
+
+  @override
+  Future<String> resetKey() async {
+    await _storage.delete(key: storageKey);
     final key = generateKey(_random);
     await _storage.write(key: storageKey, value: key);
     return key;

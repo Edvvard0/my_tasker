@@ -25,7 +25,10 @@ import 'package:my_tasker/features/settings/presentation/server_form_validation.
 /// отпечаток с тем, что напечатан на сервере -> «Доверять». Только после
 /// подтверждения PEM сохраняется. Смена адреса сбрасывает закрепление.
 class ServerConnectionScreen extends ConsumerStatefulWidget {
-  const ServerConnectionScreen({super.key});
+  const ServerConnectionScreen({this.backLocation = '/settings', super.key});
+
+  /// Куда ведёт стрелка «назад» (с экрана входа — `/login`).
+  final String backLocation;
 
   @override
   ConsumerState<ServerConnectionScreen> createState() =>
@@ -224,8 +227,8 @@ class _ServerConnectionScreenState
 
     return ScreenScaffold(
       title: 'Сервер',
-      parentLabel: 'Настройки',
-      onBack: () => context.go('/settings'),
+      parentLabel: widget.backLocation == '/settings' ? 'Настройки' : 'Вход',
+      onBack: () => context.go(widget.backLocation),
       child: Align(
         alignment: Alignment.topLeft,
         child: ConstrainedBox(

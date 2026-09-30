@@ -30,6 +30,9 @@ class _FixedKeyStore implements DatabaseKeyStore {
 
   @override
   Future<String> getOrCreateKey() async => key;
+
+  @override
+  Future<String> resetKey() async => key;
 }
 
 /// Подделка `Database` без SQLCipher: `PRAGMA cipher_version` пуст.
@@ -51,17 +54,25 @@ void main() {
     setUp(() => db = AppDatabase(NativeDatabase.memory()));
     tearDown(() => db.close());
 
-    test('создаёт схему v1 с таблицей local_settings', () async {
-      expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
-      expect(db.schemaVersion, 1);
-      final tables = await db
-          .customSelect(
-            "SELECT name FROM sqlite_master WHERE type = 'table' "
-            "AND name NOT LIKE 'sqlite_%'",
-          )
-          .get();
-      expect(tables.map((r) => r.read<String>('name')), ['local_settings']);
-    });
+    test(
+      'создаёт схему v2: настройки устройства и таблицы синхронизации',
+      () async {
+        expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
+        expect(db.schemaVersion, 2);
+        final tables = await db
+            .customSelect(
+              "SELECT name FROM sqlite_master WHERE type = 'table' "
+              "AND name NOT LIKE 'sqlite_%' ORDER BY name",
+            )
+            .get();
+        expect(tables.map((r) => r.read<String>('name')), [
+          'local_settings',
+          'sync_meta',
+          'sync_outbox',
+          'user_settings',
+        ]);
+      },
+    );
 
     test('внешние ключи включены', () async {
       final row = await db.customSelect('PRAGMA foreign_keys').getSingle();
@@ -104,8 +115,8 @@ void main() {
       );
     });
 
-    test('в реестре AppDatabase шагов пока нет (схема v1)', () {
-      expect(AppDatabase.migrationSteps, isEmpty);
+    test('в реестре AppDatabase есть шаг до v2 (синхронизация)', () {
+      expect(AppDatabase.migrationSteps.keys, [2]);
     });
   });
 
@@ -128,7 +139,33 @@ void main() {
       addTearDown(db.close);
       expect(await LocalSettingsRepository(db).read('k'), 'v');
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.read<int>('user_version'), 1);
+      expect(version.read<int>('user_version'), 2);
+    });
+
+    test('миграция v1 -> v2 сохраняет данные и добавляет таблицы', () async {
+      sqlite3.open(file.path)
+        ..execute(
+          'CREATE TABLE local_settings (key TEXT NOT NULL PRIMARY KEY, '
+          'value TEXT NOT NULL)',
+        )
+        ..execute(
+          "INSERT INTO local_settings VALUES ('server_url', 'https://x')",
+        )
+        ..execute('PRAGMA user_version = 1')
+        ..close();
+
+      final db = AppDatabase(NativeDatabase(file));
+      addTearDown(db.close);
+      expect(await LocalSettingsRepository(db).read('server_url'), 'https://x');
+      final tables = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name IN ('sync_outbox', 'sync_meta', 'user_settings')",
+          )
+          .get();
+      expect(tables, hasLength(3));
+      final version = await db.customSelect('PRAGMA user_version').getSingle();
+      expect(version.read<int>('user_version'), 2);
     });
 
     test('БД более новой схемы не открывается старым кодом', () async {
@@ -185,8 +222,26 @@ void main() {
       });
       await expectLater(
         SecureDatabaseKeyStore().getOrCreateKey(),
+        throwsA(isA<DatabaseKeyCorruptedException>()),
+      );
+      await expectLater(
+        SecureDatabaseKeyStore().getOrCreateKey(),
         throwsA(isA<StateError>()),
       );
+    });
+
+    test('resetKey заменяет ключ (в том числе повреждённый) новым', () async {
+      final store = SecureDatabaseKeyStore();
+      final first = await store.getOrCreateKey();
+      final second = await store.resetKey();
+      expect(second, matches(RegExp(r'^[0-9a-f]{64}$')));
+      expect(second, isNot(first));
+      expect(await store.getOrCreateKey(), second);
+      FlutterSecureStorage.setMockInitialValues({
+        SecureDatabaseKeyStore.storageKey: 'broken',
+      });
+      final fixed = await SecureDatabaseKeyStore().resetKey();
+      expect(await SecureDatabaseKeyStore().getOrCreateKey(), fixed);
     });
 
     test('свой Random используется при генерации', () async {

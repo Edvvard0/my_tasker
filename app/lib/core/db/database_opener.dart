@@ -11,6 +11,11 @@ import 'package:sqlite3/sqlite3.dart';
 /// тесты подставляют in-memory через `databaseOpenerProvider`.
 abstract interface class AppDatabaseOpener {
   QueryExecutor open();
+
+  /// Удаляет локальное хранилище (файл БД) и ключ шифрования: следующий
+  /// `open()` создаст пустую БД с новым ключом. Нужен для восстановления,
+  /// когда БД существует, но ключ потерян или не подходит.
+  Future<void> resetStorage();
 }
 
 /// Путь к файлу БД по умолчанию (каталог данных приложения).
@@ -39,6 +44,17 @@ class EncryptedDatabaseOpener implements AppDatabaseOpener {
     await file.parent.create(recursive: true);
     return NativeDatabase.createInBackground(file, setup: _cipherSetup(key));
   });
+
+  @override
+  Future<void> resetStorage() async {
+    final file = await locateFile();
+    // Рядом с основным файлом SQLite держит журналы.
+    for (final suffix in const ['', '-wal', '-shm', '-journal']) {
+      final part = File('${file.path}$suffix');
+      if (part.existsSync()) await part.delete();
+    }
+    await keyStore.resetKey();
+  }
 }
 
 /// Возвращает `setup`-колбэк, который включает шифрование ключом [hexKey].

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:my_tasker/core/config/app_config.dart';
@@ -16,19 +17,57 @@ import 'package:my_tasker/main.dart' as app;
 import 'support/pump_app.dart';
 
 void main() {
-  testWidgets('main() запускает приложение на экране «Сегодня»', (
+  testWidgets('main() запускает приложение: без входа — экран входа', (
     tester,
   ) async {
     tester.view
       ..physicalSize = phoneSize
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
+    FlutterSecureStorage.setMockInitialValues({});
+    final dir = Directory.systemTemp.createTempSync('main_test');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          ..setMockMethodCallHandler(
+            const MethodChannel('plugins.flutter.io/path_provider'),
+            (call) async => call.method == 'getApplicationSupportDirectory'
+                ? dir.path
+                : null,
+          )
+          // Плагин сети: онлайн, поток событий принимается молча.
+          ..setMockMethodCallHandler(
+            const MethodChannel('dev.fluttercommunity.plus/connectivity'),
+            (call) async => ['wifi'],
+          )
+          ..setMockMethodCallHandler(
+            const MethodChannel(
+              'dev.fluttercommunity.plus/connectivity_status',
+            ),
+            (call) async => null,
+          );
+    addTearDown(() {
+      for (final name in [
+        'plugins.flutter.io/path_provider',
+        'dev.fluttercommunity.plus/connectivity',
+        'dev.fluttercommunity.plus/connectivity_status',
+      ]) {
+        messenger.setMockMethodCallHandler(MethodChannel(name), null);
+      }
+    });
 
+    // Настоящая БД (SQLCipher), настоящие токены (пустые), настоящий роутер.
     app.main();
-    await tester.pumpAndSettle();
+    for (var i = 0; i < 50; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      if (find.text('Сервер не настроен').evaluate().isNotEmpty) break;
+    }
 
-    expect(find.byKey(const Key('floating-tab-bar')), findsOneWidget);
-    expect(find.text('Здесь будет «Сегодня»'), findsOneWidget);
+    expect(find.text('Сервер не настроен'), findsOneWidget);
+    expect(find.byKey(const Key('login-setup-server')), findsOneWidget);
   });
 
   test('провайдеры по умолчанию: конфиг и проверка соединения', () {
