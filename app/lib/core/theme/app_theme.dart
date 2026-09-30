@@ -6,14 +6,33 @@ import 'package:my_tasker/core/theme/app_typography.dart';
 
 /// Сборка [ThemeData] из дизайн-токенов. Тёмная тема — основная.
 abstract final class AppTheme {
-  static final ThemeData _mobile = _build(AppTextStyles.mobile());
-  static final ThemeData _desktop = _build(AppTextStyles.desktop());
+  static final ThemeData _mobile = _build(
+    AppTextStyles.mobile(),
+    desktop: false,
+  );
+  static final ThemeData _desktop = _build(
+    AppTextStyles.desktop(),
+    desktop: true,
+  );
 
   /// Тёмная тема для заданного класса ширины (влияет на шкалу шрифтов).
   static ThemeData dark([WindowClass windowClass = WindowClass.compact]) =>
       windowClass.isDesktopScale ? _desktop : _mobile;
 
-  static ThemeData _build(AppTextStyles text) {
+  /// Размеры по 02, 2.3: кнопка 48 (телефон) / 36 (десктоп), поле ввода
+  /// 52 / 40. [desktop] выбирает набор.
+  static ThemeData _build(AppTextStyles text, {required bool desktop}) {
+    final buttonHeight = desktop ? 36.0 : 48.0;
+    final fieldPadding = desktop ? 10.0 : 15.0;
+    final tapTarget = desktop
+        ? MaterialTapTargetSize.shrinkWrap
+        : MaterialTapTargetSize.padded;
+    // Фокус клавиатуры кнопок: обводка 2 px акцента.
+    final focusSide = WidgetStateProperty.resolveWith<BorderSide?>(
+      (states) => states.contains(WidgetState.focused)
+          ? BorderSide(color: AppColors.dark.borderFocus, width: 2)
+          : null,
+    );
     const c = AppColors.dark;
     final scheme = ColorScheme.dark(
       primary: c.accent,
@@ -77,19 +96,23 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
+        isDense: true,
+        // Высота поля 02, 2.3: 52 на телефоне, 40 на десктопе.
+        constraints: BoxConstraints(minHeight: desktop ? 40 : 52),
         fillColor: c.surface3,
         hintStyle: text.body.copyWith(color: c.textTertiary),
         errorStyle: text.bodyS.copyWith(color: c.danger),
-        contentPadding: const EdgeInsets.symmetric(
+        contentPadding: EdgeInsets.symmetric(
           horizontal: 16,
-          vertical: 15,
+          vertical: fieldPadding,
         ),
         border: border(Colors.transparent),
         enabledBorder: border(Colors.transparent),
         hoverColor: AppColors.stateHover,
-        focusedBorder: border(c.borderFocus, 2),
+        // Кольцо фокуса рисует AppTextField снаружи (2 px + зазор 2 px).
+        focusedBorder: border(Colors.transparent),
         errorBorder: border(c.borderDanger),
-        focusedErrorBorder: border(c.borderDanger, 2),
+        focusedErrorBorder: border(c.borderDanger),
         disabledBorder: border(Colors.transparent),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -98,10 +121,11 @@ abstract final class AppTheme {
           foregroundColor: c.textOnAccent,
           disabledBackgroundColor: c.surface3,
           disabledForegroundColor: c.textDisabled,
-          minimumSize: const Size(64, 48),
+          minimumSize: Size(64, buttonHeight),
+          tapTargetSize: tapTarget,
           textStyle: text.label.copyWith(fontWeight: FontWeight.w600),
           shape: const RoundedRectangleBorder(borderRadius: AppRadii.borderM),
-        ),
+        ).copyWith(side: focusSide),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -110,16 +134,18 @@ abstract final class AppTheme {
           disabledBackgroundColor: c.surface3,
           disabledForegroundColor: c.textDisabled,
           elevation: 0,
-          minimumSize: const Size(64, 48),
+          minimumSize: Size(64, buttonHeight),
+          tapTargetSize: tapTarget,
           textStyle: text.label,
           shape: const RoundedRectangleBorder(borderRadius: AppRadii.borderM),
-        ),
+        ).copyWith(side: focusSide),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: c.textPrimary,
           side: BorderSide(color: c.borderStrong),
-          minimumSize: const Size(64, 48),
+          minimumSize: Size(64, buttonHeight),
+          tapTargetSize: tapTarget,
           textStyle: text.label,
           shape: const RoundedRectangleBorder(borderRadius: AppRadii.borderM),
         ),
@@ -149,7 +175,10 @@ abstract final class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: c.surface2,
         surfaceTintColor: Colors.transparent,
-        shape: const RoundedRectangleBorder(borderRadius: AppRadii.borderL),
+        shape: RoundedRectangleBorder(
+          // Мобильные модальные окна — radius/xl (28), десктоп — radius/l (20).
+          borderRadius: desktop ? AppRadii.borderL : AppRadii.borderXl,
+        ),
       ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(

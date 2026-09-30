@@ -5,11 +5,10 @@ import 'package:my_tasker/core/network/connection_checker.dart';
 import 'package:my_tasker/core/network/server_url.dart';
 
 import '../support/fake_adapter.dart';
+import '../support/pem.dart';
 
 void main() {
-  // Структурно корректный PEM (содержимое не важно: сеть подменена).
-  const pem =
-      '-----BEGIN CERTIFICATE-----\nAAECAwQ=\n-----END CERTIFICATE-----\n';
+  final pem = fakePem();
   const versionJson = {
     'app_version': '0.1.0',
     'api_schema_version': 1,

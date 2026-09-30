@@ -6,6 +6,7 @@ import 'package:my_tasker/core/network/certificate_fingerprint.dart';
 import 'package:my_tasker/core/network/connection_checker.dart';
 import 'package:my_tasker/core/network/server_api.dart';
 import 'package:my_tasker/core/network/trust_on_first_use.dart';
+import 'package:my_tasker/core/widgets/app_text_field.dart';
 import 'package:my_tasker/features/settings/data/server_connection_repository.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 
@@ -25,10 +26,8 @@ Finder get _status => find.byKey(const Key('connection-status'));
 Finder _inStatus(String text) =>
     find.descendant(of: _status, matching: find.textContaining(text));
 
-FetchedRootCa _ca([List<int>? der]) => FetchedRootCa(
-  pem: fakePem(der ?? const [1, 2, 3, 4, 5, 6, 7, 8]),
-  fingerprint: fakeFingerprint(der ?? const [1, 2, 3, 4, 5, 6, 7, 8]),
-);
+FetchedRootCa _ca([int salt = 0xAB]) =>
+    FetchedRootCa(pem: fakePem(salt), fingerprint: fakeFingerprint(salt));
 
 void main() {
   const route = '/settings/server';
@@ -137,6 +136,44 @@ void main() {
       await tester.pumpAndSettle();
       expect(_confirm, findsNothing);
       expect(_inStatus('Сервер не настроен'), findsOneWidget);
+    });
+
+    testWidgets('новый запрос и «Отмена» не сбрасывают уже закреплённый УЦ', (
+      tester,
+    ) async {
+      final checker = FakeConnectionChecker(
+        const ConnectionResult(ConnectionOutcome.ok),
+      );
+      var salt = 0x01;
+      await pumpApp(
+        tester,
+        location: route,
+        checker: checker,
+        overrides: [
+          rootCaFetcherProvider.overrideWithValue((_) async => _ca(salt)),
+        ],
+      );
+      await pin(tester);
+      expect(_inStatus('СЕРТИФИКАТ ЗАКРЕПЛЁН'), findsOneWidget);
+
+      // Второй запрос отдаёт другой сертификат; пользователь отказывается.
+      salt = 0x02;
+      await tester.tap(_fetch);
+      await tester.pumpAndSettle();
+      expect(_inStatus('СВЕРЬ ОТПЕЧАТОК'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('cancel-ca-button')));
+      await tester.pumpAndSettle();
+
+      expect(_inStatus('СЕРТИФИКАТ ЗАКРЕПЛЁН'), findsOneWidget);
+      expect(
+        tester
+            .widget<SelectableText>(find.byKey(const Key('pinned-fingerprint')))
+            .data,
+        CertificateFingerprint.format(fakeFingerprint(0x01)),
+      );
+      await tester.tap(_check);
+      await tester.pumpAndSettle();
+      expect(checker.calls.single.caPem, fakePem(0x01));
     });
 
     testWidgets('подтверждение: PEM и адрес сохраняются, «закреплён»', (
@@ -281,6 +318,24 @@ void main() {
       expect(saved!.caPem, _ca().pem);
     });
 
+    testWidgets('неканонический PEM из БД не считается закреплённым', (
+      tester,
+    ) async {
+      final container = await pumpApp(tester);
+      final bad =
+          fakePem() +
+          fakePem(0x09).replaceAll('CERTIFICATE', 'X509 CERTIFICATE');
+      await tester.runAsync(
+        () => container
+            .read(serverConnectionRepositoryProvider)
+            .save(ServerConnectionSettings(url: _url, caPem: bad)),
+      );
+      container.read(routerProvider).go(route);
+      await tester.pumpAndSettle();
+      expect(_inStatus('СЕРТИФИКАТ ЗАКРЕПЛЁН'), findsNothing);
+      expect(find.byKey(const Key('pinned-fingerprint')), findsNothing);
+    });
+
     testWidgets('сохранённые адрес и УЦ подставляются при открытии', (
       tester,
     ) async {
@@ -293,7 +348,7 @@ void main() {
       container.read(routerProvider).go(route);
       await tester.pumpAndSettle();
 
-      expect(tester.widget<TextField>(_urlField).controller!.text, _url);
+      expect(tester.widget<AppTextField>(_urlField).controller.text, _url);
       expect(_inStatus('СЕРТИФИКАТ ЗАКРЕПЛЁН'), findsOneWidget);
       expect(
         tester
@@ -391,6 +446,45 @@ void main() {
       await tester.tap(find.byKey(const Key('manual-pem-toggle')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('pem-field')), findsNothing);
+    });
+
+    testWidgets('файл с двумя сертификатами и чужие метки отвергаются', (
+      tester,
+    ) async {
+      await pumpApp(tester, location: route);
+      await enterUrl(tester);
+      await tester.tap(find.byKey(const Key('manual-pem-toggle')));
+      await tester.pumpAndSettle();
+      final evil = fakePem(0x09).replaceAll('CERTIFICATE', 'X509 CERTIFICATE');
+      for (final text in [fakePem() + evil, fakePem() + fakePem(0x09), evil]) {
+        await tester.enterText(find.byKey(const Key('pem-field')), text);
+        await tester.ensureVisible(find.byKey(const Key('use-pem-button')));
+        await tester.tap(find.byKey(const Key('use-pem-button')));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('в формате PEM'), findsOneWidget);
+        expect(_confirm, findsNothing);
+      }
+    });
+
+    testWidgets('CRLF при вставке: сохраняется каноническая запись', (
+      tester,
+    ) async {
+      final container = await pumpApp(tester, location: route);
+      await enterUrl(tester);
+      await tester.tap(find.byKey(const Key('manual-pem-toggle')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('pem-field')),
+        fakePem().replaceAll('\n', '\r\n'),
+      );
+      await tester.tap(find.byKey(const Key('use-pem-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(_confirm);
+      await tester.pumpAndSettle();
+      final saved = await tester.runAsync(
+        () => container.read(serverConnectionRepositoryProvider).load(),
+      );
+      expect(saved!.caPem, fakePem());
     });
 
     testWidgets('мусор вместо PEM и пустой адрес — ошибки', (tester) async {

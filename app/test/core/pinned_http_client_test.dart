@@ -5,10 +5,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/core/config/app_config.dart';
+import 'package:my_tasker/core/network/certificate_fingerprint.dart';
 import 'package:my_tasker/core/network/connection_checker.dart';
 import 'package:my_tasker/core/network/pinned_http_client.dart';
 import 'package:my_tasker/core/network/trust_on_first_use.dart';
 
+import '../support/pem.dart';
 import '../support/tls_fixtures.dart';
 
 /// Настоящий TLS: openssl-CA, листья с IP SAN 127.0.0.1, локальный сервер.
@@ -132,12 +134,50 @@ void main() {
       expect(junk.caInvalid, isTrue);
     });
 
-    test('PEM разобран как base64, но это не сертификат -> ошибка', () async {
-      const fake =
-          '-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----';
-      expect(() => createPinnedHttpClient(fake), throwsA(isA<TlsException>()));
-      final r = await checker().check(url: 'https://127.0.0.1:1', caPem: fake);
+    test('структурно валидный, но не настоящий сертификат -> ошибка', () async {
+      expect(
+        () => createPinnedHttpClient(fakePem()),
+        throwsA(isA<TlsException>()),
+      );
+      final r = await checker().check(
+        url: 'https://127.0.0.1:1',
+        caPem: fakePem(),
+      );
       expect(r.isOk, isFalse);
+    });
+
+    test('неканоническая запись не принимается клиентом', () async {
+      if (!hasOpenssl) return markTestSkipped('нет openssl');
+      final crlf = ca.pem.replaceAll('\n', '\r\n');
+      expect(() => createPinnedHttpClient(crlf), throwsA(isA<ArgumentError>()));
+      final r = await checkAgainst(leafA, crlf);
+      expect(r.outcome, ConnectionOutcome.invalidSettings);
+      expect(r.caInvalid, isTrue);
+    });
+
+    test('обход сверки: доп. блок X509 CERTIFICATE не доверяется', () async {
+      if (!hasOpenssl) return markTestSkipped('нет openssl');
+      // В БД лежит настоящий УЦ + чужой УЦ под другой меткой. Показанный
+      // отпечаток был бы настоящим, а доверялось бы и чужому.
+      final evilBlock = otherCa.pem.replaceAll(
+        'CERTIFICATE',
+        'X509 CERTIFICATE',
+      );
+      final combined = ca.pem + evilBlock;
+      expect(CertificateFingerprint.canonicalize(combined), isNull);
+      final r = await checkAgainst(otherCaLeaf, combined);
+      expect(r.outcome, ConnectionOutcome.invalidSettings);
+    });
+
+    test('два сертификата в одном файле отвергаются при вставке', () {
+      if (!hasOpenssl) return markTestSkipped('нет openssl');
+      expect(CertificateFingerprint.canonicalize(ca.pem + otherCa.pem), isNull);
+      expect(
+        CertificateFingerprint.canonicalize(
+          ca.pem.replaceAll('CERTIFICATE', 'TRUSTED CERTIFICATE'),
+        ),
+        isNull,
+      );
     });
   });
 
@@ -216,6 +256,64 @@ void main() {
         fetchRootCaTrustOnFirstUse(server.url),
         throwsA(isA<RootCaFetchException>()),
       );
+    });
+
+    test('медленный сервер: общий дедлайн, а не по событиям', () async {
+      if (!hasOpenssl) return markTestSkipped('нет openssl');
+      final server = await TestTlsServer.start(
+        leafA,
+        caPem: ca.pem,
+        slowDrip: true,
+      );
+      addTearDown(server.close);
+      final watch = Stopwatch()..start();
+      await expectLater(
+        fetchRootCaTrustOnFirstUse(
+          server.url,
+          deadline: const Duration(milliseconds: 800),
+        ),
+        throwsA(
+          isA<RootCaFetchException>().having(
+            (e) => e.error,
+            'error',
+            RootCaFetchError.unreachable,
+          ),
+        ),
+      );
+      expect(watch.elapsedMilliseconds, lessThan(3000));
+    });
+
+    test('лишний блок в ответе сервера -> invalidCertificate', () async {
+      if (!hasOpenssl) return markTestSkipped('нет openssl');
+      final server = await TestTlsServer.start(
+        leafA,
+        caPem: ca.pem,
+        caBody:
+            ca.pem + otherCa.pem.replaceAll('CERTIFICATE', 'X509 CERTIFICATE'),
+      );
+      addTearDown(server.close);
+      await expectLater(
+        fetchRootCaTrustOnFirstUse(server.url),
+        throwsA(
+          isA<RootCaFetchException>().having(
+            (e) => e.error,
+            'error',
+            RootCaFetchError.invalidCertificate,
+          ),
+        ),
+      );
+    });
+
+    test('CRLF в ответе канонизируется', () async {
+      if (!hasOpenssl) return markTestSkipped('нет openssl');
+      final server = await TestTlsServer.start(
+        leafA,
+        caPem: ca.pem,
+        caBody: ca.pem.replaceAll('\n', '\r\n'),
+      );
+      addTearDown(server.close);
+      final fetched = await fetchRootCaTrustOnFirstUse(server.url);
+      expect(fetched.pem, ca.pem);
     });
 
     test('порт без сервера -> unreachable', () async {

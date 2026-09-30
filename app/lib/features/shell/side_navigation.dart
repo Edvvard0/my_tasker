@@ -162,7 +162,7 @@ class _CreateAction extends StatelessWidget {
       onPressed: onPressed,
       icon: const Icon(LucideIcons.plus, size: 20),
       label: const Text('Создать'),
-      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(40)),
+      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(36)),
     );
   }
 }

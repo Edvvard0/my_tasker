@@ -89,7 +89,7 @@ class ConnectionChecker {
     late final HttpClientAdapter adapter;
     if (serverUrl.isHttps) {
       final pem = caPem;
-      if (pem == null || CertificateFingerprint.pemToDer(pem) == null) {
+      if (pem == null || !CertificateFingerprint.isCanonical(pem)) {
         return const ConnectionResult(
           ConnectionOutcome.invalidSettings,
           caInvalid: true,

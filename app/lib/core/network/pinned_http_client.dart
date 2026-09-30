@@ -27,6 +27,16 @@ class PinObserver {
 ///
 /// Бросает [TlsException], если [rootCaPem] не разбирается.
 HttpClient createPinnedHttpClient(String rootCaPem, {PinObserver? observer}) {
+  // В TLS-контекст идёт только каноническая запись одного сертификата:
+  // иначе `setTrustedCertificatesBytes` принял бы и дополнительные блоки
+  // (`X509 CERTIFICATE`, `TRUSTED CERTIFICATE`), которых пользователь не видел.
+  if (!CertificateFingerprint.isCanonical(rootCaPem)) {
+    throw ArgumentError.value(
+      rootCaPem,
+      'rootCaPem',
+      'ожидается каноническая запись одного сертификата',
+    );
+  }
   final context = SecurityContext()
     ..setTrustedCertificatesBytes(utf8.encode(rootCaPem));
   return HttpClient(context: context)

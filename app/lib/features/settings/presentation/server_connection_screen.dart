@@ -10,6 +10,7 @@ import 'package:my_tasker/core/network/trust_on_first_use.dart';
 import 'package:my_tasker/core/theme/app_radii.dart';
 import 'package:my_tasker/core/theme/app_spacing.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
+import 'package:my_tasker/core/widgets/app_text_field.dart';
 import 'package:my_tasker/core/widgets/empty_state.dart';
 import 'package:my_tasker/core/widgets/screen_scaffold.dart';
 import 'package:my_tasker/core/widgets/status_pill.dart';
@@ -40,8 +41,9 @@ class _ServerConnectionScreenState
   String? _pinnedPem;
   String? _pinnedUrl;
 
-  /// Полученный, но ещё не подтверждённый сертификат.
+  /// Полученный, но ещё не подтверждённый сертификат и его адрес.
   FetchedRootCa? _pending;
+  String? _pendingUrl;
   bool _fetching = false;
   RootCaFetchError? _fetchError;
   bool _manual = false;
@@ -58,7 +60,11 @@ class _ServerConnectionScreenState
       if (saved == null || _prefilled) return;
       _prefilled = true;
       _pinnedUrl = saved.url;
-      _pinnedPem = saved.caPem;
+      // Не каноническая запись в БД — недоверенная: считаем, что УЦ не задан.
+      final pem = saved.caPem;
+      _pinnedPem = pem != null && CertificateFingerprint.isCanonical(pem)
+          ? pem
+          : null;
       _url.text = saved.url ?? '';
     }, fireImmediately: true);
   }
@@ -84,12 +90,19 @@ class _ServerConnectionScreenState
 
   /// Смена адреса сбрасывает закреплённый и ожидающий сертификаты.
   void _syncPin() {
-    final hasPin = _pinnedPem != null || _pending != null;
-    if (hasPin && _normalizedUrl() != _pinnedUrl) {
+    final url = _normalizedUrl();
+    final dropPin = _pinnedPem != null && url != _pinnedUrl;
+    final dropPending = _pending != null && url != _pendingUrl;
+    if (dropPin || dropPending) {
       setState(() {
-        _pinnedPem = null;
-        _pinnedUrl = null;
-        _pending = null;
+        if (dropPin) {
+          _pinnedPem = null;
+          _pinnedUrl = null;
+        }
+        if (dropPending) {
+          _pending = null;
+          _pendingUrl = null;
+        }
       });
       ref.read(connectionCheckProvider.notifier).reset();
     }
@@ -118,8 +131,7 @@ class _ServerConnectionScreenState
       if (!mounted) return;
       setState(() {
         _pending = fetched;
-        _pinnedUrl = url.toString();
-        _pinnedPem = null;
+        _pendingUrl = url.toString();
       });
     } on RootCaFetchException catch (e) {
       if (mounted) setState(() => _fetchError = e.error);
@@ -131,18 +143,20 @@ class _ServerConnectionScreenState
   void _usePastedPem() {
     final url = _validUrl();
     if (url == null) return;
-    final pem = _pem.text.trim();
-    final fingerprint = CertificateFingerprint.ofPem(pem);
-    if (fingerprint == null) {
+    // Строго: ровно один сертификат; сохраняется каноническая запись.
+    final canonical = CertificateFingerprint.canonicalize(_pem.text);
+    if (canonical == null) {
       setState(() => _pemError = pemInvalidText);
       return;
     }
     setState(() {
       _pemError = null;
       _fetchError = null;
-      _pending = FetchedRootCa(pem: '$pem\n', fingerprint: fingerprint);
-      _pinnedUrl = url.toString();
-      _pinnedPem = null;
+      _pending = FetchedRootCa(
+        pem: canonical,
+        fingerprint: CertificateFingerprint.ofPem(canonical)!,
+      );
+      _pendingUrl = url.toString();
     });
   }
 
@@ -161,15 +175,18 @@ class _ServerConnectionScreenState
       _pinnedPem = pending.pem;
       _pinnedUrl = url.toString();
       _pending = null;
+      _pendingUrl = null;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Сертификат сервера закреплён')),
     );
   }
 
+  /// Отмена не трогает уже закреплённый УЦ: он заменяется только
+  /// подтверждением нового.
   void _cancelPending() => setState(() {
     _pending = null;
-    if (_pinnedPem == null) _pinnedUrl = null;
+    _pendingUrl = null;
   });
 
   Future<void> _save() async {
@@ -230,7 +247,7 @@ class _ServerConnectionScreenState
               const SizedBox(height: AppSpacing.s6),
               _LabeledField(
                 label: 'Адрес сервера',
-                child: TextField(
+                child: AppTextField(
                   key: const Key('server-url-field'),
                   controller: _url,
                   keyboardType: TextInputType.url,
@@ -269,7 +286,7 @@ class _ServerConnectionScreenState
                 _LabeledField(
                   label: 'Корневой сертификат (PEM)',
                   hint: 'Файл root.crt с сервера целиком',
-                  child: TextField(
+                  child: AppTextField(
                     key: const Key('pem-field'),
                     controller: _pem,
                     autocorrect: false,

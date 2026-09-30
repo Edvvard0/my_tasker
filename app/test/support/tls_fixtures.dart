@@ -46,11 +46,8 @@ class TestCa {
       '-addext', 'basicConstraints=critical,CA:TRUE',
       '-addext', 'keyUsage=critical,keyCertSign,cRLSign',
     ]);
-    return TestCa._(
-      dir,
-      name,
-      File('${dir.path}/$name.pem').readAsStringSync(),
-    );
+    final raw = File('${dir.path}/$name.pem').readAsStringSync();
+    return TestCa._(dir, name, CertificateFingerprint.canonicalize(raw)!);
   }
 
   /// Выпускает листовой сертификат с заданными SAN (например `IP:127.0.0.1`).
@@ -99,6 +96,7 @@ class TestTlsServer {
     required String caPem,
     int caStatus = 200,
     String? caBody,
+    bool slowDrip = false,
   }) async {
     final context = SecurityContext()
       ..useCertificateChain(leaf.certPath)
@@ -123,6 +121,17 @@ class TestTlsServer {
                 '{"app_version":"9.9.9","api_schema_version":1,'
                 '"min_client_schema_version":1}',
               );
+          case '/ca/root.crt' when slowDrip:
+            // По байту каждые 30 мс, пока клиент не оборвёт соединение.
+            try {
+              while (true) {
+                response.write('-');
+                await response.flush();
+                await Future<void>.delayed(const Duration(milliseconds: 30));
+              }
+            } on Object {
+              return;
+            }
           case '/ca/root.crt':
             response
               ..statusCode = caStatus

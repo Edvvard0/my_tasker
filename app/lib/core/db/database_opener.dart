@@ -54,6 +54,10 @@ void Function(Database) _cipherSetup(String hexKey) =>
 /// молча писать данные в открытом виде недопустимо. Неверный ключ приводит к
 /// [SqliteException] («file is not a database»).
 void applyCipherKey(Database db, String hexKey) {
+  // Ключ подставляется в PRAGMA как текст: допускаем только 64 hex-символа.
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(hexKey)) {
+    throw ArgumentError.value('***', 'hexKey', 'ожидается 64 hex-символа');
+  }
   final version = db.select('PRAGMA cipher_version;');
   final value = version.isEmpty ? null : version.first.values.first;
   if (value == null || value.toString().isEmpty) {

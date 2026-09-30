@@ -1,12 +1,18 @@
-import 'dart:convert';
-
 import 'package:my_tasker/core/network/certificate_fingerprint.dart';
 
-/// Структурно корректный PEM (содержимое — произвольные байты): для тестов,
-/// где настоящий сертификат не нужен.
-String fakePem([List<int> der = const [1, 2, 3, 4, 5, 6, 7, 8]]) =>
-    '-----BEGIN CERTIFICATE-----\n${base64.encode(der)}\n'
-    '-----END CERTIFICATE-----\n';
+/// Минимальный DER, проходящий структурную проверку X.509
+/// (`SEQUENCE { SEQUENCE, SEQUENCE, BIT STRING }`), но не настоящий
+/// сертификат. [salt] делает содержимое (и отпечаток) разным.
+List<int> fakeDer([int salt = 0xAB]) => [
+  0x30, 0x0E, //
+  0x30, 0x03, 0x02, 0x01, 0x01, //
+  0x30, 0x03, 0x06, 0x01, 0x2A, //
+  0x03, 0x02, 0x00, salt,
+];
 
-String fakeFingerprint([List<int> der = const [1, 2, 3, 4, 5, 6, 7, 8]]) =>
-    CertificateFingerprint.ofDer(der);
+/// Каноническая PEM-запись [fakeDer].
+String fakePem([int salt = 0xAB]) =>
+    CertificateFingerprint.pemFromDer(fakeDer(salt));
+
+String fakeFingerprint([int salt = 0xAB]) =>
+    CertificateFingerprint.ofDer(fakeDer(salt));

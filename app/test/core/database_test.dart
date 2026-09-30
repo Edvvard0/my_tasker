@@ -275,6 +275,20 @@ void main() {
       );
     });
 
+    test('ключ не в формате 64 hex отвергается до подстановки в PRAGMA', () {
+      final db = sqlite3.openInMemory();
+      addTearDown(db.close);
+      for (final bad in [
+        '',
+        'zz',
+        keyA.substring(1),
+        '$keyA"; DROP',
+        keyA.toUpperCase(),
+      ]) {
+        expect(() => applyCipherKey(db, bad), throwsArgumentError, reason: bad);
+      }
+    });
+
     test('без SQLCipher вместо шифрования — ошибка, а не открытая БД', () {
       expect(
         () => applyCipherKey(_PlainSqliteDb(), keyA),

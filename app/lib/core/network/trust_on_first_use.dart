@@ -52,34 +52,16 @@ const int _maxBodyBytes = 64 * 1024;
 /// `createPinnedHttpClient` и этот клиент не используют.
 Future<FetchedRootCa> fetchRootCaTrustOnFirstUse(
   Uri baseUrl, {
-  Duration timeout = const Duration(seconds: 6),
+  Duration deadline = const Duration(seconds: 15),
 }) async {
   final client = HttpClient()
-    ..connectionTimeout = timeout
+    ..connectionTimeout = deadline
     // Осознанно: см. документацию функции.
     ..badCertificateCallback = (cert, host, port) => true;
   try {
-    final request = await client
-        .getUrl(baseUrl.replace(path: '/ca/root.crt'))
-        .timeout(timeout);
-    final response = await request.close().timeout(timeout);
-    if (response.statusCode != HttpStatus.ok) {
-      await response.drain<void>();
-      throw const RootCaFetchException(RootCaFetchError.badResponse);
-    }
-    final bytes = <int>[];
-    await for (final chunk in response.timeout(timeout)) {
-      bytes.addAll(chunk);
-      if (bytes.length > _maxBodyBytes) {
-        throw const RootCaFetchException(RootCaFetchError.badResponse);
-      }
-    }
-    final pem = utf8.decode(bytes, allowMalformed: true).trim();
-    final fingerprint = CertificateFingerprint.ofPem(pem);
-    if (fingerprint == null) {
-      throw const RootCaFetchException(RootCaFetchError.invalidCertificate);
-    }
-    return FetchedRootCa(pem: '$pem\n', fingerprint: fingerprint);
+    // Один общий дедлайн на весь обмен (соединение, заголовки, тело):
+    // сервер, который отдаёт по байту в секунду, не удержит экран вечно.
+    return await _download(client, baseUrl).timeout(deadline);
   } on RootCaFetchException {
     rethrow;
   } on Object {
@@ -87,6 +69,34 @@ Future<FetchedRootCa> fetchRootCaTrustOnFirstUse(
   } finally {
     client.close(force: true);
   }
+}
+
+Future<FetchedRootCa> _download(HttpClient client, Uri baseUrl) async {
+  final request = await client.getUrl(baseUrl.replace(path: '/ca/root.crt'));
+  final response = await request.close();
+  if (response.statusCode != HttpStatus.ok) {
+    await response.drain<void>();
+    throw const RootCaFetchException(RootCaFetchError.badResponse);
+  }
+  final bytes = <int>[];
+  await for (final chunk in response) {
+    bytes.addAll(chunk);
+    if (bytes.length > _maxBodyBytes) {
+      throw const RootCaFetchException(RootCaFetchError.badResponse);
+    }
+  }
+  // Строгий разбор: только ровно один сертификат, сохраняем каноническую
+  // перекодировку (см. CertificateFingerprint).
+  final canonical = CertificateFingerprint.canonicalize(
+    utf8.decode(bytes, allowMalformed: true),
+  );
+  if (canonical == null) {
+    throw const RootCaFetchException(RootCaFetchError.invalidCertificate);
+  }
+  return FetchedRootCa(
+    pem: canonical,
+    fingerprint: CertificateFingerprint.ofPem(canonical)!,
+  );
 }
 
 /// Способ получить корневой УЦ. В тестах подменяется.
