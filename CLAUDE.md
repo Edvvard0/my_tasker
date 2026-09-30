@@ -47,4 +47,27 @@
 
 ## Команды
 
-Заполняется на этапе 0 (запуск тестов, линтеров, локального окружения).
+### Бэкенд (из `backend/`)
+
+```bash
+uv sync --locked
+uv run ruff check && uv run ruff format --check && uv run mypy
+uv run pytest            # покрытие >= 90 % проверяется автоматически; PostgreSQL 17 поднимается в Docker сам
+# Docker Hub отдаёт 429: export TEST_POSTGRES_IMAGE=mirror.gcr.io/library/postgres:17-alpine
+# свой сервер БД: DATABASE_URL=postgresql://user:pw@host:5432/postgres uv run pytest
+uv run python -m tasker.db_migrations                                  # миграции
+uv run uvicorn tasker.main:create_app --factory --no-access-log         # api
+uv run python -m tasker.worker                                          # worker
+```
+
+### Локальный стек (из `deploy/`)
+
+```bash
+cp .env.example .env     # заполнить; .env никогда не коммитить
+docker compose config -q && docker compose up -d --build
+curl -k https://127.0.0.1/health/ready
+```
+
+### Клиент (из `app/`)
+
+Дополняется по итогам клиентской части этапа 0.
