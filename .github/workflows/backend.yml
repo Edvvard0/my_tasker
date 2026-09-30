@@ -1,0 +1,80 @@
+name: backend
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - "deploy/**"
+      - "shared-test-vectors/**"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "deploy/**"
+      - "shared-test-vectors/**"
+      - ".github/workflows/backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          # Throw-away CI database, reachable only from this job.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.8.17"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv sync --locked
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run mypy
+      - name: pytest (coverage gate 90%)
+        run: uv run pytest --cov-fail-under=90
+
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate compose file
+        working-directory: deploy
+        env:
+          # Placeholders: `config` only checks that required variables are set.
+          SERVER_IP: 127.0.0.1
+          POSTGRES_USER: ci
+          POSTGRES_DB: ci
+          POSTGRES_PASSWORD: placeholder
+        run: docker compose -f docker-compose.yml config -q
+      - name: Build backend image
+        run: docker build -f deploy/Dockerfile -t my-tasker-backend:ci backend
+      - name: Image runs as non-root and imports the app
+        run: |
+          test "$(docker run --rm my-tasker-backend:ci id -u)" != "0"
+          docker run --rm my-tasker-backend:ci python -c "import tasker.main, tasker.worker.runner"

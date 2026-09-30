@@ -1,0 +1,296 @@
+{
+  "description": "parse_amount(text) -> int kopecks, or error. See README.md for the rules.",
+  "cases": [
+    {
+      "name": "space grouping and comma",
+      "input": "1 234,56",
+      "expected": 123456
+    },
+    {
+      "name": "dot decimal, one fraction digit",
+      "input": "1234.5",
+      "expected": 123450
+    },
+    {
+      "name": "space grouping with ruble sign",
+      "input": "1 000 ₽",
+      "expected": 100000
+    },
+    {
+      "name": "negative integer",
+      "input": "-500",
+      "expected": -50000
+    },
+    {
+      "name": "one kopeck",
+      "input": "0,01",
+      "expected": 1
+    },
+    {
+      "name": "no-break space grouping",
+      "input": "1\u00a0234,56",
+      "expected": 123456
+    },
+    {
+      "name": "narrow no-break space grouping and sign",
+      "input": "1\u202f234,56\u202f₽",
+      "expected": 123456
+    },
+    {
+      "name": "thin space grouping",
+      "input": "12\u2009345,6",
+      "expected": 1234560
+    },
+    {
+      "name": "plain integer",
+      "input": "1234",
+      "expected": 123400
+    },
+    {
+      "name": "zero",
+      "input": "0",
+      "expected": 0
+    },
+    {
+      "name": "zero with fraction",
+      "input": "0,00",
+      "expected": 0
+    },
+    {
+      "name": "negative zero",
+      "input": "-0",
+      "expected": 0
+    },
+    {
+      "name": "explicit plus",
+      "input": "+100,5",
+      "expected": 10050
+    },
+    {
+      "name": "unicode minus",
+      "input": "\u22121 000,25",
+      "expected": -100025
+    },
+    {
+      "name": "surrounding spaces",
+      "input": "  42  ",
+      "expected": 4200
+    },
+    {
+      "name": "surrounding nbsp",
+      "input": "\u00a042\u00a0",
+      "expected": 4200
+    },
+    {
+      "name": "space after sign is ignored",
+      "input": "- 500",
+      "expected": -50000
+    },
+    {
+      "name": "suffix 'руб.'",
+      "input": "12,3 руб.",
+      "expected": 1230
+    },
+    {
+      "name": "suffix 'руб'",
+      "input": "12 руб",
+      "expected": 1200
+    },
+    {
+      "name": "suffix 'р.' without space",
+      "input": "12р.",
+      "expected": 1200
+    },
+    {
+      "name": "suffix 'Р' uppercase",
+      "input": "12 Р",
+      "expected": 1200
+    },
+    {
+      "name": "negative with ruble sign",
+      "input": "-1 500,50 ₽",
+      "expected": -150050
+    },
+    {
+      "name": "millions",
+      "input": "1 234 567,89 ₽",
+      "expected": 123456789
+    },
+    {
+      "name": "largest accepted value",
+      "input": "999999999999,99",
+      "expected": 99999999999999
+    },
+    {
+      "name": "trailing zeros in fraction",
+      "input": "10,00",
+      "expected": 1000
+    },
+    {
+      "name": "leading zeros",
+      "input": "007,05",
+      "expected": 705
+    },
+    {
+      "name": "empty string",
+      "input": "",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "only spaces",
+      "input": "   ",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "letters",
+      "input": "abc",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "mixed separators, comma thousands",
+      "input": "1,234.56",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "mixed separators, dot thousands",
+      "input": "1.234,56",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "three fraction digits with comma",
+      "input": "1,234",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "three fraction digits with dot",
+      "input": "12.345",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "no integer part",
+      "input": ",5",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "no fraction digits",
+      "input": "5,",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "two separators",
+      "input": "1,2,3",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "currency only",
+      "input": "₽",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "currency before amount",
+      "input": "₽ 100",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "double currency",
+      "input": "12 ₽₽",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "double minus",
+      "input": "--5",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "trailing minus",
+      "input": "5-",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "exponent",
+      "input": "1e3",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "non-ASCII digits",
+      "input": "١٢٣",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "thirteen integer digits",
+      "input": "1000000000000",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "foreign currency",
+      "input": "12,5 $",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "hex",
+      "input": "0x10",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "underscore grouping",
+      "input": "1_000",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "text after currency",
+      "input": "5 ₽ 5",
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "sign only",
+      "input": "-",
+      "expected": {
+        "error": true
+      }
+    }
+  ]
+}
