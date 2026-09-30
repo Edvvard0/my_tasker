@@ -1,0 +1,41 @@
+{
+	# Only 80/443 are published; port 80 just redirects to HTTPS.
+	auto_https disable_redirects
+
+	# TLS clients send no SNI when connecting to a bare IP, so tell Caddy which cert to serve.
+	default_sni {$SERVER_IP}
+}
+
+# HTTPS by IP address, no domain: the certificate is issued by Caddy's own internal CA.
+# Clients pin the root CA of that CA (see deploy/README.md).
+https://{$SERVER_IP} {
+	tls internal
+
+	request_body {
+		max_size 10MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# The public root certificate (never the key) so a client can fetch it once and show its
+	# fingerprint for manual comparison.
+	handle /ca/root.crt {
+		rewrite * /root.crt
+		root * /data/caddy/pki/authorities/local
+		file_server
+	}
+
+	handle {
+		# flush_interval -1: stream SSE events immediately, no buffering.
+		reverse_proxy api:8000 {
+			flush_interval -1
+		}
+	}
+}
+
+http://{$SERVER_IP} {
+	redir https://{$SERVER_IP}{uri} permanent
+}

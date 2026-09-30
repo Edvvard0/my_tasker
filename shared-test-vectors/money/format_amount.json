@@ -1,0 +1,105 @@
+{
+  "description": "format_amount(kopecks) -> string. Separators are U+00A0. See README.md.",
+  "cases": [
+    {
+      "name": "thousand with kopecks",
+      "input": 123456,
+      "expected": "1\u00a0234,56\u00a0₽"
+    },
+    {
+      "name": "round thousand has no fraction",
+      "input": 100000,
+      "expected": "1\u00a0000\u00a0₽"
+    },
+    {
+      "name": "zero",
+      "input": 0,
+      "expected": "0\u00a0₽"
+    },
+    {
+      "name": "one kopeck",
+      "input": 1,
+      "expected": "0,01\u00a0₽"
+    },
+    {
+      "name": "five kopecks keeps leading zero",
+      "input": 5,
+      "expected": "0,05\u00a0₽"
+    },
+    {
+      "name": "ten kopecks keeps trailing zero",
+      "input": 10,
+      "expected": "0,10\u00a0₽"
+    },
+    {
+      "name": "fifty kopecks",
+      "input": 50,
+      "expected": "0,50\u00a0₽"
+    },
+    {
+      "name": "ninety nine kopecks",
+      "input": 99,
+      "expected": "0,99\u00a0₽"
+    },
+    {
+      "name": "one ruble",
+      "input": 100,
+      "expected": "1\u00a0₽"
+    },
+    {
+      "name": "nine ninety nine",
+      "input": 999,
+      "expected": "9,99\u00a0₽"
+    },
+    {
+      "name": "three digits, no grouping",
+      "input": 99900,
+      "expected": "999\u00a0₽"
+    },
+    {
+      "name": "negative kopecks",
+      "input": -1,
+      "expected": "-0,01\u00a0₽"
+    },
+    {
+      "name": "negative half ruble",
+      "input": -50,
+      "expected": "-0,50\u00a0₽"
+    },
+    {
+      "name": "negative thousand with kopecks",
+      "input": -123456,
+      "expected": "-1\u00a0234,56\u00a0₽"
+    },
+    {
+      "name": "negative round thousand",
+      "input": -100000,
+      "expected": "-1\u00a0000\u00a0₽"
+    },
+    {
+      "name": "ten thousand",
+      "input": 1000000,
+      "expected": "10\u00a0000\u00a0₽"
+    },
+    {
+      "name": "five digits with kopecks",
+      "input": 1234567,
+      "expected": "12\u00a0345,67\u00a0₽"
+    },
+    {
+      "name": "one million",
+      "input": 100000000,
+      "expected": "1\u00a0000\u00a0000\u00a0₽"
+    },
+    {
+      "name": "largest parseable value",
+      "input": 99999999999999,
+      "expected": "999\u00a0999\u00a0999\u00a0999,99\u00a0₽"
+    },
+    {
+      "name": "smallest parseable value",
+      "input": -99999999999999,
+      "expected": "-999\u00a0999\u00a0999\u00a0999,99\u00a0₽"
+    }
+  ]
+}
