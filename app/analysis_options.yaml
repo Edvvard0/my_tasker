@@ -1,0 +1,23 @@
+include: package:very_good_analysis/analysis_options.yaml
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - build/**
+    - android/**
+    - windows/**
+  errors:
+    # Пока не документируем каждый публичный член: код внутреннего приложения.
+    public_member_api_docs: ignore
+
+linter:
+  rules:
+    public_member_api_docs: false
+    # Кириллические строки длиннее по байтам, форматтер сам держит 80 колонок.
+    lines_longer_than_80_chars: false
+    # Классический синтаксис конструкторов (без нового short-form `new(...)`).
+    unnecessary_type_name_in_constructor: false
+    unnecessary_const_in_enum_constructor: false
+    # Зависимости сгруппированы по назначению, а не по алфавиту.
+    sort_pub_dependencies: false

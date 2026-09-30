@@ -1,0 +1,87 @@
+name: app
+
+on:
+  push:
+    paths:
+      - "app/**"
+      - "shared-test-vectors/**"
+      - ".github/workflows/app.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - "shared-test-vectors/**"
+      - ".github/workflows/app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Версия Flutter закреплена: от неё зависят golden-эталоны (движок рисует
+  # текст и антиалиасинг). Меняем только вместе с пересъёмкой эталонов.
+  FLUTTER_VERSION: "3.47.5"
+
+jobs:
+  test:
+    # Golden-эталоны сняты на Linux; runner тоже Linux, шрифты берутся из
+    # ассетов приложения (Inter, JetBrains Mono, Lucide), а не из системы.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: subosito/flutter-action@v2 # TODO(pin): заменить тег на SHA коммита
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Dependencies
+        run: flutter pub get
+
+      # Код Drift (`*.g.dart`) не хранится в репозитории.
+      - name: Codegen (build_runner)
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Format
+        run: >-
+          dart format --output=none --set-exit-if-changed
+          $(git ls-files 'lib/**.dart' 'test/**.dart' 'tool/**.dart')
+
+      - name: Analyze
+        run: flutter analyze
+
+      # Тесты используют openssl (настоящий TLS-обмен для pinning) и
+      # SQLCipher, который подтягивает build hook пакета sqlite3.
+      - name: Test with coverage
+        run: flutter test --coverage
+
+      # Порог 90 % по строкам; сгенерированные файлы не учитываются.
+      - name: Coverage gate
+        run: dart tool/check_coverage.dart --min=90
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4 # TODO(pin): заменить тег на SHA коммита
+        with:
+          name: app-coverage
+          path: app/coverage/lcov.info
+          if-no-files-found: ignore
+
+      - name: Upload golden failures
+        if: failure()
+        uses: actions/upload-artifact@v4 # TODO(pin): заменить тег на SHA коммита
+        with:
+          name: app-golden-failures
+          path: app/test/goldens/failures
+          if-no-files-found: ignore
