@@ -8,8 +8,10 @@ import 'package:my_tasker/core/theme/app_spacing.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/features/shell/app_section.dart';
 
-/// Плавающий таб-бар телефона (02, 3.2): пилюля `surface/2` + `elev/3`,
-/// 5 разделов с подписями, справа — зелёный круг «+» 56 dp.
+/// Плавающий таб-бар телефона (02, 3.2), как в референсе: пилюля `surface/2`
+/// с мягкой тенью, только иконки; у активного раздела — белая иконка на
+/// светло-сером круге, у остальных — серые иконки. Справа — белый круг «+».
+/// Подписи есть только для доступности (Semantics).
 class FloatingTabBar extends StatelessWidget {
   const FloatingTabBar({
     required this.selected,
@@ -26,8 +28,6 @@ class FloatingTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    // При масштабе шрифта > 130 % подписи неактивных вкладок скрываются.
-    final compactLabels = MediaQuery.textScalerOf(context).scale(1) > 1.3;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.s4,
@@ -41,18 +41,16 @@ class FloatingTabBar extends StatelessWidget {
             child: Container(
               key: const Key('floating-tab-bar'),
               height: AppSpacing.tabBarHeight,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s1),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
               decoration: AppElevation.floating(c, radius: AppRadii.borderFull),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   for (final section in AppSection.tabs)
-                    Expanded(
-                      child: _TabItem(
-                        section: section,
-                        active: section == selected,
-                        showLabel: !compactLabels || section == selected,
-                        onTap: () => onSelect(section),
-                      ),
+                    _TabItem(
+                      section: section,
+                      active: section == selected,
+                      onTap: () => onSelect(section),
                     ),
                 ],
               ),
@@ -70,53 +68,38 @@ class _TabItem extends StatelessWidget {
   const _TabItem({
     required this.section,
     required this.active,
-    required this.showLabel,
     required this.onTap,
   });
 
   final AppSection section;
   final bool active;
-  final bool showLabel;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final t = context.text;
-    final color = active ? c.accent : c.textTertiary;
     return Semantics(
       button: true,
       selected: active,
       label: section.label,
       excludeSemantics: true,
-      child: InkWell(
+      child: InkResponse(
         key: Key('nav-${section.name}'),
-        borderRadius: AppRadii.borderFull,
+        radius: 28,
         onTap: onTap,
-        child: Center(
-          child: AnimatedContainer(
-            duration: AppMotion.fast,
-            curve: AppMotion.standard,
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-            decoration: BoxDecoration(
-              color: active ? c.accentMuted : Colors.transparent,
-              borderRadius: AppRadii.borderFull,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(section.icon, size: 24, color: color),
-                if (showLabel)
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      section.label,
-                      maxLines: 1,
-                      style: t.tabLabel.copyWith(color: color),
-                    ),
-                  ),
-              ],
-            ),
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          curve: AppMotion.standard,
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: active ? c.surface4 : Colors.transparent,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            section.icon,
+            size: 24,
+            color: active ? c.textPrimary : c.textTertiary,
           ),
         ),
       ),
@@ -140,7 +123,7 @@ class _CreateButton extends StatelessWidget {
         width: AppSpacing.fabSize,
         height: AppSpacing.fabSize,
         decoration: BoxDecoration(
-          color: c.accent,
+          color: c.surfaceInverse,
           shape: BoxShape.circle,
           boxShadow: const [AppElevation.shadow3],
         ),
@@ -152,7 +135,7 @@ class _CreateButton extends StatelessWidget {
             containedInkWell: true,
             customBorder: const CircleBorder(),
             highlightColor: AppColors.statePressed,
-            child: Icon(LucideIcons.plus, size: 24, color: c.textOnAccent),
+            child: Icon(LucideIcons.plus, size: 24, color: c.textOnInverse),
           ),
         ),
       ),

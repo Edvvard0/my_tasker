@@ -16,7 +16,6 @@ class WorkScreen extends StatelessWidget {
     return ModulePlaceholder(
       title: 'Работа',
       icon: LucideIcons.briefcase,
-      color: c.moduleWork,
       description: 'Деньги, время и проекты.',
       stage: 4,
       extra: Padding(
@@ -25,7 +24,6 @@ class WorkScreen extends StatelessWidget {
           decoration: BoxDecoration(
             color: c.surface1,
             borderRadius: AppRadii.borderL,
-            border: Border.all(color: c.borderDefault),
           ),
           child: Column(
             children: [
@@ -92,7 +90,7 @@ class _SubsectionRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: c.moduleWork),
+            Icon(icon, size: 20, color: c.textSecondary),
             const SizedBox(width: AppSpacing.s3),
             Expanded(child: Text(label, style: t.body)),
             Text(

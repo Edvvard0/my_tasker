@@ -1,12 +1,16 @@
 import 'package:flutter/painting.dart';
 
-/// Радиусы скругления (02, раздел 2.4).
+/// Радиусы скругления (02, раздел 2.4): крупные, как в референсе.
 abstract final class AppRadii {
-  static const double xs = 4;
-  static const double s = 8;
-  static const double m = 12;
-  static const double l = 20;
-  static const double xl = 28;
+  static const double xs = 6;
+  static const double s = 10;
+  static const double m = 16;
+
+  /// Карточки.
+  static const double l = 24;
+
+  /// Bottom sheet и модальные окна.
+  static const double xl = 32;
   static const double full = 999;
 
   static const borderXs = BorderRadius.all(Radius.circular(xs));

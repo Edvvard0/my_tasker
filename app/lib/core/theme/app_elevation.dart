@@ -1,5 +1,6 @@
 import 'package:flutter/painting.dart';
 import 'package:my_tasker/core/theme/app_colors.dart';
+import 'package:my_tasker/core/theme/app_radii.dart';
 
 /// Глубина: поверхность + обводка, тень только у плавающих элементов
 /// (02, раздел 2.5).
@@ -18,15 +19,14 @@ abstract final class AppElevation {
     blurRadius: 32,
   );
 
-  /// `elev/1`: карточки — `surface/1` + обводка 1 px `border/default`.
+  /// `elev/1`: карточки — заливка `surface/1`, радиус 24, без обводки и тени.
   static BoxDecoration card(AppColors c, {BorderRadius? radius}) =>
       BoxDecoration(
         color: c.surface1,
-        borderRadius: radius ?? BorderRadius.circular(20),
-        border: Border.all(color: c.borderDefault),
+        borderRadius: radius ?? AppRadii.borderL,
       );
 
-  /// `elev/2`: bottom sheet, левая панель, диалоги.
+  /// `elev/2`: bottom sheet, диалоги — `surface/2`, волосяная обводка.
   static BoxDecoration raised(AppColors c, {BorderRadius? radius}) =>
       BoxDecoration(
         color: c.surface2,

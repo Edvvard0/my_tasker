@@ -27,12 +27,12 @@ String _location(WidgetTester tester) => _container
 
 Finder _nav(AppSection s) => find.byKey(Key('nav-${s.name}'));
 
-/// Активна ли вкладка таб-бара: у активной — пилюля `accent/muted`.
+/// Активна ли вкладка таб-бара: у активной — светло-серый круг `surface/4`.
 bool _isActive(WidgetTester tester, AppSection s) {
   final box = tester.widget<AnimatedContainer>(
     find.descendant(of: _nav(s), matching: find.byType(AnimatedContainer)),
   );
-  return (box.decoration! as BoxDecoration).color == AppColors.dark.accentMuted;
+  return (box.decoration! as BoxDecoration).color == AppColors.dark.surface4;
 }
 
 /// Заголовок экрана (h1) в верхней панели: отличает его от подписей таб-бара.
@@ -41,7 +41,7 @@ Finder _title(String text) =>
 
 void main() {
   group('телефон 390×844: плавающий таб-бар', () {
-    testWidgets('стартовый экран — «Сегодня», таб-бар с 5 подписями и «+»', (
+    testWidgets('стартовый экран — «Сегодня», таб-бар с 5 иконками и «+»', (
       tester,
     ) async {
       await _pump(tester);
@@ -55,10 +55,23 @@ void main() {
 
       for (final s in AppSection.tabs) {
         expect(_nav(s), findsOneWidget, reason: s.label);
+        // Только иконки (как в референсе); подпись — для доступности.
+        expect(
+          find.descendant(of: _nav(s), matching: find.byIcon(s.icon)),
+          findsOneWidget,
+          reason: 'иконка у ${s.label}',
+        );
         expect(
           find.descendant(of: _nav(s), matching: find.text(s.label)),
+          findsNothing,
+          reason: 'текстовой подписи у ${s.label} нет',
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('floating-tab-bar')),
+            matching: find.bySemanticsLabel(s.label),
+          ),
           findsOneWidget,
-          reason: 'подпись у ${s.label}',
         );
       }
       expect(_isActive(tester, AppSection.today), isTrue);
@@ -189,29 +202,6 @@ void main() {
     testWidgets('корневой адрес / перенаправляет на «Сегодня»', (tester) async {
       await _pump(tester, location: '/');
       expect(_location(tester), '/today');
-    });
-
-    testWidgets('крупный шрифт (200 %): подписи неактивных вкладок скрыты', (
-      tester,
-    ) async {
-      tester.platformDispatcher.textScaleFactorTestValue = 2;
-      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-      await _pump(tester);
-      // Активна «Сегодня» — её подпись есть, у остальных нет.
-      expect(
-        find.descendant(
-          of: _nav(AppSection.today),
-          matching: find.text('Сегодня'),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: _nav(AppSection.work),
-          matching: find.text('Работа'),
-        ),
-        findsNothing,
-      );
     });
 
     testWidgets('все экраны-заглушки открываются без ошибок', (tester) async {

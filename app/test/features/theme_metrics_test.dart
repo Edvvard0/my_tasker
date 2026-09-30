@@ -5,7 +5,7 @@ import 'package:my_tasker/core/theme/app_theme.dart';
 import '../support/pump_app.dart';
 
 /// Размеры и стили из 02, 2.3 / 2.9.1: кнопки 48/36, поля 52/40, кольцо
-/// фокуса 2 px + зазор 2 px, модальные окна на мобиле — радиус 28.
+/// фокуса 2 px + зазор 2 px, модальные окна на мобиле — радиус 32.
 void main() {
   const route = '/settings/server';
 
@@ -67,7 +67,7 @@ void main() {
     expect(tester.getRect(ring), ringRect);
   });
 
-  testWidgets('радиус модальных окон: 28 на телефоне, 20 на десктопе', (
+  testWidgets('радиус модальных окон: 32 на телефоне, 24 на десктопе', (
     tester,
   ) async {
     double radius(ThemeData t) =>
@@ -78,15 +78,15 @@ void main() {
 
     await pumpApp(tester);
     final phone = Theme.of(tester.element(find.byType(Scaffold).first));
-    expect(radius(phone), 28);
+    expect(radius(phone), 32);
     final sheet =
         (phone.bottomSheetTheme.shape! as RoundedRectangleBorder).borderRadius
             as BorderRadius;
-    expect(sheet.topLeft.x, 28);
+    expect(sheet.topLeft.x, 32);
 
     await pumpApp(tester, size: desktopSize);
     final desktop = Theme.of(tester.element(find.byType(Scaffold).first));
-    expect(radius(desktop), 20);
+    expect(radius(desktop), 24);
   });
 }
 

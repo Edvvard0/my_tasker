@@ -12,7 +12,6 @@ class ModulePlaceholder extends StatelessWidget {
     required this.icon,
     required this.description,
     required this.stage,
-    this.color,
     this.parentLabel,
     this.onBack,
     this.actions = const [],
@@ -28,8 +27,6 @@ class ModulePlaceholder extends StatelessWidget {
   /// Номер этапа из `docs/04_DECISIONS_AND_ROADMAP.md`.
   final int stage;
 
-  /// Цвет модуля для иконки.
-  final Color? color;
   final String? parentLabel;
   final VoidCallback? onBack;
   final List<Widget> actions;
@@ -55,7 +52,6 @@ class ModulePlaceholder extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 320),
             child: EmptyState(
               icon: icon,
-              iconColor: color,
               title: 'Здесь будет «$title»',
               message: '$description\nПоявится на этапе $stage.',
             ),

@@ -1,6 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:my_tasker/core/theme/app_colors.dart';
 
 /// Разделы верхнего уровня (02, раздел 3.1). Порядок = порядок веток роутера.
 ///
@@ -29,17 +28,6 @@ enum AppSection {
 
   /// Раздел есть в таб-баре телефона.
   bool get isTab => index < tabCount;
-
-  /// Цвет иконки модуля (02, 2.1.6); у «Сегодня» и «Настроек» — нейтральный.
-  Color moduleColor(AppColors c) => switch (this) {
-    today || settings => c.textSecondary,
-    calendar => c.moduleCalendar,
-    work => c.moduleWork,
-    finance => c.moduleFinance,
-    ai => c.moduleAi,
-    study => c.moduleStudy,
-    sleep => c.moduleSleep,
-  };
 
   /// Разделы таб-бара.
   static List<AppSection> get tabs => values.sublist(0, tabCount);

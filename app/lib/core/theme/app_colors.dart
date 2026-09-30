@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 
 /// Цветовые токены тёмной темы (02_DESIGN_SYSTEM, раздел 2.1).
 ///
-/// Имена токенов повторяют дизайн-систему: `bg/base` -> [bgBase] и т. д.
-/// Светлая тема не входит в MVP, но токены собраны в один класс, чтобы её
-/// можно было добавить второй константой.
+/// Палитра — «чёрный, белый, серый, синий»: чистый чёрный фон, нейтральная
+/// серая шкала (без оттенка), один синий акцент и один функциональный
+/// приглушённый красный (только для удаления и критичных ошибок). Цветов
+/// модулей, зелёного и жёлтого нет. Светлая тема не входит в MVP.
 @immutable
 class AppColors extends ThemeExtension<AppColors> {
   const AppColors({
@@ -12,6 +13,7 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.surface1,
     required this.surface2,
     required this.surface3,
+    required this.surface4,
     required this.surfaceInverse,
     required this.borderSubtle,
     required this.borderDefault,
@@ -22,66 +24,33 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.textSecondary,
     required this.textTertiary,
     required this.textDisabled,
-    required this.textOnAccent,
     required this.textOnInverse,
     required this.accent,
-    required this.accentHover,
-    required this.accentPressed,
-    required this.accentMuted,
-    required this.accentMutedStrong,
-    required this.success,
-    required this.successMuted,
-    required this.warning,
-    required this.warningMuted,
     required this.danger,
     required this.dangerMuted,
-    required this.info,
-    required this.infoMuted,
-    required this.moduleCalendar,
-    required this.moduleWork,
-    required this.moduleFinance,
-    required this.moduleStudy,
-    required this.moduleSleep,
-    required this.moduleAi,
   });
 
   /// Тёмная тема — основная.
   static const dark = AppColors(
-    bgBase: Color(0xFF0B0C0C),
-    surface1: Color(0xFF141615),
-    surface2: Color(0xFF1B1E1C),
-    surface3: Color(0xFF232725),
-    surfaceInverse: Color(0xFFEDEFEE),
-    borderSubtle: Color(0xFF1F2321),
-    borderDefault: Color(0xFF2A2E2C),
-    borderStrong: Color(0xFF3A403C),
-    borderFocus: Color(0xFF3BE08C),
-    borderDanger: Color(0xFFFF6B6B),
+    bgBase: Color(0xFF000000),
+    surface1: Color(0xFF141414),
+    surface2: Color(0xFF1C1C1C),
+    surface3: Color(0xFF262626),
+    surface4: Color(0xFF3A3A3A),
+    surfaceInverse: Color(0xFFFFFFFF),
+    borderSubtle: Color(0xFF1F1F1F),
+    borderDefault: Color(0xFF2A2A2A),
+    borderStrong: Color(0xFF404040),
+    borderFocus: accentValue,
+    borderDanger: Color(0xFFF0625A),
     textPrimary: textPrimaryValue,
-    textSecondary: Color(0xFFA3AAA6),
-    textTertiary: Color(0xFF878F8A),
-    textDisabled: Color(0xFF50564F),
-    textOnAccent: Color(0xFF06150D),
-    textOnInverse: Color(0xFF0B0C0C),
-    accent: Color(0xFF3BE08C),
-    accentHover: Color(0xFF62E6A3),
-    accentPressed: Color(0xFF32BE77),
-    accentMuted: Color(0xFF1A3628),
-    accentMutedStrong: Color(0xFF1D4632),
-    success: Color(0xFF3BE08C),
-    successMuted: Color(0xFF1A3628),
-    warning: Color(0xFFFFB547),
-    warningMuted: Color(0xFF3A2F1D),
-    danger: Color(0xFFFF6B6B),
-    dangerMuted: Color(0xFF3A2423),
-    info: Color(0xFF5AB0FF),
-    infoMuted: Color(0xFF1F2F3A),
-    moduleCalendar: Color(0xFF4CC9DC),
-    moduleWork: Color(0xFF6E9CFF),
-    moduleFinance: Color(0xFFE3BE5E),
-    moduleStudy: Color(0xFFF08DB0),
-    moduleSleep: Color(0xFFA08CFF),
-    moduleAi: Color(0xFFF29B6B),
+    textSecondary: Color(0xFFA6A6A6),
+    textTertiary: Color(0xFF8F8F8F),
+    textDisabled: Color(0xFF5C5C5C),
+    textOnInverse: Color(0xFF000000),
+    accent: accentValue,
+    danger: Color(0xFFF0625A),
+    dangerMuted: Color(0xFF2B1615),
   );
 
   // Фоны и поверхности.
@@ -89,6 +58,11 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color surface1;
   final Color surface2;
   final Color surface3;
+
+  /// Самая светлая поверхность: активный пункт навигации, нажатое.
+  final Color surface4;
+
+  /// Белая заливка главной кнопки (текст на ней — [textOnInverse]).
   final Color surfaceInverse;
 
   // Обводки.
@@ -103,36 +77,20 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color textSecondary;
   final Color textTertiary;
   final Color textDisabled;
-  final Color textOnAccent;
   final Color textOnInverse;
 
-  // Акцент.
+  /// Единственный акцент: «сегодня/выбрано», фокус, ссылки, прогресс к цели.
   final Color accent;
-  final Color accentHover;
-  final Color accentPressed;
-  final Color accentMuted;
-  final Color accentMutedStrong;
 
-  // Семантика.
-  final Color success;
-  final Color successMuted;
-  final Color warning;
-  final Color warningMuted;
+  /// Функциональное исключение: удаление и критичные ошибки.
   final Color danger;
   final Color dangerMuted;
-  final Color info;
-  final Color infoMuted;
-
-  // Цвета модулей.
-  final Color moduleCalendar;
-  final Color moduleWork;
-  final Color moduleFinance;
-  final Color moduleStudy;
-  final Color moduleSleep;
-  final Color moduleAi;
 
   /// Значение `text/primary` для const-контекстов.
-  static const textPrimaryValue = Color(0xFFEDEFEE);
+  static const textPrimaryValue = Color(0xFFFFFFFF);
+
+  /// Значение `accent` для const-контекстов.
+  static const accentValue = Color(0xFF0A84FF);
 
   /// Оверлей наведения (белый 4 %).
   static const stateHover = Color(0x0AFFFFFF);
@@ -146,26 +104,25 @@ class AppColors extends ThemeExtension<AppColors> {
   /// Затемнение под модальным окном (чёрный 60 %).
   static const scrim = Color(0x99000000);
 
-  /// Категориальная палитра графиков (2.1.7), порядок фиксирован.
-  static const chartCategories = <Color>[
-    Color(0xFF6E9CFF),
-    Color(0xFFE3BE5E),
-    Color(0xFFA08CFF),
-    Color(0xFF4CC9DC),
-    Color(0xFFF08DB0),
-    Color(0xFFF29B6B),
+  /// Ряды графиков (2.1.7), не больше четырёх, порядок фиксирован: акцент,
+  /// затем серые от светлого к тёмному. Ряды дополнительно различаются штрихом/заливкой.
+  static const chartSeries = <Color>[
+    accentValue,
+    Color(0xFFE6E6E6),
+    Color(0xFFA8A8A8),
+    Color(0xFF808080),
   ];
 
   /// Серый «Прочее» для графиков.
-  static const chartOther = Color(0xFF6B736E);
+  static const chartOther = Color(0xFF656565);
 
-  /// Шкала heatmap (уровни 0–4).
+  /// Шкала heatmap (уровни 0–4): от пустой ячейки до белой заливки.
   static const heat = <Color>[
-    Color(0xFF1E2220),
-    Color(0xFF15432B),
-    Color(0xFF1F6E43),
-    Color(0xFF2CA362),
-    Color(0xFF3BE08C),
+    Color(0xFF1A1A1A),
+    Color(0xFF3A3A3A),
+    Color(0xFF6B6B6B),
+    Color(0xFFA8A8A8),
+    Color(0xFFE6E6E6),
   ];
 
   /// Токены неизменяемы: копия совпадает с оригиналом.

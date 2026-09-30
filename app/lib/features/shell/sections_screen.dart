@@ -19,34 +19,29 @@ class SectionsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
     final items = <_SectionTile>[
-      _SectionTile(
+      const _SectionTile(
         keyName: 'study',
         label: 'Учёба',
         icon: LucideIcons.graduationCap,
-        color: c.moduleStudy,
         path: '/study',
       ),
-      _SectionTile(
+      const _SectionTile(
         keyName: 'sleep',
         label: 'Сон',
         icon: LucideIcons.moon,
-        color: c.moduleSleep,
         path: '/sleep',
       ),
-      _SectionTile(
+      const _SectionTile(
         keyName: 'servers',
         label: 'Серверы',
         icon: LucideIcons.server,
-        color: c.moduleWork,
         path: '/work/servers',
       ),
-      _SectionTile(
+      const _SectionTile(
         keyName: 'settings',
         label: 'Настройки',
         icon: LucideIcons.settings,
-        color: c.textSecondary,
         path: '/settings',
       ),
     ];
@@ -75,14 +70,12 @@ class _SectionTile extends StatelessWidget {
     required this.keyName,
     required this.label,
     required this.icon,
-    required this.color,
     required this.path,
   });
 
   final String keyName;
   final String label;
   final IconData icon;
-  final Color color;
   final String path;
 
   @override
@@ -90,10 +83,7 @@ class _SectionTile extends StatelessWidget {
     final c = context.colors;
     return Material(
       color: c.surface1,
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadii.borderL,
-        side: BorderSide(color: c.borderDefault),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadii.borderL),
       child: InkWell(
         key: Key('section-$keyName'),
         borderRadius: AppRadii.borderL,
@@ -104,7 +94,7 @@ class _SectionTile extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 24, color: color),
+              Icon(icon, size: 28, color: c.textSecondary),
               Text(label, style: context.text.h3),
             ],
           ),

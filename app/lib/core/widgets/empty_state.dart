@@ -10,7 +10,6 @@ class EmptyState extends StatelessWidget {
     required this.title,
     required this.message,
     this.action,
-    this.iconColor,
     super.key,
   });
 
@@ -18,7 +17,6 @@ class EmptyState extends StatelessWidget {
   final String title;
   final String message;
   final Widget? action;
-  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +30,7 @@ class EmptyState extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 32, color: iconColor ?? c.textTertiary),
+              Icon(icon, size: 32, color: c.textTertiary),
               const SizedBox(height: AppSpacing.s3),
               Text(title, style: t.h3, textAlign: TextAlign.center),
               const SizedBox(height: AppSpacing.s1),

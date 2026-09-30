@@ -119,7 +119,7 @@ class _Header extends StatelessWidget {
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
-                  color: c.accent,
+                  color: c.textPrimary,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -149,8 +149,8 @@ class _CreateAction extends StatelessWidget {
           tooltip: 'Создать',
           onPressed: onPressed,
           style: IconButton.styleFrom(
-            backgroundColor: c.accent,
-            foregroundColor: c.textOnAccent,
+            backgroundColor: c.surfaceInverse,
+            foregroundColor: c.textOnInverse,
             fixedSize: const Size(44, 44),
           ),
           icon: const Icon(LucideIcons.plus, size: 24),
@@ -184,8 +184,9 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.text;
-    final textColor = selected ? c.accent : c.textPrimary;
-    final iconColor = selected ? c.accent : section.moduleColor(c);
+    // Иконки монохромные: выбранный — белый, остальные — серые.
+    final textColor = selected ? c.textPrimary : c.textSecondary;
+    final iconColor = textColor;
 
     final content = collapsed
         ? Column(
@@ -226,7 +227,7 @@ class _NavItem extends StatelessWidget {
         label: section.label,
         excludeSemantics: true,
         child: Material(
-          color: selected ? c.accentMuted : Colors.transparent,
+          color: selected ? c.surface3 : Colors.transparent,
           borderRadius: collapsed ? AppRadii.borderM : AppRadii.borderFull,
           child: InkWell(
             key: Key('nav-${section.name}'),

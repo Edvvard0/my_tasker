@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/core/network/connection_checker.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
+import 'package:my_tasker/core/theme/app_typography.dart';
 import 'package:my_tasker/features/settings/application/server_connection_controller.dart';
 import 'package:my_tasker/features/settings/data/server_connection_repository.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
@@ -100,10 +101,11 @@ void main() {
     ) async {
       await pumpApp(tester);
       final ctx = tester.element(find.byType(Scaffold).first);
-      expect(ctx.colors.accent, const Color(0xFF3BE08C));
-      expect(ctx.colors.bgBase, const Color(0xFF0B0C0C));
+      expect(ctx.colors.accent, const Color(0xFF0A84FF));
+      expect(ctx.colors.bgBase, const Color(0xFF000000));
       expect(ctx.text.h1.fontFamily, 'Inter');
-      expect(ctx.text.monoM.fontFamily, 'JetBrains Mono');
+      expect(ctx.text.numM.fontFamily, 'Inter');
+      expect(ctx.text.display.fontFeatures, tabularFigures);
       expect(Theme.of(ctx).brightness, Brightness.dark);
       expect(Theme.of(ctx).scaffoldBackgroundColor, ctx.colors.bgBase);
     });

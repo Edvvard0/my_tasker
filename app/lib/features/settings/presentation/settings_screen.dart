@@ -26,7 +26,6 @@ class SettingsScreen extends ConsumerWidget {
         decoration: BoxDecoration(
           color: c.surface1,
           borderRadius: AppRadii.borderL,
-          border: Border.all(color: c.borderDefault),
         ),
         child: Column(
           children: [
@@ -37,7 +36,11 @@ class SettingsScreen extends ConsumerWidget {
               subtitle: saved?.url ?? 'Не настроен',
               onTap: () => context.go('/settings/server'),
             ),
-            Divider(color: c.borderSubtle),
+            Divider(
+              color: c.borderDefault,
+              indent: AppSpacing.s4,
+              endIndent: AppSpacing.s4,
+            ),
             _SettingsTile(
               key: const Key('settings-theme'),
               icon: LucideIcons.palette,
@@ -45,7 +48,11 @@ class SettingsScreen extends ConsumerWidget {
               subtitle: 'Тёмная тема · справочник дизайн-токенов',
               onTap: () => context.go('/settings/theme'),
             ),
-            Divider(color: c.borderSubtle),
+            Divider(
+              color: c.borderDefault,
+              indent: AppSpacing.s4,
+              endIndent: AppSpacing.s4,
+            ),
             _SettingsTile(
               key: const Key('settings-about'),
               icon: LucideIcons.info,

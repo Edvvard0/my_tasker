@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:my_tasker/core/theme/app_typography.dart';
 
-/// Загружает настоящие шрифты приложения (Inter, JetBrains Mono, Lucide) в
+/// Загружает настоящие шрифты приложения (Inter, Lucide) в
 /// тестовый движок. Без этого golden-тесты рисуют текст шрифтом Ahem.
 ///
 /// Файлы берутся из ассетов приложения, поэтому картинка одинакова на любой

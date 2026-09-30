@@ -27,7 +27,7 @@ abstract final class AppTheme {
     final tapTarget = desktop
         ? MaterialTapTargetSize.shrinkWrap
         : MaterialTapTargetSize.padded;
-    // Фокус клавиатуры кнопок: обводка 2 px акцента.
+    // Фокус клавиатуры кнопок: обводка 2 px акцента (синий).
     final focusSide = WidgetStateProperty.resolveWith<BorderSide?>(
       (states) => states.contains(WidgetState.focused)
           ? BorderSide(color: AppColors.dark.borderFocus, width: 2)
@@ -35,10 +35,11 @@ abstract final class AppTheme {
     );
     const c = AppColors.dark;
     final scheme = ColorScheme.dark(
-      primary: c.accent,
-      onPrimary: c.textOnAccent,
+      // Главная кнопка — белая пилюля с чёрным текстом, как в референсе.
+      primary: c.surfaceInverse,
+      onPrimary: c.textOnInverse,
       secondary: c.accent,
-      onSecondary: c.textOnAccent,
+      onSecondary: c.textPrimary,
       error: c.danger,
       onError: c.textOnInverse,
       surface: c.surface1,
@@ -57,7 +58,7 @@ abstract final class AppTheme {
 
     OutlineInputBorder border(Color color, [double width = 1]) =>
         OutlineInputBorder(
-          borderRadius: AppRadii.borderS,
+          borderRadius: AppRadii.borderM,
           borderSide: BorderSide(color: color, width: width),
         );
 
@@ -89,10 +90,12 @@ abstract final class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadii.borderL,
-          side: BorderSide(color: c.borderDefault),
-        ),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadii.borderL),
+      ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: c.accent,
+        selectionColor: c.accent.withValues(alpha: 0.35),
+        selectionHandleColor: c.accent,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -117,14 +120,14 @@ abstract final class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: c.accent,
-          foregroundColor: c.textOnAccent,
+          backgroundColor: c.surfaceInverse,
+          foregroundColor: c.textOnInverse,
           disabledBackgroundColor: c.surface3,
           disabledForegroundColor: c.textDisabled,
           minimumSize: Size(64, buttonHeight),
           tapTargetSize: tapTarget,
           textStyle: text.label.copyWith(fontWeight: FontWeight.w600),
-          shape: const RoundedRectangleBorder(borderRadius: AppRadii.borderM),
+          shape: const StadiumBorder(),
         ).copyWith(side: focusSide),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -137,7 +140,7 @@ abstract final class AppTheme {
           minimumSize: Size(64, buttonHeight),
           tapTargetSize: tapTarget,
           textStyle: text.label,
-          shape: const RoundedRectangleBorder(borderRadius: AppRadii.borderM),
+          shape: const StadiumBorder(),
         ).copyWith(side: focusSide),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -147,7 +150,7 @@ abstract final class AppTheme {
           minimumSize: Size(64, buttonHeight),
           tapTargetSize: tapTarget,
           textStyle: text.label,
-          shape: const RoundedRectangleBorder(borderRadius: AppRadii.borderM),
+          shape: const StadiumBorder(),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -176,7 +179,7 @@ abstract final class AppTheme {
         backgroundColor: c.surface2,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          // Мобильные модальные окна — radius/xl (28), десктоп — radius/l (20).
+          // Мобильные модальные окна — radius/xl (32), десктоп — radius/l (24).
           borderRadius: desktop ? AppRadii.borderL : AppRadii.borderXl,
         ),
       ),

@@ -6,7 +6,7 @@
 ## Почему картинки стабильны
 
 - Шрифты не берутся из системы: `test/flutter_test_config.dart` загружает
-  из ассетов приложения Inter, JetBrains Mono и Lucide (`test/support/fonts.dart`).
+  из ассетов приложения Inter и Lucide (`test/support/fonts.dart`).
   Без этого Flutter рисует весь текст шрифтом Ahem.
 - Размер окна и `devicePixelRatio = 1` задаются в тесте явно
   (телефон 390×844, окно 800×600, десктоп 1440×900).

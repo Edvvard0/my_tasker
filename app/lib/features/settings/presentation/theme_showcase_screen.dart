@@ -46,35 +46,45 @@ class ThemeShowcase extends StatelessWidget {
               _Swatch('surface/1', c.surface1),
               _Swatch('surface/2', c.surface2),
               _Swatch('surface/3', c.surface3),
+              _Swatch('surface/4', c.surface4),
               _Swatch('inverse', c.surfaceInverse, dark: false),
             ],
           ),
         ),
         _Section(
-          title: 'Акцент и статусы',
+          title: 'Акцент и исключение',
           child: Wrap(
             spacing: AppSpacing.s2,
             runSpacing: AppSpacing.s2,
             children: [
-              _Swatch('accent', c.accent, dark: false),
-              _Swatch('warning', c.warning, dark: false),
+              _Swatch('accent', c.accent),
               _Swatch('danger', c.danger, dark: false),
-              _Swatch('info', c.info, dark: false),
             ],
           ),
         ),
         _Section(
-          title: 'Модули',
+          title: 'Серые ряды и heatmap',
           child: Wrap(
             spacing: AppSpacing.s2,
             runSpacing: AppSpacing.s2,
             children: [
-              _Swatch('calendar', c.moduleCalendar, dark: false),
-              _Swatch('work', c.moduleWork, dark: false),
-              _Swatch('finance', c.moduleFinance, dark: false),
-              _Swatch('study', c.moduleStudy, dark: false),
-              _Swatch('sleep', c.moduleSleep, dark: false),
-              _Swatch('ai', c.moduleAi, dark: false),
+              for (final color in AppColors.heat)
+                Container(
+                  width: 44,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: AppRadii.borderFull,
+                  ),
+                ),
+              Container(
+                width: 44,
+                height: 24,
+                decoration: BoxDecoration(
+                  borderRadius: AppRadii.borderFull,
+                  border: Border.all(color: c.accent, width: 2),
+                ),
+              ),
             ],
           ),
         ),
@@ -83,8 +93,8 @@ class ThemeShowcase extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('205 000 ₽', style: t.display),
-              Text('359,7к', style: t.kpi),
+              Text('359,7к', style: t.display),
+              Text('205 000 ₽', style: t.kpi),
               Text('Заголовок экрана', style: t.h1),
               Text('Заголовок секции', style: t.h2),
               Text('Заголовок карточки', style: t.h3),
@@ -97,8 +107,8 @@ class ThemeShowcase extends StatelessWidget {
                 'ДОСТУПНОСТЬ',
                 style: t.overline.copyWith(color: c.textTertiary),
               ),
-              Text('1 249,90 ₽  ·  01:12:43  ·  178 мс', style: t.monoL),
-              Text('https://203.0.113.10:443', style: t.monoS),
+              Text('1 249,90 ₽  ·  01:12:43  ·  178 мс', style: t.numL),
+              Text('https://203.0.113.10:443', style: t.numS),
             ],
           ),
         ),
@@ -149,13 +159,12 @@ class ThemeShowcase extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: c.surface3,
                     borderRadius: BorderRadius.circular(r),
-                    border: Border.all(color: c.borderDefault),
                   ),
                 ),
               Icon(LucideIcons.sun, color: c.textSecondary),
-              Icon(LucideIcons.wallet, color: c.moduleFinance),
-              Icon(LucideIcons.moon, color: c.moduleSleep),
-              Icon(LucideIcons.sparkles, color: c.moduleAi),
+              Icon(LucideIcons.wallet, color: c.textSecondary),
+              Icon(LucideIcons.moon, color: c.textSecondary),
+              Icon(LucideIcons.sparkles, color: c.textSecondary),
             ],
           ),
         ),
@@ -210,11 +219,11 @@ class _Swatch extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: AppRadii.borderM,
-        border: Border.all(color: AppColors.stateSelected),
+        border: Border.all(color: c.borderStrong),
       ),
       child: Text(
         label,
-        style: context.text.monoS.copyWith(
+        style: context.text.numS.copyWith(
           color: dark ? c.textPrimary : c.textOnInverse,
         ),
       ),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/core/widgets/module_placeholder.dart';
 
 /// «Работа › Серверы»: мониторинг только наблюдает, серверами не управляет.
@@ -15,7 +14,6 @@ class ServersScreen extends StatelessWidget {
       title: 'Серверы',
       parentLabel: 'Работа',
       icon: LucideIcons.server,
-      color: context.colors.moduleWork,
       description: 'Дашборд «Пульс»: статус, доступность, отклик и инциденты.',
       stage: 9,
       onBack: () => context.go('/work'),

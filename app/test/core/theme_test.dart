@@ -52,38 +52,73 @@ void main() {
     const c = AppColors.dark;
 
     test('значения совпадают с 02_DESIGN_SYSTEM', () {
-      expect(c.bgBase, const Color(0xFF0B0C0C));
-      expect(c.surface1, const Color(0xFF141615));
-      expect(c.surface2, const Color(0xFF1B1E1C));
-      expect(c.surface3, const Color(0xFF232725));
-      expect(c.textPrimary, const Color(0xFFEDEFEE));
-      expect(c.textSecondary, const Color(0xFFA3AAA6));
-      expect(c.textTertiary, const Color(0xFF878F8A));
-      expect(c.accent, const Color(0xFF3BE08C));
-      expect(c.danger, const Color(0xFFFF6B6B));
-      expect(c.warning, const Color(0xFFFFB547));
-      expect(c.info, const Color(0xFF5AB0FF));
-      expect(c.moduleWork, const Color(0xFF6E9CFF));
-      expect(AppColors.chartCategories, hasLength(6));
+      expect(c.bgBase, const Color(0xFF000000));
+      expect(c.surface1, const Color(0xFF141414));
+      expect(c.surface2, const Color(0xFF1C1C1C));
+      expect(c.surface3, const Color(0xFF262626));
+      expect(c.surface4, const Color(0xFF3A3A3A));
+      expect(c.surfaceInverse, const Color(0xFFFFFFFF));
+      expect(c.textPrimary, const Color(0xFFFFFFFF));
+      expect(c.textSecondary, const Color(0xFFA6A6A6));
+      expect(c.textTertiary, const Color(0xFF8F8F8F));
+      expect(c.accent, const Color(0xFF0A84FF));
+      expect(c.borderFocus, c.accent);
+      expect(c.danger, const Color(0xFFF0625A));
+      expect(AppColors.chartSeries, hasLength(4));
+      expect(AppColors.chartSeries.first, c.accent);
       expect(AppColors.heat, hasLength(5));
     });
 
+    test('палитра: только серые, один синий и функциональный красный', () {
+      bool isGray(Color x) => x.r == x.g && x.g == x.b;
+      final grays = [
+        c.bgBase,
+        c.surface1,
+        c.surface2,
+        c.surface3,
+        c.surface4,
+        c.surfaceInverse,
+        c.borderSubtle,
+        c.borderDefault,
+        c.borderStrong,
+        c.textPrimary,
+        c.textSecondary,
+        c.textTertiary,
+        c.textDisabled,
+        c.textOnInverse,
+        AppColors.chartOther,
+        ...AppColors.heat,
+        ...AppColors.chartSeries.skip(1),
+      ];
+      for (final g in grays) {
+        expect(isGray(g), isTrue, reason: '$g должен быть нейтрально-серым');
+      }
+      expect(isGray(c.accent), isFalse);
+      // Красный — только danger-токены.
+      expect(c.borderDanger, c.danger);
+    });
+
     test('контраст текста соответствует таблице 2.1.3 (WCAG AA)', () {
-      expect(_contrast(c.textPrimary, c.bgBase), greaterThan(16));
+      expect(_contrast(c.textPrimary, c.bgBase), greaterThan(20));
       expect(_contrast(c.textSecondary, c.surface1), greaterThan(7));
       // text/tertiary — AA даже на surface/3.
       expect(_contrast(c.textTertiary, c.surface3), greaterThanOrEqualTo(4.5));
-      expect(_contrast(c.textOnAccent, c.accent), greaterThan(9));
-      expect(_contrast(c.accent, c.surface1), greaterThan(10));
-      for (final module in [
-        c.moduleCalendar,
-        c.moduleWork,
-        c.moduleFinance,
-        c.moduleStudy,
-        c.moduleSleep,
-        c.moduleAi,
-      ]) {
-        expect(_contrast(module, c.surface1), greaterThanOrEqualTo(4.5));
+      // Белая кнопка с чёрным текстом.
+      expect(_contrast(c.textOnInverse, c.surfaceInverse), greaterThan(20));
+      // Синий как текст/ссылка — AA на фоне и карточках surface/1, /2.
+      expect(_contrast(c.accent, c.bgBase), greaterThanOrEqualTo(4.5));
+      expect(_contrast(c.accent, c.surface1), greaterThanOrEqualTo(4.5));
+      expect(_contrast(c.accent, c.surface2), greaterThanOrEqualTo(4.5));
+      // Как элемент интерфейса (обводка, фокус) — не ниже 3:1 на surface/3.
+      expect(_contrast(c.accent, c.surface3), greaterThanOrEqualTo(3));
+      // Красный — AA на surface/1 и в пилюле на dangerMuted.
+      expect(_contrast(c.danger, c.surface1), greaterThanOrEqualTo(4.5));
+      expect(_contrast(c.danger, c.dangerMuted), greaterThanOrEqualTo(4.5));
+      // Белая иконка на светло-сером круге активной вкладки.
+      expect(_contrast(c.textPrimary, c.surface4), greaterThanOrEqualTo(4.5));
+      // Ряды графиков и «Прочее» — графические элементы, >= 3:1 на surface/1.
+      for (final s in [...AppColors.chartSeries, AppColors.chartOther]) {
+        expect(_contrast(s, c.surface1), greaterThanOrEqualTo(3));
       }
     });
 
@@ -102,7 +137,7 @@ void main() {
       expect(AppSpacing.s4, 16);
       expect(AppSpacing.all(4), const EdgeInsets.all(4));
       expect(AppSpacing.floatingBarInset, 124);
-      expect(AppRadii.l, 20);
+      expect(AppRadii.l, 24);
       expect(AppRadii.borderFull.topLeft.x, 999);
       expect(AppMotion.base, const Duration(milliseconds: 220));
       expect(AppMotion.standard.transform(0), 0);
@@ -111,7 +146,7 @@ void main() {
     test('elevation-декорации', () {
       final card = AppElevation.card(c);
       expect(card.color, c.surface1);
-      expect((card.borderRadius! as BorderRadius).topLeft.x, 20);
+      expect((card.borderRadius! as BorderRadius).topLeft.x, 24);
       expect(
         AppElevation.card(c, radius: AppRadii.borderM).borderRadius,
         AppRadii.borderM,
@@ -128,18 +163,22 @@ void main() {
       expect(t.h1.height, closeTo(32 / 26, 1e-9));
       expect(t.h1.fontWeight, FontWeight.w700);
       expect(t.h1.fontFamily, AppFonts.sans);
-      expect(t.display.fontFamily, AppFonts.mono);
-      expect(t.display.fontSize, 34);
+      expect(t.display.fontFamily, AppFonts.sans);
+      expect(t.display.fontSize, 40);
+      expect(t.display.fontWeight, FontWeight.w700);
+      expect(t.display.fontFeatures, tabularFigures);
       expect(t.tabLabel.fontSize, 11);
       expect(t.overline.letterSpacing, closeTo(11 * 0.06, 1e-9));
-      expect(t.monoS.fontFamily, AppFonts.mono);
+      expect(t.numS.fontFamily, AppFonts.sans);
+      expect(t.numM.fontFeatures, tabularFigures);
+      expect(t.body.fontFeatures, isNull);
     });
 
     test('десктопная шкала из 02', () {
       final t = AppTextStyles.desktop();
       expect(t.h1.fontSize, 24);
       expect(t.body.fontSize, 14);
-      expect(t.monoL.fontSize, 16);
+      expect(t.numL.fontSize, 16);
     });
 
     test('forWindow выбирает шкалу по классу ширины', () {
@@ -154,7 +193,7 @@ void main() {
     });
 
     test('все файлы шрифтов объявлены в pubspec и загружаются', () async {
-      expect(AppFonts.files, hasLength(8));
+      expect(AppFonts.files, hasLength(4));
       for (final (_, _, asset) in AppFonts.files) {
         final data = await rootBundle.load(asset);
         expect(data.lengthInBytes, greaterThan(50 * 1024), reason: asset);
@@ -173,7 +212,7 @@ void main() {
         },
       };
       expect(byPackage['Inter'], contains('SIL OPEN FONT LICENSE'));
-      expect(byPackage['JetBrains Mono'], contains('SIL OPEN FONT LICENSE'));
+      expect(byPackage.containsKey('JetBrains Mono'), isFalse);
     });
   });
 

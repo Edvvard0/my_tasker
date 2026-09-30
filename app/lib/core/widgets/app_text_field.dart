@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:my_tasker/core/theme/app_radii.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
 
-/// Поле ввода со стилем фокуса из 02, 2.9.1: кольцо 2 px цвета акцента с
+/// Поле ввода со стилем фокуса из 02, 2.9.1: кольцо 2 px синего акцента с
 /// зазором 2 px от поля, радиус кольца = радиус поля + 2.
 ///
 /// Место под кольцо (4 px со всех сторон) резервируется всегда, поэтому
@@ -49,7 +49,7 @@ class _AppTextFieldState extends State<AppTextField> {
       child: DecoratedBox(
         key: const Key('focus-ring'),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadii.s + 2),
+          borderRadius: BorderRadius.circular(AppRadii.m + 2),
           border: Border.all(
             color: _focused ? ring : Colors.transparent,
             width: 2,

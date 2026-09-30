@@ -49,16 +49,6 @@ flutter:
           weight: 600
         - asset: assets/fonts/Inter-Bold.ttf
           weight: 700
-    - family: JetBrains Mono
-      fonts:
-        - asset: assets/fonts/JetBrainsMono-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/JetBrainsMono-Medium.ttf
-          weight: 500
-        - asset: assets/fonts/JetBrainsMono-SemiBold.ttf
-          weight: 600
-        - asset: assets/fonts/JetBrainsMono-Bold.ttf
-          weight: 700
 
 # SQLCipher вместо обычного SQLite: сборка подтягивается build hook-ом пакета
 # sqlite3 (см. doc/hook.md пакета). Действует и для `flutter test`, поэтому

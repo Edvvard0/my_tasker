@@ -253,7 +253,7 @@ class _ServerConnectionScreenState
                   keyboardType: TextInputType.url,
                   autocorrect: false,
                   enableSuggestions: false,
-                  style: t.monoM,
+                  style: t.numM,
                   decoration: InputDecoration(
                     hintText: 'https://203.0.113.10',
                     errorText: _urlError,
@@ -293,7 +293,7 @@ class _ServerConnectionScreenState
                     enableSuggestions: false,
                     minLines: 4,
                     maxLines: 8,
-                    style: t.monoS,
+                    style: t.numS,
                     decoration: InputDecoration(
                       hintText: '-----BEGIN CERTIFICATE-----',
                       errorText: _pemError,
@@ -449,7 +449,6 @@ class _StatusCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface1,
         borderRadius: AppRadii.borderL,
-        border: Border.all(color: c.borderDefault),
       ),
       padding: const EdgeInsets.all(AppSpacing.s4),
       child: content,
@@ -552,7 +551,7 @@ class _PendingCa extends StatelessWidget {
         SelectableText(
           CertificateFingerprint.format(ca.fingerprint),
           key: const Key('ca-fingerprint'),
-          style: t.monoS,
+          style: t.numS,
         ),
         const SizedBox(height: AppSpacing.s4),
         Wrap(
@@ -600,14 +599,16 @@ class _Message extends StatelessWidget {
         const SizedBox(height: AppSpacing.s2),
         Text(
           text,
-          style: t.body.copyWith(color: warning ? c.warning : c.textSecondary),
+          style: t.body.copyWith(
+            color: warning ? c.textPrimary : c.textSecondary,
+          ),
         ),
         if (fingerprint != null) ...[
           const SizedBox(height: AppSpacing.s2),
           SelectableText(
             CertificateFingerprint.format(fingerprint!),
             key: const Key('pinned-fingerprint'),
-            style: t.monoS.copyWith(color: c.textTertiary),
+            style: t.numS.copyWith(color: c.textTertiary),
           ),
         ],
       ],
