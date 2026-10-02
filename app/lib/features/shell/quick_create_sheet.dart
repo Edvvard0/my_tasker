@@ -6,13 +6,17 @@ import 'package:my_tasker/core/layout/window_class.dart';
 import 'package:my_tasker/core/theme/app_spacing.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/features/calendar/presentation/event_editor.dart';
+import 'package:my_tasker/features/finance/presentation/transaction_editor.dart';
+import 'package:my_tasker/features/shell/app_section.dart';
 import 'package:my_tasker/features/tasks/presentation/quick_add_bar.dart';
 import 'package:my_tasker/features/tasks/presentation/task_editor.dart';
 
 /// Открывает окно быстрого создания («+», 02, 4.4): строка быстрого ввода
 /// задачи с чипами (дата, время, приоритет, проект…) и кнопки «Задача» /
-/// «Событие» для полных форм.
-Future<void> showQuickCreate(BuildContext context) {
+/// «Событие» для полных форм. В разделе «Финансы» («+» по умолчанию —
+/// операция, 02, 7.1) сразу открывается редактор операции.
+Future<void> showQuickCreate(BuildContext context, {AppSection? section}) {
+  if (section == AppSection.finance) return showTransactionEditor(context);
   if (context.windowClass.isCompact) {
     return showModalBottomSheet<void>(
       context: context,

@@ -423,6 +423,9 @@ class FinanceRepository {
   Future<void> deleteCheckpoint(String id) =>
       _store.softDelete(checkpointsTable, id);
 
+  Future<void> restoreCheckpoint(String id) =>
+      _store.restore(checkpointsTable, id);
+
   /// Сверка баланса (spec 4.4): точка `source = manual` с фактическим
   /// остатком [actualBalance] на момент [at] (по умолчанию — сейчас).
   /// Отдельных операций-корректировок не создаётся; возвращается

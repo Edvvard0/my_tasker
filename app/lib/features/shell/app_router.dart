@@ -17,6 +17,10 @@ import 'package:my_tasker/features/calendar/presentation/calendar_settings_scree
 import 'package:my_tasker/features/calendar/presentation/layers_screen.dart';
 import 'package:my_tasker/features/devices/presentation/devices_screen.dart';
 import 'package:my_tasker/features/finance/finance_screen.dart';
+import 'package:my_tasker/features/finance/presentation/account_screen.dart';
+import 'package:my_tasker/features/finance/presentation/categories_screen.dart';
+import 'package:my_tasker/features/finance/presentation/reconcile_screen.dart';
+import 'package:my_tasker/features/finance/presentation/transactions_screen.dart';
 import 'package:my_tasker/features/local_ai/presentation/local_benchmark_screen.dart';
 import 'package:my_tasker/features/local_ai/presentation/local_models_screen.dart';
 import 'package:my_tasker/features/settings/presentation/server_connection_screen.dart';
@@ -122,7 +126,33 @@ GoRouter createRouter({
         ),
         StatefulShellBranch(
           routes: [
-            GoRoute(path: '/finance', builder: (_, _) => const FinanceScreen()),
+            GoRoute(
+              path: '/finance',
+              builder: (_, _) => const FinanceScreen(),
+              routes: [
+                GoRoute(
+                  path: 'transactions',
+                  builder: (_, _) => const TransactionsScreen(),
+                ),
+                GoRoute(
+                  path: 'categories',
+                  builder: (_, _) => const CategoriesScreen(),
+                ),
+                GoRoute(
+                  path: 'accounts/:id',
+                  builder: (_, state) =>
+                      AccountScreen(accountId: state.pathParameters['id']!),
+                  routes: [
+                    GoRoute(
+                      path: 'reconcile',
+                      builder: (_, state) => ReconcileScreen(
+                        accountId: state.pathParameters['id']!,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ],
         ),
         StatefulShellBranch(

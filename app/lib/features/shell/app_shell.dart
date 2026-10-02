@@ -67,7 +67,7 @@ class AppShell extends ConsumerWidget {
                 child: FloatingTabBar(
                   selected: _current.isTab ? _current : null,
                   onSelect: _select,
-                  onCreate: () => showQuickCreate(context),
+                  onCreate: () => showQuickCreate(context, section: _current),
                 ),
               ),
             ),
@@ -86,7 +86,7 @@ class AppShell extends ConsumerWidget {
             collapsed: isMedium || userCollapsed,
             selected: _current,
             onSelect: _select,
-            onCreate: () => showQuickCreate(context),
+            onCreate: () => showQuickCreate(context, section: _current),
             // В узком окне панель всегда рейл: сворачивать нечего.
             onToggleCollapsed: isMedium
                 ? null

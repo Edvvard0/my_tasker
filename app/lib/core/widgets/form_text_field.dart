@@ -21,6 +21,7 @@ class FormTextField extends StatefulWidget {
     this.inputFormatters,
     this.focusNode,
     this.maxLength,
+    this.textAlign = TextAlign.start,
     super.key,
   });
 
@@ -37,6 +38,7 @@ class FormTextField extends StatefulWidget {
   final List<TextInputFormatter>? inputFormatters;
   final FocusNode? focusNode;
   final int? maxLength;
+  final TextAlign textAlign;
 
   @override
   State<FormTextField> createState() => _FormTextFieldState();
@@ -67,6 +69,7 @@ class _FormTextFieldState extends State<FormTextField> {
             focusNode: widget.focusNode,
             decoration: widget.decoration,
             style: widget.style,
+            textAlign: widget.textAlign,
             keyboardType: widget.keyboardType,
             minLines: widget.minLines,
             maxLines: widget.maxLines,
