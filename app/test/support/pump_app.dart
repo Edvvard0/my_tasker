@@ -12,9 +12,11 @@ import 'package:my_tasker/core/db/database_providers.dart';
 import 'package:my_tasker/core/network/api_providers.dart';
 import 'package:my_tasker/core/network/connection_checker.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
+import 'package:my_tasker/features/ai_chat/application/ai_providers.dart';
 import 'package:my_tasker/features/settings/data/server_connection_repository.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 
+import 'ai_env.dart';
 import 'fake_server/fake_backend.dart';
 import 'fakes.dart';
 import 'in_memory_opener.dart';
@@ -39,7 +41,8 @@ const desktopSize = Size(1440, 900);
 /// [backend] — вместо сети фейковый сервер (тогда `http://localhost`
 /// разрешён); [serverUrl] — сохранить адрес сервера в БД до старта;
 /// [now] — зафиксировать «текущее время» (стабильные подписи «5 мин назад»);
-/// [opener] — свой способ открыть БД (например, «сломанную»).
+/// [opener] — свой способ открыть БД (например, «сломанную»);
+/// [defaultAiApi] — поддельный API ИИ по умолчанию (экраны ИИ не ходят в сеть).
 Future<ProviderContainer> pumpApp(
   WidgetTester tester, {
   Size size = phoneSize,
@@ -53,6 +56,7 @@ Future<ProviderContainer> pumpApp(
   String? serverUrl,
   DateTime? now,
   AppDatabaseOpener? opener,
+  bool defaultAiApi = true,
 }) async {
   tester.view
     ..physicalSize = size
@@ -82,6 +86,8 @@ Future<ProviderContainer> pumpApp(
       if (backend != null)
         plainAdapterFactoryProvider.overrideWithValue(() => backend),
       if (now != null) clockProvider.overrideWithValue(() => now),
+      // Экраны ИИ не ходят в настоящую сеть: поддельный API по умолчанию.
+      if (defaultAiApi) aiApiProvider.overrideWithValue(FakeAiApi()),
       ...overrides,
     ],
   );

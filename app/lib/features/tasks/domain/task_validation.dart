@@ -1,3 +1,4 @@
+import 'package:my_tasker/core/calendar_time/civil_date.dart';
 import 'package:my_tasker/core/calendar_time/wall_time.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_validation.dart';
 import 'package:my_tasker/features/tasks/domain/task_models.dart';
@@ -21,6 +22,12 @@ String? taskProblem(TaskEntity t) {
   }
   final reminders = remindersProblem(t.reminders);
   if (reminders != null) return reminders;
+  final dueDate = t.due.date;
+  final dueAt = t.due.at;
+  if ((dueDate != null && (dueDate.year < minYear || dueDate.year > maxYear)) ||
+      (dueAt != null && (dueAt.year < minYear || dueAt.year > maxYear))) {
+    return 'Срок: год вне диапазона ($minYear–$maxYear)';
+  }
   if (t.due.hasTime && findLocation(t.due.tz ?? '') == null) {
     return 'Неизвестная таймзона';
   }

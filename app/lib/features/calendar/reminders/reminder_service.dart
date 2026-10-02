@@ -134,6 +134,7 @@ class ReminderService {
     if (every != null) {
       _refreshTimer = periodicTimer(every, (_) => unawaited(replan()));
     }
+    _permission = await scheduler.permission();
     await replan();
   }
 
@@ -145,8 +146,20 @@ class ReminderService {
   /// Пояс устройства изменился: «9:00» для событий на весь день сместилось.
   Future<void> onTimeZoneChanged() => replan();
 
-  /// Приложение вернулось на передний план.
-  Future<void> onResumed() => replan();
+  /// Приложение вернулось на передний план. Если за это время изменилось
+  /// состояние разрешений (например, пользователь выдал «точные
+  /// будильники» в системных настройках), всё запланированное
+  /// регистрируется заново: на Android режим (точно/неточно) задаётся при
+  /// планировании и сам не обновится.
+  Future<void> onResumed() async {
+    final now = await scheduler.permission();
+    final changed = _permission != null && _permission != now;
+    _permission = now;
+    if (changed) await scheduler.cancelAll();
+    await replan();
+  }
+
+  ReminderPermission? _permission;
 
   Future<void> stop() async {
     _debounceTimer?.cancel();

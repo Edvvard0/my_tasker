@@ -145,6 +145,27 @@ class ApiClient {
     return body.stream;
   }
 
+  /// `POST` с потоковым ответом (SSE ответа ИИ, Этап 3): тело запроса —
+  /// JSON, ответ — поток байтов. Обрыв соединения (отмена ответа) —
+  /// `cancelToken.cancel()`: простая отмена подписки на поток соединение
+  /// не закрывает.
+  Future<Stream<List<int>>> openPostStream(
+    String path,
+    Object body, {
+    CancelToken? cancelToken,
+  }) async {
+    final response = await _request(
+      'POST',
+      path,
+      body: body,
+      stream: true,
+      cancelToken: cancelToken,
+      headers: {'Accept': 'text/event-stream', 'Cache-Control': 'no-cache'},
+    );
+    final data = response.data! as ResponseBody;
+    return data.stream;
+  }
+
   Future<Map<String, Object?>> _json(
     String method,
     String path, {
@@ -180,6 +201,7 @@ class ApiClient {
     bool auth = true,
     bool stream = false,
     Map<String, Object?> headers = const {},
+    CancelToken? cancelToken,
   }) async {
     var token = auth ? await tokens?.currentAccessToken() : null;
     if (auth && token == null && tokens != null) {
@@ -197,6 +219,7 @@ class ApiClient {
       token: token,
       stream: stream,
       headers: headers,
+      cancelToken: cancelToken,
     );
     ApiException? error;
     if (auth && response.statusCode == 401 && tokens != null) {
@@ -214,6 +237,7 @@ class ApiClient {
           token: token,
           stream: stream,
           headers: headers,
+          cancelToken: cancelToken,
         );
       }
     }
@@ -234,12 +258,14 @@ class ApiClient {
     Object? body,
     bool stream = false,
     Map<String, Object?> headers = const {},
+    CancelToken? cancelToken,
   }) async {
     try {
       return await _dio.request<Object?>(
         path,
         data: body,
         queryParameters: query,
+        cancelToken: cancelToken,
         options: Options(
           method: method,
           responseType: stream ? ResponseType.stream : ResponseType.plain,

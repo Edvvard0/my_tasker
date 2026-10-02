@@ -1,4 +1,5 @@
 import 'package:my_tasker/core/sync/sync_table.dart';
+import 'package:my_tasker/features/ai_chat/data/ai_sync_specs.dart';
 import 'package:my_tasker/features/calendar/data/calendar_sync_specs.dart';
 import 'package:my_tasker/features/tasks/data/task_sync_specs.dart';
 
@@ -45,4 +46,6 @@ const List<SyncTableSpec> registeredSyncTables = [
   subtasksSpec,
   taskTagsSpec,
   taskCompletionsSpec,
+  // Этап 3 (ИИ-чат): `backend/src/tasker/ai/tables.py`, `AI_TABLES`.
+  ...aiSyncSpecs,
 ];

@@ -12,6 +12,10 @@ import 'package:my_tasker/features/calendar/domain/calendar_items.dart';
 import 'package:my_tasker/features/calendar/presentation/widgets/calendar_blocks.dart';
 import 'package:my_tasker/features/tasks/domain/task_models.dart';
 
+/// Минимальная ширина колонки блока при раскладке пересечений: сколько
+/// блоков помещается рядом — `floor(ширина колонки дня / minLaneWidth)`.
+const double minLaneWidth = 56;
+
 /// Сетка времени для видов «День», «3 дня» и «Неделя» (02, 5.1.1):
 /// заголовки дней, полоса «весь день», часовая шкала, блоки событий и
 /// задач, линия «сейчас». На десктопе блоки перетаскиваются (сдвиг на
@@ -83,13 +87,15 @@ class _TimeGridViewState extends ConsumerState<TimeGridView> {
   _Drag? _drag;
 
   double get _hour => widget.desktop ? 56.0 : 52.0;
-  double get _gutter => widget.desktop ? 56.0 : 48.0;
+  // Телефон: в недельной сетке колонки узкие, шкале времени — меньше места.
+  double get _gutter =>
+      widget.desktop ? 56.0 : (widget.days.length >= 5 ? 40.0 : 48.0);
 
   @override
   void initState() {
     super.initState();
     final showsToday = widget.days.any((d) => d == widget.today);
-    final startHour = showsToday ? math.max(0, widget.nowWall.hour - 1) : 7;
+    final startHour = showsToday ? math.max(0, widget.nowWall.hour - 2) : 7;
     _scroll = ScrollController(initialScrollOffset: startHour * _hour);
   }
 
@@ -335,10 +341,12 @@ class _TimeGridViewState extends ConsumerState<TimeGridView> {
                 for (var h = 1; h < 24; h++)
                   Positioned(
                     left: 0,
-                    width: _gutter - 6,
+                    width: _gutter - 4,
                     top: h * _hour - 8,
                     child: Text(
                       clockText(h, 0),
+                      maxLines: 1,
+                      softWrap: false,
                       textAlign: TextAlign.right,
                       style: t.caption.copyWith(color: c.textTertiary),
                     ),
@@ -402,11 +410,16 @@ class _TimeGridViewState extends ConsumerState<TimeGridView> {
           end: math.max(i.endMinuteOn(day), i.startMinuteOn(day) + 20),
         ),
     ];
-    final lanes = layoutLanes(spans);
+    // Не больше одной колонки на каждые 56 px; остальное — плашка «+N».
+    final layout = layoutLanes(
+      spans,
+      maxLanes: math.max(1, (colWidth / minLaneWidth).floor()),
+    );
     final widgets = <Widget>[];
     for (var i = 0; i < items.length; i++) {
       final item = items[i];
-      final lane = lanes[i];
+      final lane = layout.placements[i];
+      if (lane.hidden) continue;
       final top = spans[i].start / 60 * _hour;
       final minutes = math.max(20, spans[i].end - spans[i].start);
       final blockHeight = math.max(16, minutes / 60 * _hour - 1);
@@ -462,7 +475,66 @@ class _TimeGridViewState extends ConsumerState<TimeGridView> {
         ),
       );
     }
+    for (final o in layout.overflows) {
+      widgets.add(_overflowChip(context, day, col, colWidth, o, spans, layout));
+    }
     return widgets;
+  }
+
+  /// Плашка «+N» в нижнем правом углу блока-якоря: тап открывает день
+  /// целиком (там колонка шире и помещается больше блоков).
+  Widget _overflowChip(
+    BuildContext context,
+    DateTime day,
+    int col,
+    double colWidth,
+    LaneOverflow o,
+    List<({int start, int end})> spans,
+    LaneLayout layout,
+  ) {
+    final c = context.colors;
+    final lane = layout.placements[o.anchor];
+    final laneWidth = (colWidth - 3) / lane.lanes;
+    final blockLeft = _gutter + col * colWidth + 1 + lane.lane * laneWidth;
+    final blockTop = spans[o.anchor].start / 60 * _hour;
+    final minutes = math.max(20, spans[o.anchor].end - spans[o.anchor].start);
+    final blockBottom = blockTop + math.max(16, minutes / 60 * _hour - 1);
+    final width = 12.0 + 6.5 * '${o.count}'.length + 6;
+    return Positioned(
+      key: Key('grid-more-${formatDate(day)}-${o.startMinute}'),
+      left: blockLeft + laneWidth - 1 - width - 1,
+      top: math.max(blockTop + 14, blockBottom - 19),
+      width: width,
+      height: 17,
+      child: Semantics(
+        button: true,
+        label: 'Ещё ${o.count} событий',
+        excludeSemantics: true,
+        child: InkWell(
+          onTap: widget.onDayTap == null ? null : () => widget.onDayTap!(day),
+          borderRadius: AppRadii.borderXs,
+          child: Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: c.surface2,
+              borderRadius: AppRadii.borderXs,
+              border: Border.all(color: c.borderStrong),
+            ),
+            child: Text(
+              '+${o.count}',
+              maxLines: 1,
+              softWrap: false,
+              style: context.text.caption.copyWith(
+                color: c.textPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 10.5,
+                height: 1,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   String _itemId(CalendarItem item) => switch (item) {
@@ -770,10 +842,8 @@ class TaskCardCompactRow extends StatelessWidget {
             borderRadius: AppRadii.borderXs,
             border: Border.all(color: c.borderStrong),
           ),
-          child: Text(
+          child: WordEllipsisText(
             item.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             style: context.text.caption.copyWith(
               fontSize: 10,
               height: 1.2,
@@ -817,10 +887,8 @@ class TaskCardCompactRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Text(
+            child: WordEllipsisText(
               item.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: context.text.caption.copyWith(
                 color: item.done ? c.textTertiary : c.textPrimary,
                 decoration: item.done ? TextDecoration.lineThrough : null,

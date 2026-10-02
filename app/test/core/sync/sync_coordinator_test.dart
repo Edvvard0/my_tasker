@@ -715,6 +715,31 @@ void main() {
       },
     );
 
+    test(
+      'runHeadlessSync: хук afterSync вызывается после цикла; его сбой '
+      'не портит результат; без входа и на переднем плане — не вызывается',
+      () async {
+        env = await AppEnv.create();
+        var calls = 0;
+        Future<void> hook(ProviderContainer _) async => calls++;
+        expect(await runHeadlessSync(env.container, afterSync: hook), isTrue);
+        expect(calls, 0, reason: 'нет входа');
+        await env.login();
+        expect(await runHeadlessSync(env.container, afterSync: hook), isTrue);
+        expect(calls, 1);
+        expect(
+          await runHeadlessSync(
+            env.container,
+            afterSync: (_) async => throw StateError('hook'),
+          ),
+          isTrue,
+        );
+        await env.container.read(syncStoreProvider).markForeground();
+        expect(await runHeadlessSync(env.container, afterSync: hook), isTrue);
+        expect(calls, 1, reason: 'интерфейс на переднем плане');
+      },
+    );
+
     test('NoBackgroundSync и провайдер по умолчанию', () async {
       const none = NoBackgroundSync();
       await none.register();

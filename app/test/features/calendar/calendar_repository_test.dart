@@ -262,6 +262,35 @@ void main() {
     });
   });
 
+  group('правка «Все»: переопределения', () {
+    test('смена времени суток: отмена остаётся на своём дне', () async {
+      final e = _event(e1, rrule: 'FREQ=DAILY');
+      await repo.createEvent(e);
+      await repo.cancelInstance(e, '2026-10-07T07:00:00Z');
+      await repo.updateEvent(
+        e.copyWith(
+          startAt: DateTime.utc(2026, 10, 5, 9),
+          endAt: DateTime.utc(2026, 10, 5, 10),
+        ),
+      );
+      final o = (await repo.overridesOf(e1)).single;
+      expect(o.originalStart, '2026-10-07T09:00:00Z');
+      expect(o.cancelled, isTrue);
+      expect(o.id, eventOverrideId(e1, '2026-10-07T09:00:00Z'));
+      expect(repo.lastDroppedOverrides, 0);
+    });
+
+    test('смена правила: «висячие» удаляются и считаются', () async {
+      final e = _event(e1, rrule: 'FREQ=DAILY');
+      await repo.createEvent(e);
+      await repo.cancelInstance(e, '2026-10-07T07:00:00Z');
+      await repo.cancelInstance(e, '2026-10-08T07:00:00Z');
+      await repo.updateEvent(e.copyWith(rrule: 'FREQ=WEEKLY'));
+      expect(await repo.overridesOf(e1), isEmpty);
+      expect(repo.lastDroppedOverrides, 2);
+    });
+  });
+
   group('«это и следующие»', () {
     test('разрез серии с COUNT: хвост получает остаток', () async {
       final e = _event(e1, rrule: 'FREQ=DAILY;COUNT=5');
@@ -307,6 +336,27 @@ void main() {
         eventOverrideId(tailId, moved.single.originalStart),
       );
     });
+
+    test(
+      'смена времени суток хвоста: отмена переезжает на тот же день',
+      () async {
+        final e = _event(e1, rrule: 'FREQ=DAILY');
+        await repo.createEvent(e);
+        await repo.cancelInstance(e, '2026-10-09T07:00:00Z');
+        final tailId = await repo.splitFollowing(
+          e,
+          '2026-10-08T07:00:00Z',
+          e.copyWith(
+            startAt: DateTime.utc(2026, 10, 8, 9), // 12:00 МСК вместо 10:00
+            endAt: DateTime.utc(2026, 10, 8, 10),
+          ),
+        );
+        final moved = await repo.overridesOf(tailId);
+        expect(moved.single.originalStart, '2026-10-09T09:00:00Z');
+        expect(moved.single.cancelled, isTrue);
+        expect(repo.lastDroppedOverrides, 0);
+      },
+    );
 
     test('первый экземпляр — правка «Все»', () async {
       final e = _event(e1, rrule: 'FREQ=DAILY;COUNT=3');

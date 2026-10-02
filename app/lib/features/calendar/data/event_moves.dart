@@ -54,10 +54,17 @@ class EventMoves {
           ),
         );
       case RecurrenceScope.following:
+        final zone = requireLocation(event.tz!);
+        final oldDate = dateOnly(utcToWall(zone, slot.start));
+        final newDate = dateOnly(utcToWall(zone, newStart));
         await repo.splitFollowing(
           event,
           key,
-          event.copyWith(startAt: newStart, endAt: newEnd),
+          event.copyWith(
+            startAt: newStart,
+            endAt: newEnd,
+            rrule: rewriteRuleForMove(event.rrule!, oldDate, newDate),
+          ),
         );
       case RecurrenceScope.all:
         await repo.updateEvent(
@@ -100,6 +107,7 @@ class EventMoves {
     if (rrule != null && dayShift != 0) {
       final rule = RRule.parse(rrule, allDay: false);
       if (rule.freq == 'WEEKLY' && rule.byDay.isNotEmpty) {
+        // Серия целиком едет жёстко: все дни недели сдвигаются одинаково.
         rrule = rule
             .copyWith(
               byDay: [
@@ -107,6 +115,12 @@ class EventMoves {
               ],
             )
             .toRuleString();
+      } else {
+        rrule = rewriteRuleForMove(
+          rrule,
+          dateOnly(masterWall),
+          dateOnly(shifted),
+        );
       }
     }
     return event.copyWith(
@@ -114,6 +128,72 @@ class EventMoves {
       endAt: start.add(newEnd.difference(newStart)),
       rrule: rrule,
     );
+  }
+}
+
+/// Правило серии после переноса экземпляра с даты [from] на дату [to] (для
+/// «Это и следующие»): день недели/число/порядковый номер перезаписываются
+/// так, чтобы новое начало серии ([to]) подходило под правило (spec 3.2),
+/// как это делает редактор (`_ruleFor`). Затрагивается только запись,
+/// соответствующая переносимому экземпляру (у `TU,TH` перенос четверга на
+/// пятницу даёт `TU,FR`); `COUNT`/`UNTIL`/`INTERVAL` сохраняются.
+///
+/// Известное ограничение: если экземпляр переносится на более раннюю дату
+/// той же недели (или месяца), а другие записи правила лежат между [to] и
+/// [from], хвост серии даст по ним лишний экземпляр рядом с уже прошедшими.
+String rewriteRuleForMove(String rrule, DateTime from, DateTime to) {
+  final rule = RRule.parse(rrule, allDay: false);
+  if (from == to) return rrule;
+  switch (rule.freq) {
+    case 'WEEKLY' when rule.byDay.isNotEmpty:
+      final oldDay = weekdayIndex(from);
+      final newDay = weekdayIndex(to);
+      final days = <int>{
+        for (final d in rule.byDay)
+          if (d.weekday == oldDay) newDay else d.weekday,
+      }.toList()..sort();
+      return rule
+          .copyWith(byDay: [for (final d in days) ByDay(d)])
+          .toRuleString();
+    case 'MONTHLY' when rule.byMonthDay.isNotEmpty:
+      final fromDim = daysInMonth(from.year, from.month);
+      final toDim = daysInMonth(to.year, to.month);
+      final days = <int>[];
+      for (final e in rule.byMonthDay) {
+        final matches = e == from.day || e == from.day - fromDim - 1;
+        final next = !matches
+            ? e
+            : (e < 0 && e == to.day - toDim - 1)
+            ? e
+            : to.day;
+        if (!days.contains(next)) days.add(next);
+      }
+      return rule.copyWith(byMonthDay: days).toRuleString();
+    case 'MONTHLY' when rule.byDay.isNotEmpty:
+      final oldOrdinal = (from.day - 1) ~/ 7 + 1;
+      final oldLast = from.day + 7 > daysInMonth(from.year, from.month);
+      final newOrdinal = (to.day - 1) ~/ 7 + 1;
+      final newLast = to.day + 7 > daysInMonth(to.year, to.month);
+      final entries = <ByDay>[];
+      for (final d in rule.byDay) {
+        final matches =
+            d.weekday == weekdayIndex(from) &&
+            (d.ordinal == null ||
+                d.ordinal == oldOrdinal ||
+                (oldLast && d.ordinal == -1));
+        final next = !matches
+            ? d
+            : ByDay(
+                weekdayIndex(to),
+                d.ordinal == null
+                    ? null
+                    : (newLast && newOrdinal >= 4 ? -1 : newOrdinal),
+              );
+        if (!entries.contains(next)) entries.add(next);
+      }
+      return rule.copyWith(byDay: entries).toRuleString();
+    default:
+      return rrule;
   }
 }
 

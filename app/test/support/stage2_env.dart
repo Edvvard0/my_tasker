@@ -217,6 +217,65 @@ Future<void> seedDemo(ProviderContainer container) async {
   await tasks.setStatus(done, TaskStatus.done);
 }
 
+/// Пересекающиеся события для сеток «3 дня» и «Неделя»: в среду 30 сентября
+/// четыре блока одновременно (длинные названия), в четверг — два, в пятницу
+/// — один длинный и один короткий. Москва: UTC+3.
+Future<void> seedOverlaps(ProviderContainer container) async {
+  Future<void> add(
+    String title,
+    String start,
+    String end, {
+    String calendar = 'personal',
+    String? location,
+  }) => addEvent(
+    container,
+    title: title,
+    startUtc: start,
+    endUtc: end,
+    calendar: calendar,
+    location: location,
+  );
+  await add(
+    'Планирование спринта',
+    '2026-09-30T07:00:00',
+    '2026-09-30T08:30:00',
+    calendar: 'work',
+    location: 'Zoom',
+  );
+  await add(
+    'Ревью архитектуры',
+    '2026-09-30T07:15:00',
+    '2026-09-30T08:15:00',
+    calendar: 'work',
+  );
+  await add(
+    'Консультация по диплому',
+    '2026-09-30T07:30:00',
+    '2026-09-30T09:00:00',
+    calendar: 'study',
+    location: 'ауд. 14',
+  );
+  await add('Обед с Ромой', '2026-09-30T08:00:00', '2026-09-30T09:00:00');
+  await add(
+    'Тренировка по плаванию',
+    '2026-10-01T07:00:00',
+    '2026-10-01T08:00:00',
+  );
+  await add(
+    'Разбор задач Эмира',
+    '2026-10-01T07:30:00',
+    '2026-10-01T09:00:00',
+    calendar: 'work',
+  );
+  await add(
+    'Подготовка презентации',
+    '2026-10-02T07:00:00',
+    '2026-10-02T10:00:00',
+    calendar: 'study',
+  );
+  await add('Звонок', '2026-10-02T07:30:00', '2026-10-02T07:50:00');
+}
+
 /// Часовой пояс для проверки дат в тестах.
 DateTime moscow(int y, int m, int d, [int h = 0, int min = 0]) =>
     DateTime.utc(y, m, d, h - 3, min);

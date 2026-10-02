@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:my_tasker/core/calendar_time/calendar_ids.dart';
 import 'package:my_tasker/core/calendar_time/civil_date.dart';
 
 /// Результат разбора строки быстрого ввода (spec 8): **предложение**, которое
@@ -239,8 +240,8 @@ void _record(_Meta meta, String sigil, String name) {
     return;
   }
   final bucket = sigil == '@' ? meta.people : meta.tags;
-  final lower = name.toLowerCase();
-  if (!bucket.any((item) => item.toLowerCase() == lower)) bucket.add(name);
+  final folded = foldTagName(name);
+  if (!bucket.any((item) => foldTagName(item) == folded)) bucket.add(name);
 }
 
 /// Ключ токена: нижний регистр, `ё -> е`, без хвостовых `, ; :`.
@@ -329,7 +330,7 @@ const _weekWords = ['неделю', 'недели', 'недель'];
 const _monthWords = ['месяц', 'месяца', 'месяцев'];
 const _minuteWords = ['минуту', 'минуты', 'минут', 'мин'];
 const _hourWords = ['час', 'часа', 'часов', 'ч'];
-const _periods = ['утра', 'дня', 'вечера'];
+const _periods = ['утра', 'дня', 'вечера', 'ночи'];
 const Map<String, (int, int)> _dayPartTimes = {
   'утром': (9, 0),
   'днем': (13, 0),
@@ -351,6 +352,22 @@ final RegExp _numericDate = RegExp(
 );
 final RegExp _isoDate = RegExp(r'^([0-9]{4})-([0-9]{2})-([0-9]{2})$');
 final RegExp _year = RegExp(r'^20[0-9]{2}$');
+final RegExp _halfHours = RegExp(r'^([0-9]{1,2})[.,]5(ч|час|часа|часов)?$');
+
+/// Голый час 1…7 — вечер (13:00–19:00); остальные часы — как написано.
+int _evening(int hour) => hour >= 1 && hour <= 7 ? hour + 12 : hour;
+
+/// Час для «N утра/дня/вечера/ночи»; `null` — не фраза.
+int? _periodHour(int amount, String period) {
+  if (period == 'утра') return amount % 12;
+  if (period == 'ночи') {
+    // 12 ночи = 00:00, 1…5 ночи = 01:00…05:00, 9…11 ночи = 21:00…23:00.
+    if (amount == 12) return 0;
+    if (amount >= 1 && amount <= 5) return amount;
+    return amount >= 9 && amount <= 11 ? amount + 12 : null;
+  }
+  return amount % 12 + 12;
+}
 
 /// Число из токена; слишком большое число — «очень большое» (вне диапазонов).
 int? _number(List<String> keys, int index) {
@@ -556,11 +573,11 @@ _Match? _hourPhrase(List<String> keys, int i) {
   if (period != null) {
     j++;
     if (amount < 1 || amount > 12) return null;
-    final hour = period == 'утра' ? amount % 12 : amount % 12 + 12;
-    return _Match(j - i, clock: (hour, 0));
+    final hour = _periodHour(amount, period);
+    return hour == null ? null : _Match(j - i, clock: (hour, 0));
   }
   if (hasWord && hasPrep && amount >= 0 && amount <= 23) {
-    return _Match(j - i, clock: (amount, 0));
+    return _Match(j - i, clock: (_evening(amount), 0));
   }
   return null;
 }
@@ -573,6 +590,16 @@ _Match? _durationPhrase(_State s, int i) {
   if (following == 'полчаса') return const _Match(2, duration: 30);
   if (following == 'полтора' && i + 2 < keys.length && keys[i + 2] == 'часа') {
     return const _Match(3, duration: 90);
+  }
+  final half = _halfHours.firstMatch(following);
+  if (half != null) {
+    // «на 1.5ч», «на 2,5 часа»: N с половиной часов.
+    final used = half.group(2) != null ? 2 : 3;
+    final word = used == 3 && i + 2 < keys.length ? keys[i + 2] : '';
+    if (half.group(2) != null || _hourWords.contains(word)) {
+      return _Match(used, duration: int.parse(half.group(1)!) * 60 + 30);
+    }
+    return null;
   }
   final amount = _number(keys, i + 1);
   final unit = i + 2 < keys.length ? keys[i + 2] : '';
@@ -643,7 +670,7 @@ void _bareHour(_State s) {
     if (amount == null || amount > 23) continue;
     if (s.day == null && i + 2 != keys.length) continue;
     s
-      ..clock = (amount, 0)
+      ..clock = (_evening(amount), 0)
       ..consumed[i] = true
       ..consumed[i + 1] = true;
     s.owners[i].add(QuickToken.time);

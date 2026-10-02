@@ -55,6 +55,45 @@ void main() {
       await _shot(tester, 'week_desktop');
     });
 
+    testWidgets('3 дня с пересечениями (телефон)', (tester) async {
+      await pumpStage2(
+        tester,
+        seed: true,
+        seedWith: seedOverlaps,
+        location: '/calendar',
+      );
+      await tester.tap(find.byKey(const Key('calendar-view-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('view-threeDays')));
+      await tester.pumpAndSettle();
+      await _shot(tester, 'three_days_phone');
+    });
+
+    testWidgets('неделя с пересечениями (телефон)', (tester) async {
+      await pumpStage2(
+        tester,
+        seed: true,
+        seedWith: seedOverlaps,
+        location: '/calendar',
+      );
+      await tester.tap(find.byKey(const Key('calendar-view-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('view-week')));
+      await tester.pumpAndSettle();
+      await _shot(tester, 'week_overlap_phone');
+    });
+
+    testWidgets('неделя с пересечениями (десктоп)', (tester) async {
+      await pumpStage2(
+        tester,
+        seed: true,
+        seedWith: seedOverlaps,
+        location: '/calendar',
+        size: desktopSize,
+      );
+      await _shot(tester, 'week_overlap_desktop');
+    });
+
     testWidgets('месяц (телефон)', (tester) async {
       await pumpStage2(tester, seed: true, location: '/calendar');
       await tester.tap(find.byKey(const Key('calendar-view-menu')));

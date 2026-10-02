@@ -120,8 +120,12 @@ class CalendarActions {
           newEnd: newEnd,
           scope: scope,
         );
+    final dropped = repo.lastDroppedOverrides;
     _toast(
-      'Перенесено на ${_label(newWall)}',
+      dropped > 0
+          ? 'Перенесено на ${_label(newWall)}. Исключения серии сброшены: '
+                '$dropped'
+          : 'Перенесено на ${_label(newWall)}',
       undo: event.isRecurring ? null : () => repo.updateEvent(event),
     );
   }

@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:my_tasker/core/db/calendar_tables.dart';
 import 'package:my_tasker/core/db/migration_steps.dart';
 import 'package:my_tasker/core/db/sync_tables.dart';
+import 'package:my_tasker/features/ai_chat/data/ai_tables.dart';
 
 part 'app_database.g.dart';
 
@@ -26,6 +27,10 @@ class LocalSettings extends Table {
 ///   `event_overrides`, `projects`, `people`, `tags`, `tasks`, `subtasks`,
 ///   `task_tags`, `task_completions` (`calendar_tables.dart`).
 ///
+/// * v4 — Этап 3 (ИИ-чат): `ai_agent_profiles`, `ai_prompt_versions`,
+///   `ai_context_presets`, `ai_model_favorites`, `ai_conversations`,
+///   `ai_messages`, `ai_tool_proposals` (`features/ai_chat/data/ai_tables.dart`).
+///
 /// Правила миграций: любое изменение схемы = `schemaVersion + 1` и новый шаг
 /// в [migrationSteps]; шаги применяются последовательно. Откат версии
 /// приложения (схема БД новее кода) Drift тоже передаёт в `onUpgrade`
@@ -46,13 +51,20 @@ class LocalSettings extends Table {
     Subtasks,
     TaskTags,
     TaskCompletions,
+    AiAgentProfiles,
+    AiPromptVersions,
+    AiContextPresets,
+    AiModelFavorites,
+    AiConversations,
+    AiMessages,
+    AiToolProposals,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   /// Текущая версия схемы (то же значение, что и [schemaVersion]).
-  static const int currentSchemaVersion = 3;
+  static const int currentSchemaVersion = 4;
 
   @override
   int get schemaVersion => currentSchemaVersion;
@@ -84,6 +96,19 @@ class AppDatabase extends _$AppDatabase {
       await m.createIndex(db.subtasksTaskIdx);
       await m.createIndex(db.taskTagsTaskIdx);
       await m.createIndex(db.taskCompletionsTaskIdx);
+    },
+    4: (m) async {
+      final db = m.database as AppDatabase;
+      await m.createTable(db.aiAgentProfiles);
+      await m.createTable(db.aiPromptVersions);
+      await m.createTable(db.aiContextPresets);
+      await m.createTable(db.aiModelFavorites);
+      await m.createTable(db.aiConversations);
+      await m.createTable(db.aiMessages);
+      await m.createTable(db.aiToolProposals);
+      await m.createIndex(db.aiPromptVersionsProfileIdx);
+      await m.createIndex(db.aiMessagesConversationIdx);
+      await m.createIndex(db.aiToolProposalsMessageIdx);
     },
   };
 

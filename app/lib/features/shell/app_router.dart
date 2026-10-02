@@ -4,12 +4,21 @@ import 'package:go_router/go_router.dart';
 import 'package:my_tasker/core/auth/auth_controller.dart';
 import 'package:my_tasker/core/auth/auth_models.dart';
 import 'package:my_tasker/features/ai_chat/ai_chat_screen.dart';
+import 'package:my_tasker/features/ai_chat/presentation/chat_screen.dart';
+import 'package:my_tasker/features/ai_chat/presentation/settings/agent_editor_screen.dart';
+import 'package:my_tasker/features/ai_chat/presentation/settings/agents_screen.dart';
+import 'package:my_tasker/features/ai_chat/presentation/settings/ai_settings_screen.dart';
+import 'package:my_tasker/features/ai_chat/presentation/settings/models_screen.dart';
+import 'package:my_tasker/features/ai_chat/presentation/settings/presets_screen.dart';
+import 'package:my_tasker/features/ai_chat/presentation/settings/usage_screen.dart';
 import 'package:my_tasker/features/auth/presentation/login_screen.dart';
 import 'package:my_tasker/features/calendar/calendar_screen.dart';
 import 'package:my_tasker/features/calendar/presentation/calendar_settings_screen.dart';
 import 'package:my_tasker/features/calendar/presentation/layers_screen.dart';
 import 'package:my_tasker/features/devices/presentation/devices_screen.dart';
 import 'package:my_tasker/features/finance/finance_screen.dart';
+import 'package:my_tasker/features/local_ai/presentation/local_benchmark_screen.dart';
+import 'package:my_tasker/features/local_ai/presentation/local_models_screen.dart';
 import 'package:my_tasker/features/settings/presentation/server_connection_screen.dart';
 import 'package:my_tasker/features/settings/presentation/settings_screen.dart';
 import 'package:my_tasker/features/settings/presentation/theme_showcase_screen.dart';
@@ -118,7 +127,66 @@ GoRouter createRouter({
         ),
         StatefulShellBranch(
           routes: [
-            GoRoute(path: '/ai', builder: (_, _) => const AiChatScreen()),
+            GoRoute(
+              path: '/ai',
+              builder: (_, _) => const AiChatScreen(),
+              routes: [
+                // Чат — на весь экран поверх оболочки (поле ввода не
+                // прячется под плавающим таб-баром).
+                GoRoute(
+                  path: 'new',
+                  parentNavigatorKey: rootNavigatorKey,
+                  builder: (_, _) => const ChatScreen(),
+                ),
+                GoRoute(
+                  path: 'chat/:id',
+                  parentNavigatorKey: rootNavigatorKey,
+                  builder: (_, state) =>
+                      ChatScreen(conversationId: state.pathParameters['id']),
+                ),
+                GoRoute(
+                  path: 'settings',
+                  builder: (_, _) => const AiSettingsScreen(),
+                  routes: [
+                    GoRoute(
+                      path: 'agents',
+                      builder: (_, _) => const AgentsScreen(),
+                      routes: [
+                        GoRoute(
+                          path: ':id',
+                          builder: (_, state) => AgentEditorScreen(
+                            agentId: state.pathParameters['id']!,
+                          ),
+                        ),
+                      ],
+                    ),
+                    GoRoute(
+                      path: 'models',
+                      builder: (_, _) => const ModelsScreen(),
+                    ),
+                    GoRoute(
+                      path: 'presets',
+                      builder: (_, _) => const PresetsScreen(),
+                    ),
+                    GoRoute(
+                      path: 'usage',
+                      builder: (_, _) => const UsageScreen(),
+                    ),
+                    // Этап 10: офлайн-модель и тест локальной модели.
+                    GoRoute(
+                      path: 'local',
+                      builder: (_, _) => const LocalModelsScreen(),
+                      routes: [
+                        GoRoute(
+                          path: 'benchmark',
+                          builder: (_, _) => const LocalBenchmarkScreen(),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ],
         ),
         StatefulShellBranch(

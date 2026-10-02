@@ -16,8 +16,26 @@ String tableNamespace(String table) =>
 String systemCalendarId(String systemKey) =>
     uuid5(tableNamespace('calendars'), systemKey);
 
-/// Тег по имени (регистр не важен: `lower(name)`).
-String tagId(String name) => uuid5(tableNamespace('tags'), name.toLowerCase());
+/// Приведение имени тега к одному регистру, одинаковое во всех клиентах:
+/// понижаются только заглавные ASCII и кириллица (`toLowerCase` и
+/// `str.lower` расходятся для греческой финальной сигмы, турецкой İ и т. п.,
+/// и два устройства получили бы разные id одного тега).
+String foldTagName(String name) {
+  final out = StringBuffer();
+  for (final c in name.runes) {
+    if ((c >= 0x41 && c <= 0x5A) || (c >= 0x410 && c <= 0x42F)) {
+      out.writeCharCode(c + 32);
+    } else if (c == 0x401) {
+      out.writeCharCode(0x451);
+    } else {
+      out.writeCharCode(c);
+    }
+  }
+  return out.toString();
+}
+
+/// Тег по имени (регистр не важен: [foldTagName]).
+String tagId(String name) => uuid5(tableNamespace('tags'), foldTagName(name));
 
 /// Переопределение экземпляра события.
 String eventOverrideId(String eventId, String originalStart) =>

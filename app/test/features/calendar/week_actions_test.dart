@@ -165,6 +165,15 @@ void main() {
   });
 
   group('перенос перетаскиванием', () {
+    // Новое событие (хвост разреза): строка, которой нет среди [known].
+    Future<EventEntity> tailOf(Set<String> known) async {
+      final rows = await d.device.store.visibleRows('events');
+      final id = rows
+          .map((r) => r['id']! as String)
+          .firstWhere((x) => !known.contains(x));
+      return (await repo.getEvent(id))!;
+    }
+
     final newStart = DateTime.utc(2026, 10, 6, 9); // вт 12:00 МСК
     final newEnd = DateTime.utc(2026, 10, 6, 10);
     const key = '2026-10-12T07:00:00Z';
@@ -250,6 +259,137 @@ void main() {
       expect(utcToWall(zone, got.startAt!).hour, 12);
       expect(utcToWall(zone, got.startAt!).day, 6);
       expect(got.endAt!.difference(got.startAt!), const Duration(hours: 1));
+    });
+
+    test(
+      'это и следующие: BYDAY=TU,TH, четверг -> пятница даёт TU,FR',
+      () async {
+        // пн 05.10 10:00 МСК старт; серия вт/чт, начало серии — вт 06.10
+        final e = _timed(
+          _uuid(1),
+          rrule: 'FREQ=WEEKLY;BYDAY=TU,TH',
+          start: '2026-10-06T07:00:00Z',
+          end: '2026-10-06T08:00:00Z',
+        );
+        await repo.createEvent(e);
+        // экземпляр четверга 15.10 -> пятница 16.10 в 10:00
+        await moves.move(
+          e,
+          key: '2026-10-15T07:00:00Z',
+          newStart: DateTime.utc(2026, 10, 16, 7),
+          newEnd: DateTime.utc(2026, 10, 16, 8),
+          scope: RecurrenceScope.following,
+        );
+        final rows = await d.device.store.visibleRows('events');
+        expect(rows, hasLength(2));
+        final tail = await tailOf({e.id});
+        expect(tail.rrule, 'FREQ=WEEKLY;BYDAY=TU,FR');
+        expect(tail.startAt, DateTime.utc(2026, 10, 16, 7));
+        expect((await repo.getEvent(e.id))!.rrule, contains('UNTIL='));
+      },
+    );
+
+    test('это и следующие: BYMONTHDAY переезжает на новое число', () async {
+      final e = _timed(
+        _uuid(1),
+        rrule: 'FREQ=MONTHLY;BYMONTHDAY=15',
+        start: '2026-09-15T07:00:00Z',
+        end: '2026-09-15T08:00:00Z',
+      );
+      await repo.createEvent(e);
+      await moves.move(
+        e,
+        key: '2026-10-15T07:00:00Z',
+        newStart: DateTime.utc(2026, 10, 17, 7),
+        newEnd: DateTime.utc(2026, 10, 17, 8),
+        scope: RecurrenceScope.following,
+      );
+      final tail = await tailOf({e.id});
+      expect(tail.rrule, 'FREQ=MONTHLY;BYMONTHDAY=17');
+    });
+
+    test('это и следующие: -1FR и порядковый номер', () async {
+      final last = _timed(
+        _uuid(1),
+        rrule: 'FREQ=MONTHLY;BYDAY=-1FR',
+        start: '2026-09-25T07:00:00Z',
+        end: '2026-09-25T08:00:00Z',
+      );
+      await repo.createEvent(last);
+      // последняя пятница октября 30.10 -> последний четверг 29.10
+      await moves.move(
+        last,
+        key: '2026-10-30T07:00:00Z',
+        newStart: DateTime.utc(2026, 10, 29, 7),
+        newEnd: DateTime.utc(2026, 10, 29, 8),
+        scope: RecurrenceScope.following,
+      );
+      final tail = await tailOf({last.id});
+      expect(tail.rrule, 'FREQ=MONTHLY;BYDAY=-1TH');
+
+      final second = _timed(
+        _uuid(2),
+        rrule: 'FREQ=MONTHLY;BYDAY=2TU',
+        start: '2026-09-08T07:00:00Z',
+        end: '2026-09-08T08:00:00Z',
+      );
+      await repo.createEvent(second);
+      // 2-й вторник октября 13.10 -> 3-я среда 21.10 (3WE)
+      await moves.move(
+        second,
+        key: '2026-10-13T07:00:00Z',
+        newStart: DateTime.utc(2026, 10, 21, 7),
+        newEnd: DateTime.utc(2026, 10, 21, 8),
+        scope: RecurrenceScope.following,
+      );
+      final tail2 = await tailOf({second.id, last.id, tail.id});
+      expect(tail2.rrule, 'FREQ=MONTHLY;BYDAY=3WE');
+    });
+
+    test('все: BYMONTHDAY сдвигается вместе с началом серии', () async {
+      final e = _timed(
+        _uuid(1),
+        rrule: 'FREQ=MONTHLY;BYMONTHDAY=15',
+        start: '2026-09-15T07:00:00Z',
+        end: '2026-09-15T08:00:00Z',
+      );
+      await repo.createEvent(e);
+      await moves.move(
+        e,
+        key: '2026-10-15T07:00:00Z',
+        newStart: DateTime.utc(2026, 10, 16, 7),
+        newEnd: DateTime.utc(2026, 10, 16, 8),
+      );
+      final got = (await repo.getEvent(e.id))!;
+      expect(got.rrule, 'FREQ=MONTHLY;BYMONTHDAY=16');
+      expect(got.startAt, DateTime.utc(2026, 9, 16, 7));
+    });
+
+    test('разрез: начало хвоста не подходит под правило — ошибка', () async {
+      final e = _timed(
+        _uuid(1),
+        rrule: 'FREQ=WEEKLY;BYDAY=TU',
+        start: '2026-10-06T07:00:00Z',
+        end: '2026-10-06T08:00:00Z',
+      );
+      await repo.createEvent(e);
+      await expectLater(
+        repo.splitFollowing(
+          e,
+          '2026-10-13T07:00:00Z',
+          e.copyWith(
+            startAt: DateTime.utc(
+              2026,
+              10,
+              16,
+              7,
+            ), // пятница, правило — вторник
+            endAt: DateTime.utc(2026, 10, 16, 8),
+          ),
+        ),
+        throwsA(isA<ValidationError>()),
+      );
+      expect(await d.device.store.visibleRows('events'), hasLength(1));
     });
 
     test('все: тот же день — правило не меняется', () async {

@@ -209,6 +209,27 @@ void main() {
       expect(_location(tester), '/today');
     });
 
+    // Каждый экран ИИ — в отдельном тесте: у экранов с автоудаляемыми
+    // провайдерами второй `pumpApp` в одном тесте оставляет таймер.
+    const aiRoutes = {
+      '/ai': 'chat-search',
+      '/ai/settings': 'ai-settings-agents',
+      '/ai/settings/agents': 'agents-screen-empty',
+      '/ai/settings/models': 'catalog-search',
+      '/ai/settings/presets': 'preset-add',
+      '/ai/settings/usage': 'limit-field',
+      '/ai/new': 'chat-input',
+    };
+    for (final entry in aiRoutes.entries) {
+      testWidgets('экран Этапа 3 ${entry.key} открывается без ошибок', (
+        tester,
+      ) async {
+        await _pump(tester, location: entry.key);
+        expect(find.byKey(Key(entry.value)), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
     testWidgets('экраны Этапа 2 открываются без ошибок', (tester) async {
       const routes = {
         '/today': 'today-tasks',
@@ -229,7 +250,6 @@ void main() {
         '/work': 'этапе 4',
         '/work/servers': 'этапе 9',
         '/finance': 'этапе 5',
-        '/ai': 'этапе 3',
         '/study': 'этапе 7',
         '/sleep': 'этапе 8',
       };

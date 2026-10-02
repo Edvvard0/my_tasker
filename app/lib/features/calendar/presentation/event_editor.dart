@@ -366,7 +366,19 @@ class _EventEditorState extends ConsumerState<EventEditor> {
         await _saveScoped(repo, original, scope, reminders);
       }
       if (!mounted) return;
+      final dropped = repo.lastDroppedOverrides;
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop();
+      if (dropped > 0) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Исключения серии сброшены: $dropped. Их даты больше не '
+              'совпадают с повторениями.',
+            ),
+          ),
+        );
+      }
     } on ValidationError catch (e) {
       if (!mounted) return;
       setState(() {

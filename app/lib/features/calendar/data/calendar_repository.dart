@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_tasker/core/calendar_time/calendar_ids.dart';
 import 'package:my_tasker/core/calendar_time/civil_date.dart';
+import 'package:my_tasker/core/calendar_time/wall_time.dart';
 import 'package:my_tasker/core/recurrence/expansion.dart';
 import 'package:my_tasker/core/recurrence/rrule.dart';
+import 'package:my_tasker/core/recurrence/rule_dates.dart';
 import 'package:my_tasker/core/sync/ids.dart';
 import 'package:my_tasker/core/sync/outbox_logic.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
@@ -209,6 +211,7 @@ class CalendarRepository {
   /// `original_start` перестал быть экземпляром, удаляются.
   Future<void> updateEvent(EventEntity next) async {
     ensureValid(eventProblem(next));
+    lastDroppedOverrides = 0;
     await _store.transaction(() async {
       final current = await getEvent(next.id);
       if (current == null) throw StateError('События ${next.id} нет');
@@ -230,9 +233,80 @@ class CalendarRepository {
       if (fields.isEmpty) return;
       await _store.update(eventsTable, next.id, fields);
       if (timeChanged || ruleChanged) {
-        await _dropDanglingOverrides(next);
+        lastDroppedOverrides = await _dropDanglingOverrides(current, next);
       }
     });
+  }
+
+  /// Сколько переопределений (отмены и правки экземпляров) не удалось
+  /// сохранить при последнем [updateEvent]/[splitFollowing]: их ключ перестал
+  /// быть экземпляром, и перенести по дате нельзя. Интерфейс предупреждает.
+  int lastDroppedOverrides = 0;
+
+  /// Ключ экземпляра [key] серии [old] в серии [next], если у серии сменилось
+  /// только время суток/пояс: тот же локальный день, новое время начала.
+  /// `null` — перенос по дате невозможен.
+  String? _remapKey(EventEntity old, EventEntity next, String key) {
+    if (old.allDay || next.allDay || old.startAt == null) return null;
+    final instant = parseInstant(key);
+    if (instant == null || next.startAt == null) return null;
+    final date = dateOnly(utcToWall(requireLocation(old.tz!), instant));
+    final newZone = requireLocation(next.tz!);
+    final wall = utcToWall(newZone, next.startAt!);
+    return formatInstant(
+      wallToUtc(
+        newZone,
+        date.year,
+        date.month,
+        date.day,
+        wall.hour,
+        wall.minute,
+        wall.second,
+      ),
+    );
+  }
+
+  /// Создаёт (или восстанавливает) переопределение [o] у события
+  /// [toEventId] на экземпляр [key] (детерминированный id).
+  Future<void> _moveOverride(
+    EventOverride o,
+    String toEventId,
+    String key,
+  ) async {
+    final id = eventOverrideId(toEventId, key);
+    final row = await _store.getRow(overridesTable, id);
+    if (row == null) {
+      await _store.create(overridesTable, id, {
+        'event_id': toEventId,
+        'original_start': key,
+        ...o.toFields(),
+      });
+    } else {
+      await _store.update(overridesTable, id, o.toFields());
+      if (row['deleted_at'] != null) await _store.restore(overridesTable, id);
+    }
+  }
+
+  /// Удаляет «висячие» переопределения; если у серии сменилось время суток,
+  /// переопределение переезжает на тот же день с новым временем. Возвращает
+  /// число потерянных.
+  Future<int> _dropDanglingOverrides(EventEntity old, EventEntity event) async {
+    final series = event.series;
+    final overrides = await overridesOf(event.id);
+    var dropped = 0;
+    for (final o in overrides) {
+      if (series != null && _isInstance(series, o.originalStart)) continue;
+      final key = series == null
+          ? null
+          : _remapKey(old, event, o.originalStart);
+      if (key != null && key != o.originalStart && _isInstance(series!, key)) {
+        await _moveOverride(o, event.id, key);
+      } else {
+        dropped++;
+      }
+      await _store.softDelete(overridesTable, o.id);
+    }
+    return dropped;
   }
 
   bool _differs(Object? a, Object? b) {
@@ -240,17 +314,6 @@ class CalendarRepository {
       return a.length != b.length || a.toString() != b.toString();
     }
     return a != b;
-  }
-
-  Future<void> _dropDanglingOverrides(EventEntity event) async {
-    final series = event.series;
-    final overrides = await overridesOf(event.id);
-    if (overrides.isEmpty) return;
-    for (final o in overrides) {
-      if (series == null || !_isInstance(series, o.originalStart)) {
-        await _store.softDelete(overridesTable, o.id);
-      }
-    }
   }
 
   /// Ключ [key] — настоящий экземпляр серии.
@@ -279,12 +342,17 @@ class CalendarRepository {
     String key,
     InstanceChange change,
   ) async {
-    if (change.title != null) ensureValid(nameProblem(change.title, 300));
-    ensureValid(remindersProblem(change.reminders));
-    if ((change.startAt == null) != (change.endAt == null) ||
-        (change.startDate == null) != (change.endDate == null)) {
-      throw const ValidationError('Начало и конец — вместе');
-    }
+    ensureValid(
+      overrideProblem(
+        originalStart: key,
+        title: change.title,
+        reminders: change.reminders,
+        startAt: change.startAt,
+        endAt: change.endAt,
+        startDate: change.startDate,
+        endDate: change.endDate,
+      ),
+    );
     final id = eventOverrideId(event.id, key);
     final fields = <String, Object?>{
       'cancelled': false,
@@ -391,6 +459,7 @@ class CalendarRepository {
       await updateEvent(edited.copyWith(calendarId: edited.calendarId));
       return old.id;
     }
+    lastDroppedOverrides = 0;
     final oldRule = RRule.parse(old.rrule!, allDay: old.allDay);
     var tailRule = edited.rrule;
     if (tailRule != null && oldRule.count != null) {
@@ -417,6 +486,7 @@ class CalendarRepository {
       source: edited.source,
     );
     ensureValid(eventProblem(tail));
+    _ensureStartMatchesRule(tail);
     await _store.transaction(() async {
       final overrides = await overridesOf(old.id);
       await _store.update(eventsTable, old.id, {
@@ -428,21 +498,44 @@ class CalendarRepository {
       for (final o in overrides) {
         if (o.originalStart.compareTo(key) < 0) continue;
         await _store.softDelete(overridesTable, o.id);
-        if (tailSeries == null || !_isInstance(tailSeries, o.originalStart)) {
+        if (tailSeries == null) {
+          lastDroppedOverrides++;
           continue;
         }
-        await _store.create(
-          overridesTable,
-          eventOverrideId(tail.id, o.originalStart),
-          {
-            'event_id': tail.id,
-            'original_start': o.originalStart,
-            ...o.toFields(),
-          },
-        );
+        var target = o.originalStart;
+        if (!_isInstance(tailSeries, target)) {
+          // Время суток хвоста изменилось: тот же день, новое время.
+          final remapped = _remapKey(old, tail, target);
+          if (remapped == null || !_isInstance(tailSeries, remapped)) {
+            lastDroppedOverrides++;
+            continue;
+          }
+          target = remapped;
+        }
+        await _moveOverride(o, tail.id, target);
       }
     });
     return tail.id;
+  }
+
+  /// Начало серии обязано подходить под её правило (spec 3.2): иначе первый
+  /// экземпляр хвоста уехал бы на другую дату.
+  void _ensureStartMatchesRule(EventEntity e) {
+    final text = e.rrule;
+    if (text == null) return;
+    final start = e.allDay
+        ? e.startDate!
+        : dateOnly(utcToWall(requireLocation(e.tz!), e.startAt!));
+    final rule = RRule.parse(text, allDay: e.allDay);
+    final first = ruleDates(
+      rule.copyWith(count: () => null),
+      start,
+    ).firstOrNull;
+    if (first != start) {
+      throw const ValidationError(
+        'Начало серии не подходит под правило повторения',
+      );
+    }
   }
 
   /// «Удалить это и следующие»: серия заканчивается перед [key].

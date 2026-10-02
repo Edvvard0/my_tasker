@@ -8,6 +8,7 @@ import 'package:my_tasker/core/layout/window_class.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_service.dart';
+import 'package:my_tasker/features/calendar/reminders/reminder_taps.dart';
 import 'package:my_tasker/features/recovery/presentation/recovery_screen.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 import 'package:my_tasker/features/shell/splash_screen.dart';
@@ -28,7 +29,9 @@ class MyTaskerApp extends ConsumerWidget {
       ref
         ..watch(syncLifecycleProvider)
         // Локальные напоминания (Этап 2): следят за данными календаря.
-        ..watch(reminderLifecycleProvider);
+        ..watch(reminderLifecycleProvider)
+        // Нажатие на напоминание открывает событие или задачу.
+        ..watch(reminderTapHandlerProvider);
     }
     final auth = ok ? ref.watch(authControllerProvider) : const AuthUnknown();
     return MaterialApp.router(

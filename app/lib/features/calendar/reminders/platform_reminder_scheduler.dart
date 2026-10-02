@@ -29,14 +29,19 @@ const String _channelName = 'Напоминания';
 /// * **Windows** — таймеры процесса + тосты через тот же плагин: приложение
 ///   должно быть запущено (живёт в трее).
 /// * остальное или ошибка инициализации — «пустышка».
+///
+/// [onTap] получает `payload` нажатого уведомления (включая то, из которого
+/// приложение было запущено): `event:<id>|<ключ>` или `task:<id>`.
 ReminderScheduler createPlatformReminderScheduler({
   required DateTime Function() now,
-}) => _LazyReminderScheduler(now);
+  void Function(String? payload)? onTap,
+}) => _LazyReminderScheduler(now, onTap);
 
 class _LazyReminderScheduler implements ReminderScheduler {
-  _LazyReminderScheduler(this._now);
+  _LazyReminderScheduler(this._now, this._onTap);
 
   final DateTime Function() _now;
+  final void Function(String? payload)? _onTap;
   Future<ReminderScheduler>? _delegate;
 
   Future<ReminderScheduler> get _scheduler => _delegate ??= _create();
@@ -44,13 +49,21 @@ class _LazyReminderScheduler implements ReminderScheduler {
   Future<ReminderScheduler> _create() async {
     try {
       final plugin = FlutterLocalNotificationsPlugin();
+      void tapped(NotificationResponse response) =>
+          _onTap?.call(response.payload);
       switch (defaultTargetPlatform) {
         case TargetPlatform.android:
           await plugin.initialize(
             settings: const InitializationSettings(
               android: AndroidInitializationSettings('@mipmap/ic_launcher'),
             ),
+            onDidReceiveNotificationResponse: tapped,
           );
+          // Приложение запущено нажатием на уведомление (холодный старт).
+          final launch = await plugin.getNotificationAppLaunchDetails();
+          if (launch?.didNotificationLaunchApp ?? false) {
+            _onTap?.call(launch?.notificationResponse?.payload);
+          }
           return _AndroidReminderScheduler(plugin);
         case TargetPlatform.windows:
           await plugin.initialize(
@@ -61,6 +74,7 @@ class _LazyReminderScheduler implements ReminderScheduler {
                 guid: '2f0e5b1c-6a53-4d8e-9c5b-3a0f6f1d7a10',
               ),
             ),
+            onDidReceiveNotificationResponse: tapped,
           );
           return TimerReminderScheduler(
             shower: _WindowsShower(plugin),

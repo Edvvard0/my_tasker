@@ -90,6 +90,10 @@ class _CalendarBody extends ConsumerStatefulWidget {
 class _CalendarBodyState extends ConsumerState<_CalendarBody> {
   DateTime? _selectedDay;
 
+  /// Бэклог «Без даты» свёрнут в узкую полосу: выбор пользователя; пока его
+  /// нет — свёрнут в окнах уже 1000 px (сетке нужно место).
+  bool? _backlogCollapsedByUser;
+
   @override
   Widget build(BuildContext context) {
     final compact = context.windowClass.isCompact;
@@ -152,6 +156,8 @@ class _CalendarBodyState extends ConsumerState<_CalendarBody> {
     }
 
     final showBacklog = desktop && mode != CalendarViewMode.month;
+    final width = MediaQuery.sizeOf(context).width;
+    final backlogCollapsed = _backlogCollapsedByUser ?? width < 1000;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -168,10 +174,22 @@ class _CalendarBodyState extends ConsumerState<_CalendarBody> {
                   children: [
                     Expanded(child: body),
                     const SizedBox(width: AppSpacing.s4),
-                    SizedBox(
-                      width: 300,
-                      child: _BacklogPanel(actions: actions, today: today),
-                    ),
+                    if (backlogCollapsed)
+                      _BacklogRail(
+                        onExpand: () =>
+                            setState(() => _backlogCollapsedByUser = false),
+                      )
+                    else
+                      SizedBox(
+                        // На окне ≤ 1440 px сетке нужно место: панель уже.
+                        width: width <= 1440 ? 240 : 300,
+                        child: _BacklogPanel(
+                          actions: actions,
+                          today: today,
+                          onCollapse: () =>
+                              setState(() => _backlogCollapsedByUser = true),
+                        ),
+                      ),
                   ],
                 )
               : body,
@@ -533,10 +551,15 @@ class _ViewSegments extends ConsumerWidget {
 
 /// Бэклог «Без даты» справа на десктопе: перетаскивание задач в сетку.
 class _BacklogPanel extends ConsumerWidget {
-  const _BacklogPanel({required this.actions, required this.today});
+  const _BacklogPanel({
+    required this.actions,
+    required this.today,
+    required this.onCollapse,
+  });
 
   final CalendarActions actions;
   final DateTime today;
+  final VoidCallback onCollapse;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -555,19 +578,30 @@ class _BacklogPanel extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Text(
-                data.value == null
-                    ? 'Без даты'
-                    : 'Без даты · ${data.value!.backlog.length}',
-                key: const Key('backlog-title'),
-                style: context.text.h3,
+              Expanded(
+                child: Text(
+                  data.value == null
+                      ? 'Без даты'
+                      : 'Без даты · ${data.value!.backlog.length}',
+                  key: const Key('backlog-title'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.text.h3,
+                ),
               ),
-              const Spacer(),
               IconButton(
                 key: const Key('backlog-add'),
                 tooltip: 'Новая задача',
+                visualDensity: VisualDensity.compact,
                 onPressed: () => unawaited(showTaskEditor(context)),
                 icon: const Icon(LucideIcons.plus, size: 18),
+              ),
+              IconButton(
+                key: const Key('backlog-collapse'),
+                tooltip: 'Свернуть',
+                visualDensity: VisualDensity.compact,
+                onPressed: onCollapse,
+                icon: const Icon(LucideIcons.panelRightClose, size: 18),
               ),
             ],
           ),
@@ -588,6 +622,43 @@ class _BacklogPanel extends ConsumerWidget {
                 onToggle: (e) => unawaited(toggleTaskDone(context, ref, e)),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Свёрнутый бэклог: узкая полоса с числом задач и кнопкой «развернуть».
+class _BacklogRail extends ConsumerWidget {
+  const _BacklogRail({required this.onExpand});
+
+  final VoidCallback onExpand;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final count = ref.watch(taskListDataProvider).value?.backlog.length ?? 0;
+    return Container(
+      key: const Key('backlog-rail'),
+      width: 44,
+      decoration: BoxDecoration(
+        color: c.surface1,
+        borderRadius: AppRadii.borderL,
+      ),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.s3),
+      child: Column(
+        children: [
+          IconButton(
+            key: const Key('backlog-expand'),
+            tooltip: 'Без даты · $count',
+            onPressed: onExpand,
+            icon: const Icon(LucideIcons.panelRightOpen, size: 18),
+          ),
+          Text(
+            '$count',
+            key: const Key('backlog-rail-count'),
+            style: context.text.label.copyWith(color: c.textSecondary),
           ),
         ],
       ),

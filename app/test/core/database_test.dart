@@ -55,10 +55,10 @@ void main() {
     tearDown(() => db.close());
 
     test(
-      'создаёт схему v3: настройки, синхронизация и таблицы календаря',
+      'создаёт схему v4: настройки, синхронизация, календарь и ИИ-чат',
       () async {
         expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
-        expect(db.schemaVersion, 3);
+        expect(db.schemaVersion, 4);
         final tables = await db
             .customSelect(
               "SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -66,6 +66,13 @@ void main() {
             )
             .get();
         expect(tables.map((r) => r.read<String>('name')), [
+          'ai_agent_profiles',
+          'ai_context_presets',
+          'ai_conversations',
+          'ai_messages',
+          'ai_model_favorites',
+          'ai_prompt_versions',
+          'ai_tool_proposals',
           'calendars',
           'event_overrides',
           'events',
@@ -125,8 +132,8 @@ void main() {
       );
     });
 
-    test('в реестре AppDatabase есть шаги до v2 и v3 (календарь)', () {
-      expect(AppDatabase.migrationSteps.keys, [2, 3]);
+    test('в реестре AppDatabase есть шаги до v2, v3 и v4 (ИИ-чат)', () {
+      expect(AppDatabase.migrationSteps.keys, [2, 3, 4]);
     });
   });
 
@@ -200,6 +207,13 @@ void main() {
         ..execute('DROP TABLE subtasks')
         ..execute('DROP TABLE task_tags')
         ..execute('DROP TABLE task_completions')
+        ..execute('DROP TABLE ai_agent_profiles')
+        ..execute('DROP TABLE ai_prompt_versions')
+        ..execute('DROP TABLE ai_context_presets')
+        ..execute('DROP TABLE ai_model_favorites')
+        ..execute('DROP TABLE ai_conversations')
+        ..execute('DROP TABLE ai_messages')
+        ..execute('DROP TABLE ai_tool_proposals')
         ..execute('PRAGMA user_version = 2')
         ..close();
 
@@ -214,6 +228,42 @@ void main() {
       expect(
         names.map((r) => r.read<String>('name')),
         containsAll(['tasks', 'tasks_due_date_idx', 'events']),
+      );
+    });
+
+    test('миграция v3 -> v4 добавляет таблицы ИИ-чата и индексы', () async {
+      final first = AppDatabase(NativeDatabase(file));
+      await first.customSelect('SELECT 1').get();
+      await first.close();
+      final raw = sqlite3.open(file.path);
+      for (final t in [
+        'ai_agent_profiles',
+        'ai_prompt_versions',
+        'ai_context_presets',
+        'ai_model_favorites',
+        'ai_conversations',
+        'ai_messages',
+        'ai_tool_proposals',
+      ]) {
+        raw.execute('DROP TABLE $t');
+      }
+      raw
+        ..execute('PRAGMA user_version = 3')
+        ..close();
+
+      final db = AppDatabase(NativeDatabase(file));
+      addTearDown(db.close);
+      final names = await db
+          .customSelect("SELECT name FROM sqlite_master WHERE name LIKE 'ai_%'")
+          .get();
+      expect(
+        names.map((r) => r.read<String>('name')),
+        containsAll([
+          'ai_messages',
+          'ai_messages_conversation_idx',
+          'ai_tool_proposals_message_idx',
+          'ai_prompt_versions_profile_idx',
+        ]),
       );
     });
 

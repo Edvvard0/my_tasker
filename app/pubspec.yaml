@@ -33,6 +33,12 @@ dependencies:
   timezone: ^0.11.1
   flutter_local_notifications: ^22.3.1
   flutter_timezone: ^5.1.0
+  # Этап 10: офлайн-ИИ на телефоне (LiteRT-LM: Gemma 4 E2B). Платформенный
+  # адаптер — lib/core/local_llm/flutter_gemma_engine.dart.
+  flutter_gemma: ^1.11.3
+  flutter_gemma_litertlm: ^1.8.5
+  # statvfs через FFI: свободное место перед загрузкой модели.
+  ffi: ^2.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

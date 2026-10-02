@@ -1,11 +1,16 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/core/calendar_time/calendar_ids.dart';
 import 'package:my_tasker/core/calendar_time/civil_date.dart';
 import 'package:my_tasker/core/calendar_time/wall_time.dart';
+import 'package:my_tasker/core/config/clock.dart';
+import 'package:my_tasker/core/sync/sync_providers.dart';
+import 'package:my_tasker/features/calendar/application/device_timezone.dart';
 import 'package:my_tasker/features/calendar/data/calendar_settings.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_models.dart';
+import 'package:my_tasker/features/calendar/reminders/headless_reminders.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_models.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_service.dart';
 import 'package:my_tasker/features/settings/data/user_settings_repository.dart';
@@ -274,4 +279,55 @@ void main() {
     expect(await scheduler.requestPermission(), ReminderPermission.granted);
     expect(scheduler.permissionRequests, 1);
   });
+
+  test('фоновый хук: после синхронизации без приложения напоминания '
+      'пересчитываются по свежим данным', () async {
+    // Данные с другого устройства уже в локальной БД (после pull).
+    await phone.calendars.createEvent(event(1, '2026-10-06T07:00:00Z'));
+    final container = ProviderContainer(
+      overrides: [
+        syncStoreProvider.overrideWithValue(phone.device.store),
+        reminderSchedulerProvider.overrideWithValue(scheduler),
+        clockProvider.overrideWithValue(() => clock.now),
+        deviceTimeZoneSourceProvider.overrideWithValue(
+          const FixedTimeZoneSource('Europe/Moscow'),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    expect(scheduler.scheduled, isEmpty);
+    await replanRemindersAfterSync(container);
+    expect(scheduler.sorted.map((r) => formatInstant(r.fireAt)), [
+      '2026-10-06T07:00:00Z',
+    ]);
+    // Прошло время (горизонт 14 дней сдвинулся): новое событие из будущего
+    // попадает в окно только благодаря повторному фоновому пересчёту.
+    await phone.calendars.createEvent(event(2, '2026-10-25T07:00:00Z'));
+    await replanRemindersAfterSync(container);
+    expect(scheduler.scheduled, hasLength(1), reason: '25.10 вне горизонта');
+    clock.advance(const Duration(days: 12));
+    await replanRemindersAfterSync(container);
+    expect(scheduler.sorted.map((r) => formatInstant(r.fireAt)), [
+      '2026-10-25T07:00:00Z',
+    ]);
+  });
+
+  test(
+    'смена разрешения «точные будильники»: всё регистрируется заново',
+    () async {
+      scheduler.state = ReminderPermission.exactAlarmsDenied;
+      await phone.calendars.createEvent(event(1, '2026-10-06T07:00:00Z'));
+      await service.start();
+      final id = scheduler.scheduled.keys.single;
+      scheduler.log.clear();
+      // Без изменения разрешений возврат в приложение ничего не перепланирует.
+      await service.onResumed();
+      expect(scheduler.log, isEmpty);
+      // Пользователь выдал точные будильники в системных настройках.
+      scheduler.state = ReminderPermission.granted;
+      await service.onResumed();
+      expect(scheduler.log, ['clear', '+$id']);
+      expect(scheduler.scheduled.keys.single, id);
+    },
+  );
 }

@@ -88,6 +88,79 @@ String? rulesProblem(
   return null;
 }
 
+/// Год момента/даты вне 1970…2200 (spec 1).
+bool _yearOut(DateTime? value) =>
+    value != null && (value.year < minYear || value.year > maxYear);
+
+/// Границы и длительность пары начало/конец (события и переопределения,
+/// spec 3.2/3.3): оба или ни одного, конец не раньше начала, не длиннее
+/// 366 суток, годы 1970…2200 — то же, что проверяет сервер.
+String? spanProblem({
+  DateTime? startAt,
+  DateTime? endAt,
+  DateTime? startDate,
+  DateTime? endDate,
+}) {
+  if ((startAt == null) != (endAt == null) ||
+      (startDate == null) != (endDate == null)) {
+    return 'Начало и конец — вместе';
+  }
+  if (startAt != null && endAt != null) {
+    if (_yearOut(startAt) || _yearOut(endAt)) return 'Год вне диапазона';
+    if (endAt.isBefore(startAt)) return 'Конец раньше начала';
+    if (endAt.difference(startAt).inDays > maxSpanDays) {
+      return 'Событие не длиннее $maxSpanDays суток';
+    }
+  }
+  if (startDate != null && endDate != null) {
+    if (_yearOut(startDate) || _yearOut(endDate)) return 'Год вне диапазона';
+    if (endDate.isBefore(startDate)) return 'Конец раньше начала';
+    if (daysBetween(startDate, endDate) > maxSpanDays) {
+      return 'Событие не длиннее $maxSpanDays суток';
+    }
+  }
+  return null;
+}
+
+final RegExp _instanceKeyPattern = RegExp(
+  r'^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}Z)?$',
+);
+
+/// Проверка переопределения экземпляра (spec 3.3): ключ, название,
+/// напоминания, время/дата без одновременного задания обоих видов.
+String? overrideProblem({
+  required String originalStart,
+  String? title,
+  List<int>? reminders,
+  DateTime? startAt,
+  DateTime? endAt,
+  DateTime? startDate,
+  DateTime? endDate,
+}) {
+  if (!_instanceKeyPattern.hasMatch(originalStart) ||
+      (originalStart.length == 10
+              ? parseDate(originalStart)
+              : parseInstant(originalStart)) ==
+          null) {
+    return 'Некорректный ключ экземпляра';
+  }
+  if (title != null) {
+    final problem = nameProblem(title, 300);
+    if (problem != null) return problem;
+  }
+  final rem = remindersProblem(reminders);
+  if (rem != null) return rem;
+  if (startAt != null && startDate != null) {
+    return 'Экземпляр переносится либо по времени, либо по дате';
+  }
+  return spanProblem(
+    startAt: startAt,
+    endAt: endAt,
+    startDate: startDate,
+    endDate: endDate,
+  );
+}
+
 /// Проверка события целиком (spec 3.2).
 String? eventProblem(EventEntity e) {
   final title = nameProblem(e.title, 300);
@@ -103,10 +176,8 @@ String? eventProblem(EventEntity e) {
     final start = e.startDate;
     final end = e.endDate;
     if (start == null || end == null) return 'Укажите даты события';
-    if (end.isBefore(start)) return 'Конец раньше начала';
-    if (daysBetween(start, end) > maxSpanDays) {
-      return 'Событие не длиннее $maxSpanDays суток';
-    }
+    final span = spanProblem(startDate: start, endDate: end);
+    if (span != null) return span;
     return rulesProblem(e.rrule, allDay: true, startDate: start);
   }
   if (e.startDate != null || e.endDate != null) {
@@ -119,10 +190,7 @@ String? eventProblem(EventEntity e) {
   if (zone == null || findLocation(zone) == null) {
     return 'Неизвестная таймзона';
   }
-  if (end.isBefore(start)) return 'Конец раньше начала';
-  if (end.difference(start).inDays > maxSpanDays) {
-    return 'Событие не длиннее $maxSpanDays суток';
-  }
-  if (start.year < minYear || end.year > maxYear) return 'Год вне диапазона';
+  final span = spanProblem(startAt: start, endAt: end);
+  if (span != null) return span;
   return rulesProblem(e.rrule, allDay: false, startUtc: start);
 }

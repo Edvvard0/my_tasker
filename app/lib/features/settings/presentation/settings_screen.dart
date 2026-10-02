@@ -55,6 +55,18 @@ class SettingsScreen extends ConsumerWidget {
               endIndent: AppSpacing.s4,
             ),
             _SettingsTile(
+              key: const Key('settings-ai'),
+              icon: LucideIcons.sparkles,
+              title: 'ИИ',
+              subtitle: 'Агенты, модели, контекст, расход и лимит',
+              onTap: () => context.go('/ai/settings'),
+            ),
+            Divider(
+              color: c.borderDefault,
+              indent: AppSpacing.s4,
+              endIndent: AppSpacing.s4,
+            ),
+            _SettingsTile(
               key: const Key('settings-sync'),
               icon: LucideIcons.refreshCw,
               title: 'Синхронизация',

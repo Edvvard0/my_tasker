@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:my_tasker/core/calendar_time/calendar_ids.dart';
 import 'package:my_tasker/core/calendar_time/civil_date.dart';
 import 'package:my_tasker/core/calendar_time/wall_time.dart';
 import 'package:my_tasker/core/recurrence/rrule.dart';
@@ -809,7 +810,7 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
     }
     setState(() {
       _error = null;
-      if (!_tags.any((t) => t.toLowerCase() == name.toLowerCase())) {
+      if (!_tags.any((t) => foldTagName(t) == foldTagName(name))) {
         _tags.add(name);
       }
       _newTag.clear();

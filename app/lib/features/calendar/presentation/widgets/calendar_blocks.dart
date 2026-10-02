@@ -8,6 +8,122 @@ import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_items.dart';
 import 'package:my_tasker/features/tasks/presentation/task_card.dart';
 
+/// Ширина блока, меньше которой блок рисуется компактно: полоса слева и
+/// одна строка названия с многоточием (на телефоне в недельной сетке — 7
+/// колонок по ~49 px).
+const double compactBlockWidth = 64;
+
+/// Самое длинное слово [text] помещается в [width] при стиле [style].
+bool longestWordFits(
+  String text,
+  TextStyle style,
+  double width,
+  TextScaler scaler,
+) {
+  for (final word in text.split(RegExp(r'\s+'))) {
+    if (word.isEmpty) continue;
+    final painter = TextPainter(
+      text: TextSpan(text: word, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+      maxLines: 1,
+    )..layout();
+    final fits = painter.width <= width + 0.5;
+    painter.dispose();
+    if (!fits) return false;
+  }
+  return true;
+}
+
+/// Название в блоке: переносится только по словам (до [maxLines] строк); если
+/// хотя бы одно слово не помещается в ширину, слово никогда не рвётся —
+/// название идёт одной строкой с многоточием.
+class FitTitle extends StatelessWidget {
+  const FitTitle(
+    this.text, {
+    required this.style,
+    this.maxLines = 2,
+    super.key,
+  });
+
+  final String text;
+  final TextStyle style;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wrap =
+            maxLines > 1 &&
+            longestWordFits(text, style, constraints.maxWidth, scaler);
+        return Text(
+          text,
+          maxLines: wrap ? maxLines : 1,
+          softWrap: wrap,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+        );
+      },
+    );
+  }
+}
+
+/// Одна строка, которая укорачивается по границе слова: «Подготовить отчёт
+/// для…» вместо «Подготовить отчёт дл…». Если не помещается и первое слово,
+/// остаётся обычное многоточие.
+class WordEllipsisText extends StatelessWidget {
+  const WordEllipsisText(this.text, {required this.style, super.key});
+
+  final String text;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    return LayoutBuilder(
+      builder: (context, constraints) => Text(
+        ellipsizeOnWords(text, style, constraints.maxWidth, scaler),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      ),
+    );
+  }
+}
+
+/// [text], укороченный по границе слова так, чтобы влезть в [width]
+/// (с «…»); целиком — если помещается. Если не помещается даже первое слово,
+/// возвращается [text] (дальше сработает обычное многоточие).
+String ellipsizeOnWords(
+  String text,
+  TextStyle style,
+  double width,
+  TextScaler scaler,
+) {
+  bool fits(String value) {
+    final painter = TextPainter(
+      text: TextSpan(text: value, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+      maxLines: 1,
+    )..layout();
+    final ok = painter.width <= width + 0.5;
+    painter.dispose();
+    return ok;
+  }
+
+  if (fits(text)) return text;
+  final words = text.trim().split(RegExp(r'\s+'));
+  for (var n = words.length - 1; n >= 1; n--) {
+    final candidate = '${words.take(n).join(' ')}…';
+    if (fits(candidate)) return candidate;
+  }
+  return text;
+}
+
 /// Диагональная штриховка 45° для слоя «Учёба» (02, 5.1.1): слои
 /// различаются рисунком, не цветом.
 class HatchPainter extends CustomPainter {
@@ -84,7 +200,7 @@ class EventBlock extends StatelessWidget {
           borderRadius: AppRadii.borderXs,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final narrow = constraints.maxWidth < 72;
+              final narrow = constraints.maxWidth < compactBlockWidth;
               return Container(
                 key: Key('event-block-${item.event.id}-${item.key}'),
                 decoration: BoxDecoration(
@@ -116,15 +232,17 @@ class EventBlock extends StatelessWidget {
                       ),
                       Padding(
                         padding: EdgeInsets.fromLTRB(
-                          narrow ? 6 : 9,
-                          3,
-                          narrow ? 2 : 4,
-                          2,
+                          narrow ? 5 : 9,
+                          short ? 1 : 3,
+                          narrow ? 1 : 4,
+                          short ? 0 : 2,
                         ),
                         child: narrow
+                            // Компактно: полоса и одна строка названия.
                             ? Text(
                                 item.title,
-                                maxLines: 4,
+                                maxLines: 1,
+                                softWrap: false,
                                 overflow: TextOverflow.ellipsis,
                                 style: t.caption.copyWith(
                                   fontWeight: FontWeight.w600,
@@ -133,10 +251,8 @@ class EventBlock extends StatelessWidget {
                                 ),
                               )
                             : short
-                            ? Text(
+                            ? WordEllipsisText(
                                 '${timeOf(item.start)} ${item.title}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                                 style: t.bodyS.copyWith(
                                   fontWeight: FontWeight.w600,
                                   height: 1.1,
@@ -145,10 +261,8 @@ class EventBlock extends StatelessWidget {
                             : Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
+                                  FitTitle(
                                     item.title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
                                     style: t.bodyS.copyWith(
                                       fontWeight: FontWeight.w600,
                                       height: 1.15,
@@ -221,7 +335,7 @@ class TaskBlock extends StatelessWidget {
         borderRadius: AppRadii.borderXs,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final narrow = constraints.maxWidth < 72;
+            final narrow = constraints.maxWidth < compactBlockWidth;
             final style = (narrow ? t.caption : t.bodyS).copyWith(
               height: 1.15,
               fontSize: narrow ? 10.5 : null,
@@ -243,7 +357,8 @@ class TaskBlock extends StatelessWidget {
               child: narrow
                   ? Text(
                       item.title,
-                      maxLines: 4,
+                      maxLines: 1,
+                      softWrap: false,
                       overflow: TextOverflow.ellipsis,
                       style: style,
                     )
@@ -259,12 +374,7 @@ class TaskBlock extends StatelessWidget {
                         Expanded(
                           child: Padding(
                             padding: const EdgeInsets.only(top: 3),
-                            child: Text(
-                              item.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: style,
-                            ),
+                            child: FitTitle(item.title, style: style),
                           ),
                         ),
                       ],
@@ -319,10 +429,8 @@ class AllDayChip extends StatelessWidget {
             Container(width: dense ? 2 : 3, color: c.textSecondary),
             SizedBox(width: dense ? 3 : 5),
             Expanded(
-              child: Text(
+              child: WordEllipsisText(
                 title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: t.caption.copyWith(
                   color: c.textPrimary,
                   fontWeight: FontWeight.w500,
@@ -338,28 +446,91 @@ class AllDayChip extends StatelessWidget {
   }
 }
 
+/// Место блока в раскладке: [lane] из [lanes] колонок кластера;
+/// [hidden] — блок не поместился (его заменяет «+N», см. [LaneOverflow]).
+class LanePlacement {
+  const LanePlacement({
+    required this.lane,
+    required this.lanes,
+    this.hidden = false,
+  });
+
+  final int lane;
+  final int lanes;
+  final bool hidden;
+}
+
+/// Плашка «+N» вместо блоков, не поместившихся в `maxLanes` колонок. Лежит
+/// поверх нижнего правого угла блока [anchor] (индекс в списке spans).
+class LaneOverflow {
+  const LaneOverflow({
+    required this.startMinute,
+    required this.anchor,
+    required this.count,
+  });
+
+  /// Начало самого раннего скрытого блока (минуты от полуночи).
+  final int startMinute;
+
+  /// Видимый блок последней колонки кластера: к нему «прикреплена» плашка.
+  final int anchor;
+
+  /// Сколько блоков скрыто.
+  final int count;
+}
+
+/// Результат [layoutLanes].
+class LaneLayout {
+  const LaneLayout(this.placements, this.overflows);
+
+  final List<LanePlacement> placements;
+  final List<LaneOverflow> overflows;
+}
+
 /// Раскладка пересекающихся блоков по колонкам (максимум [maxLanes] рядом).
-/// Для каждого элемента возвращает номер колонки и число колонок кластера.
-List<({int lane, int lanes})> layoutLanes(
-  List<({int start, int end})> spans, {
-  int maxLanes = 3,
-}) {
+/// То, что не поместилось, скрывается и заменяется плашкой «+N» поверх
+/// последней колонки кластера.
+LaneLayout layoutLanes(List<({int start, int end})> spans, {int maxLanes = 3}) {
+  final cap = math.max(1, maxLanes);
   final order = List<int>.generate(spans.length, (i) => i)
     ..sort((a, b) {
       final c = spans[a].start.compareTo(spans[b].start);
       return c != 0 ? c : spans[b].end.compareTo(spans[a].end);
     });
-  final result = List<({int lane, int lanes})>.filled(spans.length, (
-    lane: 0,
-    lanes: 1,
-  ));
+  final laneOf = List<int>.filled(spans.length, 0);
+  final placements = List<LanePlacement>.filled(
+    spans.length,
+    const LanePlacement(lane: 0, lanes: 1),
+  );
+  final overflows = <LaneOverflow>[];
   var cluster = <int>[];
   var clusterEnd = -1;
   final laneEnds = <int>[];
   void flush() {
-    final lanes = math.min(maxLanes, math.max(1, laneEnds.length));
+    final lanes = math.max(1, math.min(cap, laneEnds.length));
+    final hidden = [
+      for (final i in cluster)
+        if (laneOf[i] >= cap) i,
+    ];
     for (final i in cluster) {
-      result[i] = (lane: result[i].lane, lanes: lanes);
+      placements[i] = LanePlacement(
+        lane: math.min(laneOf[i], cap - 1),
+        lanes: lanes,
+        hidden: laneOf[i] >= cap,
+      );
+    }
+    if (hidden.isNotEmpty) {
+      // Якорь — самый ранний видимый блок последней колонки.
+      final anchor = cluster
+          .where((i) => laneOf[i] == cap - 1)
+          .reduce((a, b) => spans[a].start <= spans[b].start ? a : b);
+      overflows.add(
+        LaneOverflow(
+          startMinute: hidden.map((i) => spans[i].start).reduce(math.min),
+          anchor: anchor,
+          count: hidden.length,
+        ),
+      );
     }
     cluster = [];
     laneEnds.clear();
@@ -375,10 +546,10 @@ List<({int lane, int lanes})> layoutLanes(
     } else {
       laneEnds[lane] = s.end;
     }
-    result[i] = (lane: math.min(lane, maxLanes - 1), lanes: 1);
+    laneOf[i] = lane;
     cluster.add(i);
     clusterEnd = math.max(clusterEnd, s.end);
   }
   if (cluster.isNotEmpty) flush();
-  return result;
+  return LaneLayout(placements, overflows);
 }
