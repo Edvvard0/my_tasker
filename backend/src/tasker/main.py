@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 
+from tasker.ai import api as ai_api
+from tasker.ai.runtime import AiRuntime
 from tasker.api import health, version
 from tasker.auth import api as auth_api
 from tasker.clock import Clock, SystemClock
@@ -26,7 +28,10 @@ def create_app(
     clock: Clock | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
-    configure_logging(settings.log_level)
+    configure_logging(
+        settings.log_level,
+        redact=[settings.polza_api_key.get_secret_value()] if settings.polza_api_key else [],
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -38,10 +43,12 @@ def create_app(
         app.state.settings = settings
         app.state.sessionmaker = sessionmaker
         app.state.rt = runtime
+        app.state.ai = ai_runtime = AiRuntime(settings, runtime.clock)
         structlog.get_logger().info("api_started", app_env=settings.app_env)
         try:
             yield
         finally:
+            await ai_runtime.aclose()
             await runtime.hub.close()
             await engine.dispose()
 
@@ -60,4 +67,5 @@ def create_app(
     app.include_router(version.router)
     app.include_router(auth_api.router)
     app.include_router(sync_api.router)
+    app.include_router(ai_api.router)
     return app

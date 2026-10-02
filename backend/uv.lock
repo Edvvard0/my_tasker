@@ -804,6 +804,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "cryptography" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dateutil" },
@@ -815,7 +816,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "hypothesis" },
     { name = "mypy" },
     { name = "pytest" },
@@ -832,6 +832,7 @@ requires-dist = [
     { name = "asyncpg", specifier = "==0.31.0" },
     { name = "cryptography", specifier = "==50.0.1" },
     { name = "fastapi", specifier = "==0.142.1" },
+    { name = "httpx", specifier = "==0.28.1" },
     { name = "pydantic", specifier = "==2.13.5" },
     { name = "pydantic-settings", specifier = "==2.15.0" },
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
@@ -843,7 +844,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = "==0.28.1" },
     { name = "hypothesis", specifier = "==6.168.3" },
     { name = "mypy", specifier = "==2.3.1" },
     { name = "pytest", specifier = "==9.1.1" },

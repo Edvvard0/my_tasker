@@ -1,6 +1,7 @@
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MIN_SECRET_KEY_LENGTH = 32
@@ -32,6 +33,37 @@ class Settings(BaseSettings):
     argon2_memory_kib: int = Field(default=19456, ge=8)
     argon2_time_cost: int = Field(default=2, ge=1)
     argon2_parallelism: int = Field(default=1, ge=1)
+
+    # AI chat (stage 3). The key exists only in the server environment: never log or return it.
+    polza_base_url: str = "https://polza.ai/api/v1"
+    polza_api_key: SecretStr | None = None
+    polza_connect_timeout: float = Field(default=5.0, gt=0)
+    polza_first_byte_timeout: float = Field(default=60.0, gt=0)
+    polza_idle_timeout: float = Field(default=60.0, gt=0)
+    polza_total_timeout: float = Field(default=600.0, gt=0)
+    polza_max_retries: int = Field(default=2, ge=0, le=5)
+    polza_retry_backoff: float = Field(default=0.5, ge=0)
+    polza_models_ttl_seconds: float = Field(default=3600.0, ge=0)
+    ai_max_tool_iterations: int = Field(default=5, ge=1, le=20)
+    ai_billing_timezone: str = "Europe/Moscow"
+    ai_sse_ping_seconds: float = Field(default=15.0, gt=0)
+
+    @field_validator("polza_api_key", "polza_base_url", mode="before")
+    @classmethod
+    def _blank_means_unset(cls, value: object, info: ValidationInfo) -> object:
+        """An empty variable (``POLZA_API_KEY=`` in compose) means "not configured"/default."""
+        if isinstance(value, str) and not value.strip():
+            return None if info.field_name == "polza_api_key" else "https://polza.ai/api/v1"
+        return value
+
+    @field_validator("ai_billing_timezone")
+    @classmethod
+    def _known_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("ai_billing_timezone must be an IANA time zone") from exc
+        return value
 
     @field_validator("database_url", mode="before")
     @classmethod

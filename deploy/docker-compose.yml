@@ -18,6 +18,9 @@ x-backend: &backend
     # The api sits behind Caddy, which sets X-Forwarded-For to the real client address.
     TRUST_FORWARDED_FOR: "true"
     LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    # AI chat provider (stage 3); empty values mean "default" / "not configured".
+    POLZA_BASE_URL: ${POLZA_BASE_URL:-}
+    POLZA_API_KEY: ${POLZA_API_KEY:-}
   networks: [internal]
   restart: unless-stopped
   read_only: true

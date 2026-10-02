@@ -10,6 +10,7 @@ dependencies = [
     "asyncpg==0.31.0",
     "cryptography==50.0.1",
     "fastapi==0.142.1",
+    "httpx==0.28.1",
     "pydantic==2.13.5",
     "pydantic-settings==2.15.0",
     "python-dateutil==2.9.0.post0",
@@ -28,7 +29,6 @@ packages = ["src/tasker"]
 
 [dependency-groups]
 dev = [
-    "httpx==0.28.1",
     "hypothesis==6.168.3",
     "mypy==2.3.1",
     "pytest==9.1.1",
@@ -49,10 +49,15 @@ ignore = ["PLR2004"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106", "S311", "S603", "S607", "PLR0913", "PLR0917", "SLF001", "RUF001", "RUF003"]
+"tests/ai/**" = ["PT018", "RUF015", "ASYNC110", "E501", "S608"]
 "src/tasker/money.py" = ["RUF001", "RUF003"]
 "src/tasker/migrations/**" = ["N999"]
 "src/tasker/cli.py" = ["T201"]
 "src/tasker/sync/**" = ["PLR0913", "PLR0917"]
+"src/tasker/ai/**" = ["PLR0913", "PLR0917"]
+"src/tasker/ai/agents.py" = ["RUF001", "RUF003"]
+"src/tasker/ai/context.py" = ["RUF001", "RUF003"]
+"src/tasker/ai/tools*.py" = ["RUF001", "RUF003"]
 "src/tasker/auth/service.py" = ["PLR0913"]
 
 [tool.mypy]
