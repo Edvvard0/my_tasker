@@ -28,6 +28,9 @@ class _ScriptedRemote implements SyncRemote {
   int pullCalls = 0;
   PushResponse Function(PushResponse)? tamper;
 
+  /// Вызывается перед каждым pull (номер вызова с 1, курсор `since`).
+  void Function(int call, int since)? beforePull;
+
   @override
   Future<PushResponse> push(List<Json> ops) async {
     if (pushError != null) throw pushError!;
@@ -38,6 +41,7 @@ class _ScriptedRemote implements SyncRemote {
   @override
   Future<PullPage> pull({required int since, required int limit}) async {
     pullCalls++;
+    beforePull?.call(pullCalls, since);
     await gate;
     if (pullError != null) throw pullError!;
     return await inner.pull(since: since, limit: limit);
@@ -718,6 +722,168 @@ void main() {
         expect(await a.rows('notes'), server.snapshot('notes'));
       },
     );
+  });
+
+  group('M1: эпоха меняется во время полной пересинхронизации', () {
+    Future<Object> seed() async {
+      for (var i = 0; i < 3; i++) {
+        await newNote(a, 'old$i');
+      }
+      await a.sync();
+      final backup = server.backup();
+      for (var i = 0; i < 3; i++) {
+        await newNote(a, 'new$i');
+      }
+      await a.sync();
+      return backup;
+    }
+
+    test(
+      'страницы разных эпох не смешиваются: загрузка начинается заново',
+      () async {
+        final backup = await seed();
+        final remote = _ScriptedRemote(b.remote);
+        final engine = SyncEngine(
+          store: b.store,
+          remote: remote,
+          clientSchemaVersion: 1,
+          pullPageSize: 2,
+          clock: () => clock.now,
+        );
+        await b.store.setNeedsResync(value: true);
+        var restored = false;
+        remote.beforePull = (call, since) {
+          if (since > 0 && !restored) {
+            restored = true; // сервер восстановили, пока мы качали
+            server.restore(backup, newEpoch: 'epoch-2');
+          }
+        };
+        expect(await engine.runCycle(), SyncOutcome.success);
+        expect(restored, isTrue);
+        expect(await b.rows('notes'), server.snapshot('notes'));
+        expect(await b.rows('notes'), hasLength(3), reason: 'только из копии');
+        expect(await b.store.serverEpoch(), 'epoch-2');
+        expect(await b.store.cursor(), server.head);
+        expect(await b.store.needsResync(), isFalse);
+        await engine.dispose();
+      },
+    );
+
+    test('эпоха меняется на каждой попытке: ограниченное число повторов, '
+        'флаг пересинхронизации остаётся', () async {
+      await seed();
+      final remote = _ScriptedRemote(b.remote);
+      final engine = SyncEngine(
+        store: b.store,
+        remote: remote,
+        clientSchemaVersion: 1,
+        pullPageSize: 2,
+        maxResyncAttempts: 3,
+        clock: () => clock.now,
+      );
+      await b.store.setNeedsResync(value: true);
+      var n = 0;
+      remote.beforePull = (call, since) {
+        if (since > 0) server.epoch = 'flap-${n++}';
+      };
+      expect(await engine.runCycle(), SyncOutcome.failed);
+      expect(remote.pullCalls, 3 * 2, reason: '3 попытки по 2 страницы');
+      expect(await b.store.needsResync(), isTrue);
+      expect(await b.rows('notes'), isEmpty, reason: 'ничего не применено');
+      await engine.dispose();
+    });
+  });
+
+  group('410 resync_required: cursor_ahead и purged', () {
+    test('сервер знает причину: cursor_ahead при since > head', () async {
+      await newNote(a, 'x');
+      await a.sync();
+      Object? error;
+      try {
+        server.pull(a.deviceId, server.head + 1, 10);
+      } on ApiException catch (e) {
+        error = e;
+        expect(e.status, 410);
+        expect(e.code, 'resync_required');
+        expect(e.details['reason'], 'cursor_ahead');
+        expect(e.details['head_version'], server.head);
+      }
+      expect(error, isNotNull);
+      // since == head — обычный ответ без строк
+      expect(server.pull(a.deviceId, server.head, 10)['changes'], isEmpty);
+    });
+
+    test('purged: причина в details', () async {
+      final id = await newNote(a, 'gone');
+      await a.sync();
+      await a.store.softDelete('notes', id);
+      await a.sync();
+      clock.advance(const Duration(days: 31));
+      await a.sync();
+      expect(server.purge(activeDevices: {a.deviceId}), 1);
+      try {
+        server.pull(b.deviceId, 1, 10);
+        fail('ожидался 410');
+      } on ApiException catch (e) {
+        expect(e.details['reason'], 'purged');
+      }
+    });
+
+    test('курсор клиента опережает сервер (восстановление из старого дампа '
+        'без смены эпохи): полная пересинхронизация', () async {
+      final keep = await newNote(a, 'keep');
+      await a.sync();
+      final backup = server.backup();
+      await newNote(a, 'lost');
+      await a.sync();
+      await b.sync();
+      expect(await b.store.cursor(), greaterThan(1));
+      server.restore(backup, newEpoch: 'epoch-1'); // эпоха та же
+      expect(await b.store.cursor(), greaterThan(server.head));
+      expect(await b.sync(), SyncOutcome.success);
+      expect((await b.rows('notes')).keys, [keep]);
+      expect(await b.store.cursor(), server.head);
+    });
+  });
+
+  group('M2: полная пересинхронизация и неотправленные создания', () {
+    test('строка, созданная локально и не принятая сервером (hlc_in_future), '
+        'переживает пересинхронизацию', () async {
+      final skewed = ManualClock(
+        clock.ms + const Duration(hours: 1).inMilliseconds,
+      );
+      final c = await TestDevice.create(server, clock: skewed);
+      final id = await newNote(c, 'held');
+      server.epoch = 'epoch-2'; // повод для полной пересинхронизации
+      expect(await c.sync(), SyncOutcome.success);
+      expect(c.engine.state.clockSkew, isTrue);
+      final rows = await c.rows('notes');
+      expect(rows.keys, [id], reason: 'строка возвращена после замены');
+      expect(rows[id]!['title'], 'held');
+      expect(await c.store.outbox(), hasLength(1));
+      expect(await c.store.serverEpoch(), 'epoch-2');
+      await c.close();
+    });
+  });
+
+  group('op_failed', () {
+    test('операция отклоняется с op_failed, остальные применяются; '
+        'повтор после исправления доходит', () async {
+      final bad = await newNote(a, 'bad');
+      final good = await newNote(a, 'good');
+      server.failOpRowIds.add(bad);
+      expect(await a.sync(), SyncOutcome.success);
+      expect(server.row('notes', good), isNotNull);
+      expect(server.row('notes', bad), isNull);
+      final rejected = (await a.store.outbox()).single;
+      expect(rejected.rejectCode, 'op_failed');
+      expect(rejected.state, OpState.rejected);
+      server.failOpRowIds.clear();
+      await a.store.retryRejected(rejected.opId);
+      expect(await a.sync(), SyncOutcome.success);
+      expect(server.row('notes', bad), isNotNull);
+      expect(await a.store.outbox(), isEmpty);
+    });
   });
 
   test('HLC устройства после pull строго больше всего увиденного', () async {

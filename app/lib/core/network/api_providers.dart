@@ -40,6 +40,30 @@ class _LazyTokens implements AccessTokenProvider {
   Future<void> onDeviceRevoked(String code) => _auth.onDeviceRevoked(code);
 }
 
+/// Клиент API после загрузки настроек сервера.
+///
+/// [apiClientProvider] читает настройки синхронно (`.value`), а при холодном
+/// старте (в том числе в фоновом изоляте WorkManager) они ещё грузятся из БД,
+/// и клиент был бы `null`. Любой код, который может выполниться до первого
+/// кадра интерфейса (синхронизация, refresh, SSE), берёт клиент отсюда:
+/// сначала дожидается настроек. Сбой чтения настроек = сервер не настроен.
+Future<ApiClient?> resolveApiClient(Ref ref) async {
+  try {
+    await ref.read(serverConnectionSettingsProvider.future);
+  } on Object {
+    return null;
+  }
+  final client = ref.read(apiClientProvider);
+  return client;
+}
+
+/// [resolveApiClient] в виде провайдера: для кода вне провайдеров (тесты,
+/// фоновый изолят).
+final apiClientResolverProvider = Provider<Future<ApiClient?> Function()>(
+  (ref) =>
+      () => resolveApiClient(ref),
+);
+
 /// Клиент API для настроенного сервера или `null`, если адрес не задан,
 /// некорректен либо для `https` нет закреплённого сертификата.
 final apiClientProvider = Provider<ApiClient?>((ref) {

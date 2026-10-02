@@ -468,7 +468,7 @@ void main() {
     });
 
     test('без настроенного сервера — notConfigured', () async {
-      final none = HttpSyncRemote(() => null);
+      final none = HttpSyncRemote(() async => null);
       await expectLater(
         none.pull(since: 0, limit: 1),
         throwsA(
@@ -483,7 +483,7 @@ void main() {
 
     test('ответ неверной формы — malformed', () async {
       final bad = HttpSyncRemote(
-        () => _client(_Recording((_) => _json(200, {'changes': 1}))),
+        () async => _client(_Recording((_) => _json(200, {'changes': 1}))),
       );
       await expectLater(
         bad.pull(since: 0, limit: 1),

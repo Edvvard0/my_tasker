@@ -45,6 +45,14 @@ class _Fault {
   final bool afterProcessing;
 }
 
+class _StatusFault {
+  _StatusFault(this.prefix, this.status, this.count);
+
+  final String prefix;
+  final int status;
+  int count;
+}
+
 class _SseConnection {
   _SseConnection(this.deviceId);
 
@@ -84,6 +92,7 @@ class FakeBackend implements HttpClientAdapter {
   final Map<String, _Token> _access = {};
   final Map<String, _Refresh> _refresh = {};
   final List<_Fault> _faults = [];
+  final List<_StatusFault> _statusFaults = [];
   final List<_SseConnection> _sse = [];
   late final StreamSubscription<Object?> _commitSub;
   int _tokenCounter = 0;
@@ -107,6 +116,12 @@ class FakeBackend implements HttpClientAdapter {
   /// [afterProcessing] сервер обработает запрос, а ответ «потеряется».
   void failNext(String prefix, {int count = 1, bool afterProcessing = false}) =>
       _faults.add(_Fault(prefix, count, afterProcessing: afterProcessing));
+
+  /// Следующие [count] запросов с путём на [prefix] получают ответ с
+  /// HTTP-статусом [status] (например, 503 `server_error`), не доходя до
+  /// сервера синхронизации.
+  void failStatusNext(String prefix, int status, {int count = 1}) =>
+      _statusFaults.add(_StatusFault(prefix, status, count));
 
   void expireAccessTokens() {
     for (final t in _access.values) {
@@ -168,6 +183,12 @@ class FakeBackend implements HttpClientAdapter {
     final path = options.path;
     requests.add('${options.method} $path');
     authHeaders.add('${options.headers['Authorization']}');
+    for (final f in _statusFaults) {
+      if (f.count > 0 && path.startsWith(f.prefix)) {
+        f.count--;
+        return _error(f.status, 'server_error');
+      }
+    }
     _Fault? fault;
     for (final f in _faults) {
       if (f.count > 0 && path.startsWith(f.prefix)) {

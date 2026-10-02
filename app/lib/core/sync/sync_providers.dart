@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_tasker/core/auth/auth_controller.dart';
 import 'package:my_tasker/core/auth/auth_models.dart';
@@ -36,7 +36,7 @@ final syncStoreProvider = Provider<SyncStore>((ref) {
 });
 
 final syncRemoteProvider = Provider<SyncRemote>(
-  (ref) => HttpSyncRemote(() => ref.read(apiClientProvider)),
+  (ref) => HttpSyncRemote(() => resolveApiClient(ref)),
 );
 
 final syncEngineProvider = Provider<SyncEngine>((ref) {
@@ -62,7 +62,7 @@ final backgroundSyncProvider = Provider<BackgroundSync>(
 final sseClientProvider = Provider<SseClient>((ref) {
   final client = SseClient(
     connect: () async {
-      final api = ref.read(apiClientProvider);
+      final api = await resolveApiClient(ref);
       if (api == null) throw StateError('Сервер не настроен');
       return await api.openStream('/events');
     },
@@ -94,14 +94,30 @@ final syncAutostartProvider = Provider<bool>((ref) => true);
 final syncLifecycleProvider = Provider<void>((ref) {
   if (!ref.watch(syncAutostartProvider)) return;
   final coordinator = ref.watch(syncCoordinatorProvider);
-  ref.listen<AuthState>(authControllerProvider, (previous, next) {
-    if (next is SignedIn) {
-      unawaited(coordinator.start());
-    } else if (next is SignedOut) {
-      unawaited(coordinator.stop());
-    }
-  }, fireImmediately: true);
+  final observer = _LifecycleObserver(coordinator);
+  WidgetsBinding.instance.addObserver(observer);
+  ref
+    ..onDispose(() => WidgetsBinding.instance.removeObserver(observer))
+    ..listen<AuthState>(authControllerProvider, (previous, next) {
+      if (next is SignedIn) {
+        unawaited(coordinator.start());
+      } else if (next is SignedOut) {
+        unawaited(coordinator.stop());
+      }
+    }, fireImmediately: true);
 });
+
+/// Передаёт координатору смену состояния приложения (возврат из фона =
+/// цикл синхронизации, отметка «на переднем плане» для WorkManager).
+class _LifecycleObserver with WidgetsBindingObserver {
+  _LifecycleObserver(this._coordinator);
+
+  final SyncCoordinator _coordinator;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) =>
+      unawaited(_coordinator.onLifecycle(state));
+}
 
 /// Что показывать в индикаторе (02, 2.9.4 и 4.12).
 enum SyncIndicatorKind { synced, syncing, offline, error, blocked }

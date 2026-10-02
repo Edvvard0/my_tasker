@@ -22,15 +22,16 @@ abstract interface class SyncRemote {
   Future<RevertResult> revert(String conflictId);
 }
 
-/// [SyncRemote] поверх [ApiClient]. (конструктор принимает функцию) возвращает клиент для
-/// текущих настроек сервера или `null`, если сервер не настроен.
+/// [SyncRemote] поверх [ApiClient]. Функция-источник возвращает клиент для
+/// текущих настроек сервера (дождавшись их загрузки) или `null`, если сервер
+/// не настроен.
 class HttpSyncRemote implements SyncRemote {
   HttpSyncRemote(this._client);
 
-  final ApiClient? Function() _client;
+  final Future<ApiClient?> Function() _client;
 
-  ApiClient get _api {
-    final client = _client();
+  Future<ApiClient> get _api async {
+    final client = await _client();
     if (client == null) throw const ApiException.notConfigured();
     return client;
   }
@@ -45,14 +46,14 @@ class HttpSyncRemote implements SyncRemote {
 
   @override
   Future<PushResponse> push(List<Json> ops) async {
-    final json = await _api.postJson('/sync/push', body: {'ops': ops});
+    final json = await (await _api).postJson('/sync/push', body: {'ops': ops});
     final parsed = _parse(() => PushResponse.fromJson(json));
     return parsed;
   }
 
   @override
   Future<PullPage> pull({required int since, required int limit}) async {
-    final json = await _api.getJson(
+    final json = await (await _api).getJson(
       '/sync/pull',
       query: {'since': since, 'limit': limit},
     );
@@ -66,7 +67,7 @@ class HttpSyncRemote implements SyncRemote {
     int limit = 50,
     String? before,
   }) async {
-    final json = await _api.getJson(
+    final json = await (await _api).getJson(
       '/sync/conflicts',
       query: {'reverted': reverted, 'limit': limit, 'before': ?before},
     );
@@ -76,7 +77,9 @@ class HttpSyncRemote implements SyncRemote {
 
   @override
   Future<RevertResult> revert(String conflictId) async {
-    final json = await _api.postJson('/sync/conflicts/$conflictId/revert');
+    final json = await (await _api).postJson(
+      '/sync/conflicts/$conflictId/revert',
+    );
     final parsed = _parse(() => RevertResult.fromJson(json));
     return parsed;
   }

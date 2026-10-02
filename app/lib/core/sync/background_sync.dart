@@ -3,6 +3,7 @@ import 'package:my_tasker/core/auth/auth_controller.dart';
 import 'package:my_tasker/core/auth/auth_models.dart';
 import 'package:my_tasker/core/sync/sync_engine.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
+import 'package:my_tasker/features/settings/application/server_connection_controller.dart';
 
 /// Фоновая синхронизация ОС (spec 5.2: WorkManager ≈ 15 мин на Android;
 /// на Windows работает таймер приложения).
@@ -30,13 +31,38 @@ class NoBackgroundSync implements BackgroundSync {
 
 /// Один цикл синхронизации без интерфейса: читает токены, выполняет
 /// [SyncEngine.runCycle]. Возвращает `false`, только если стоит повторить
-/// позже (сбой сервера); «нет сети» и «нужен вход» — не повод для повтора.
+/// позже (сбой сервера, сервер ещё не настроен); «нет сети» и «нужен вход» —
+/// не повод для повтора.
+///
+/// Холодный старт: настройки сервера лежат в БД и читаются асинхронно, поэтому
+/// перед циклом они дожидаются явно (иначе клиент API был бы `null`, а цикл
+/// вернул бы `notConfigured`, который здесь **не** считается успехом).
+///
+/// Два изолята: WorkManager запускает Dart-изолят рядом с живым приложением.
+/// Пока интерфейс на переднем плане, он сам синхронизируется (SSE, таймер) и
+/// ведёт отметку в `sync_meta` (`SyncStore.markForeground`); тогда фоновый
+/// запуск пропускается и считается успешным. Отметка устаревает за 90 с, так
+/// что убитое приложение WorkManager не блокирует.
 Future<bool> runHeadlessSync(ProviderContainer container) async {
+  final store = container.read(syncStoreProvider);
+  try {
+    if (await store.isForegroundActive()) return true;
+  } on Object {
+    // Нет читаемой БД — пусть решает остальной код.
+  }
   final auth = container.read(authControllerProvider.notifier);
   await auth.ready;
   if (container.read(authControllerProvider) is! SignedIn) return true;
+  try {
+    await container.read(serverConnectionSettingsProvider.future);
+  } on Object {
+    return false;
+  }
   final engine = container.read(syncEngineProvider);
   await engine.init();
   final outcome = await engine.runCycle();
-  return outcome != SyncOutcome.failed;
+  return switch (outcome) {
+    SyncOutcome.failed || SyncOutcome.notConfigured => false,
+    _ => true,
+  };
 }

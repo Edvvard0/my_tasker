@@ -1,20 +1,33 @@
 /// Форматирование дат и чисел для интерфейса (русский язык).
 library;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
+/// Сокращённые родительные названия месяцев: везде с точкой, кроме «мая»,
+/// которое не сокращается.
 const List<String> _months = [
   'янв.',
   'февр.',
-  'марта',
+  'мар.',
   'апр.',
   'мая',
-  'июня',
-  'июля',
+  'июн.',
+  'июл.',
   'авг.',
   'сент.',
   'окт.',
   'нояб.',
   'дек.',
 ];
+
+/// Смещение часового пояса для показа времени. `null` — пояс устройства
+/// (`toLocal`). Golden-тесты закрепляют UTC, чтобы подписи вида «сегодня в
+/// 14:02» не зависели от пояса машины, на которой снимали эталоны.
+@visibleForTesting
+Duration? debugUtcOffset;
+
+DateTime _local(DateTime t) =>
+    debugUtcOffset == null ? t.toLocal() : t.toUtc().add(debugUtcOffset!);
 
 /// Форма слова по числу: 1 день, 2 дня, 5 дней.
 String pluralRu(int n, String one, String few, String many) {
@@ -40,8 +53,8 @@ String formatDate(DateTime t, DateTime now) {
 /// Момент в прошлом человеческим языком: «только что», «5 мин назад»,
 /// «сегодня в 14:02», «вчера в 14:02», «12 сент., 14:02».
 String formatMoment(DateTime moment, DateTime now) {
-  final t = moment.toLocal();
-  final n = now.toLocal();
+  final t = _local(moment);
+  final n = _local(now);
   final diff = n.difference(t);
   if (diff.isNegative || diff.inSeconds < 45) return 'только что';
   if (diff.inMinutes < 60) return '${diff.inMinutes} мин назад';

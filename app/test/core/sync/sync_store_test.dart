@@ -481,16 +481,39 @@ void main() {
       },
     );
 
-    test('сбой применения не двигает курсор', () async {
-      final id = uuid7();
-      final bad = serverRow(id, extra: {'updated_at': 'garbage'});
-      await expectLater(
-        store.applyPage([change(serverRow(uuid7())), change(bad)], 9),
-        throwsA(isA<FormatException>()),
-      );
-      expect(await store.cursor(), 0);
-      expect(await d.rows('notes'), isEmpty);
-    });
+    test(
+      'сбой БД при применении откатывает страницу и не двигает курсор',
+      () async {
+        final id = uuid7();
+        // `title` NOT NULL: база отвергнет значение.
+        final bad = serverRow(id, extra: {'title': null});
+        await expectLater(
+          store.applyPage([change(serverRow(uuid7())), change(bad)], 9),
+          throwsA(isA<Object>()),
+        );
+        expect(await store.cursor(), 0);
+        expect(await d.rows('notes'), isEmpty);
+      },
+    );
+
+    test(
+      'L7: неразборчивый updated_at пропускает строку, страница целая',
+      () async {
+        final good = uuid7();
+        final bad = uuid7();
+        final noStamp = uuid7();
+        final applied = await store.applyPage([
+          change(serverRow(good)),
+          change(serverRow(bad, version: 8, extra: {'updated_at': 'garbage'})),
+          change(serverRow(noStamp, version: 9, extra: {'updated_at': 7})),
+        ], 9);
+        expect(applied, 1);
+        expect((await d.rows('notes')).keys, [good]);
+        expect(await store.cursor(), 9, reason: 'курсор двигается');
+        expect(await store.skippedRowCount(), 2);
+        expect(await store.lastSkippedRow(), 'notes/$noStamp');
+      },
+    );
 
     test('rebase: неотправленное поле поверх серверной строки', () async {
       final id = uuid7();
@@ -594,6 +617,42 @@ void main() {
       },
     );
 
+    test('M2: replaceAll возвращает строки, существующие только через '
+        'неотправленные создания', () async {
+      final onServer = uuid7();
+      final localOnly = uuid7();
+      final editedGone = uuid7();
+      await store.applyPage([
+        change(serverRow(onServer)),
+        change(serverRow(editedGone, version: 8)),
+      ], 8);
+      await store.create('notes', localOnly, {'title': 'mine', 'body': 'b'});
+      await store.update('notes', localOnly, {'body': 'b2'});
+      await store.update('notes', editedGone, {'title': 'edit of vanished'});
+      await store.replaceAll([change(serverRow(onServer, version: 20))], 25);
+      final rows = await d.rows('notes');
+      expect(rows.keys.toSet(), {onServer, localOnly});
+      expect(rows[localOnly]!['title'], 'mine');
+      expect(rows[localOnly]!['body'], 'b2');
+      expect(rows[localOnly]!['server_version'], 0);
+      expect(rows[localOnly]!['deleted_at'], isNull);
+      expect(rows[localOnly]!['origin_device_id'], d.deviceId);
+      // правка строки, которой на сервере нет, не воскрешает её
+      expect(rows.containsKey(editedGone), isFalse);
+      expect(await outbox(), hasLength(2));
+    });
+
+    test('M2: создание + удаление локально созданной строки — надгробие '
+        'возвращается', () async {
+      final id = uuid7();
+      await store.create('notes', id, {'title': 'x'});
+      await store.softDelete('notes', id);
+      await store.replaceAll([], 5);
+      final row = (await d.rows('notes'))[id]!;
+      expect(row['deleted_at'], isNotNull);
+      expect((await store.trashItems()).map((i) => i.id), [id]);
+    });
+
     test('purgeOldTombstones: старше 30 суток и без операций', () async {
       final oldId = uuid7();
       final busy = uuid7();
@@ -609,6 +668,125 @@ void main() {
       await store.softDelete('notes', busy);
       expect(await store.purgeOldTombstones(), 1);
       expect((await d.rows('notes')).keys.toSet(), {busy, fresh});
+    });
+  });
+
+  group('L8: retryRejected и более новые правки', () {
+    Future<(String, OutboxOp)> rejectedFirst() async {
+      final id = uuid7();
+      await store.create('notes', id, {'title': 'a', 'body': 'b'});
+      final batch = await store.takeBatch();
+      await store.applyPushResults(batch, [
+        PushOpResult(
+          opId: batch.single.opId,
+          applied: false,
+          code: 'op_failed',
+        ),
+      ]);
+      return (id, (await outbox()).single);
+    }
+
+    test('новая правка того же поля не затирается повтором', () async {
+      final (id, rejected) = await rejectedFirst();
+      await store.update('notes', id, {'title': 'newer'});
+      await store.retryRejected(rejected.opId);
+      final ops = await outbox();
+      final live = ops.where((o) => o.state != OpState.rejected).toList();
+      // повтор влил только не пересекающееся поле `body` (+ created_at)
+      final merged = <String, Object?>{for (final o in live) ...?o.fields};
+      expect(merged['title'], 'newer');
+      expect(merged['body'], 'b');
+      expect((await store.getRow('notes', id))!['title'], 'newer');
+      expect(ops.where((o) => o.opId == rejected.opId), isEmpty);
+    });
+
+    test('повтор сливается с более новой неотправленной правкой, а не '
+        'создаёт вторую', () async {
+      final id = uuid7();
+      await store.create('notes', id, {'title': 'a'});
+      final batch = await store.takeBatch();
+      await store.applyPushResults(batch, [
+        PushOpResult(
+          opId: batch.single.opId,
+          applied: false,
+          code: 'op_failed',
+        ),
+      ]);
+      final rejected = (await outbox()).single;
+      await store.update('notes', id, {'title': 'newer'});
+      await store.retryRejected(rejected.opId);
+      final after = await outbox();
+      expect(after, hasLength(1), reason: 'отклонённая снята, повтор слит');
+      expect(after.single.fields!['title'], 'newer');
+      expect(after.single.fields, contains('created_at'));
+    });
+
+    test('после более новой операции delete повтор правки не воскрешает '
+        'значения', () async {
+      final (id, rejected) = await rejectedFirst();
+      await store.softDelete('notes', id);
+      await store.retryRejected(rejected.opId);
+      final ops = await outbox();
+      expect(ops.where((o) => o.opId == rejected.opId), isEmpty);
+      expect(ops.where((o) => o.type == OpType.delete), hasLength(1));
+      expect(
+        ops.where(
+          (o) => o.type == OpType.upsert && o.state != OpState.rejected,
+        ),
+        isEmpty,
+      );
+    });
+
+    test(
+      'отклонённый delete не повторяется, если после него была правка',
+      () async {
+        final id = uuid7();
+        await store.create('notes', id, {'title': 'a'});
+        await d.sync(); // создание подтверждено, строка на сервере
+        await store.softDelete('notes', id);
+        final batch = await store.takeBatch();
+        await store.applyPushResults(batch, [
+          PushOpResult(
+            opId: batch.single.opId,
+            applied: false,
+            code: 'op_failed',
+          ),
+        ]);
+        final rejected = (await outbox()).single;
+        await store.restore('notes', id);
+        await store.retryRejected(rejected.opId);
+        final ops = await outbox();
+        expect(ops.where((o) => o.type == OpType.delete), isEmpty);
+        expect(ops.single.fields, {'deleted_at': null});
+      },
+    );
+  });
+
+  group('два изолята: отметка «на переднем плане»', () {
+    test('свежая отметка есть, устаревшая и снятая — нет', () async {
+      expect(await store.isForegroundActive(), isFalse);
+      await store.markForeground();
+      expect(await store.isForegroundActive(), isTrue);
+      clock.advance(SyncStore.foregroundTtl - const Duration(seconds: 1));
+      expect(await store.isForegroundActive(), isTrue);
+      clock.advance(const Duration(seconds: 2));
+      expect(await store.isForegroundActive(), isFalse);
+      await store.markForeground();
+      await store.clearForeground();
+      expect(await store.isForegroundActive(), isFalse);
+    });
+
+    test('L11: индекс sync_outbox(target_table, row_id) создан', () async {
+      final rows = await d.db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'index' "
+            "AND tbl_name = 'sync_outbox'",
+          )
+          .get();
+      expect(
+        rows.map((r) => r.data['name']),
+        contains('sync_outbox_target_row_idx'),
+      );
     });
   });
 
@@ -762,10 +940,12 @@ void main() {
       () async {
         final (_, t) = await projectWithTask();
         await store.softDelete('tasks', t);
+        await d.sync(); // срок считается от приёма удаления сервером
         clock.advance(const Duration(days: 10, hours: 3));
         var items = await store.trashItems();
         expect(items.single.id, t);
-        expect(items.single.daysLeft, 19);
+        // осталось 19 суток 21 час: округляется вверх (L2)
+        expect(items.single.daysLeft, 20);
         clock.advance(const Duration(days: 20));
         items = await store.trashItems();
         expect(
@@ -775,6 +955,53 @@ void main() {
         );
       },
     );
+
+    test(
+      'L2: дни до удаления округляются вверх, последние часы — 1 день',
+      () async {
+        final (_, t) = await projectWithTask();
+        await store.softDelete('tasks', t);
+        await d.sync();
+        clock.advance(const Duration(days: 29, hours: 23));
+        expect((await store.trashItems()).single.daysLeft, 1);
+        clock.advance(const Duration(minutes: 59));
+        expect((await store.trashItems()).single.daysLeft, 1);
+        clock.advance(const Duration(minutes: 2));
+        expect(await store.trashItems(), isEmpty);
+      },
+    );
+
+    test('L3: строка с неотправленным удалением остаётся в корзине и не '
+        'очищается, пока удаление не дошло до сервера', () async {
+      final id = uuid7();
+      await store.create('notes', id, {'title': 'n'});
+      await store.softDelete('notes', id);
+      // устройство 35 суток без сети: локальный deleted_at «протух»
+      clock.advance(const Duration(days: 35));
+      final items = await store.trashItems();
+      expect(items.map((i) => i.id), [id]);
+      expect(items.single.daysLeft, 30, reason: 'срок — от приёма сервером');
+      expect(await store.purgeOldTombstones(), 0);
+      expect((await d.rows('notes')).keys, [id]);
+      // после синхронизации сервер ставит deleted_at = приём (сегодня)
+      expect(await d.sync(), isNotNull);
+      expect((await store.trashItems()).map((i) => i.id), [id]);
+    });
+
+    test('корзина не делает запрос на каждую строку: много строк и '
+        'удалённые родители', () async {
+      final p = uuid7();
+      await store.create('projects', p, {'name': 'P'});
+      for (var i = 0; i < 40; i++) {
+        await store.create('tasks', uuid7(), {'title': 't$i', 'project_id': p});
+      }
+      await store.softDelete('projects', p);
+      for (final row in (await d.rows('tasks')).values) {
+        await store.softDelete('tasks', row['id']! as String);
+      }
+      final items = await store.trashItems();
+      expect(items.map((i) => i.table), ['projects'], reason: 'потомки скрыты');
+    });
 
     test('watchTrash отдаёт актуальный список', () async {
       final id = uuid7();

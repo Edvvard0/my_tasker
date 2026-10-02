@@ -8,7 +8,6 @@ import 'package:my_tasker/core/auth/auth_controller.dart';
 import 'package:my_tasker/core/auth/auth_models.dart';
 import 'package:my_tasker/core/auth/token_store.dart';
 import 'package:my_tasker/core/network/api_client.dart';
-import 'package:my_tasker/core/network/api_providers.dart';
 import 'package:my_tasker/core/sync/hlc.dart';
 import 'package:my_tasker/core/sync/ids.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
@@ -180,8 +179,7 @@ void main() {
       env.backend.revokeDevice(first);
       await expectLater(
         env.auth.currentAccessToken().then(
-          (_) =>
-              env.container.read(apiClientProvider)!.getJson('/auth/devices'),
+          (_) async => await (await env.apiClient()).getJson('/auth/devices'),
         ),
         throwsA(isA<ApiException>()),
       );
@@ -200,7 +198,7 @@ void main() {
     test('просроченный access: один refresh, ротация, новый refresh сохранён '
         'до использования', () async {
       await setUpEnv();
-      final api = env.container.read(apiClientProvider)!;
+      final api = await env.apiClient();
       final before = env.tokens.session!;
       env.backend.expireAccessTokens();
       env.clock.advance(const Duration(minutes: 20));
@@ -229,7 +227,7 @@ void main() {
     test('токен скоро истечёт: обновляется заранее, без 401', () async {
       await setUpEnv();
       env.clock.advance(const Duration(minutes: 14, seconds: 45));
-      final api = env.container.read(apiClientProvider)!;
+      final api = await env.apiClient();
       await api.getJson('/auth/devices');
       expect(env.backend.refreshCalls, 1);
       expect(
@@ -241,7 +239,7 @@ void main() {
 
     test('параллельные 401 вызывают ровно один refresh', () async {
       await setUpEnv();
-      final api = env.container.read(apiClientProvider)!;
+      final api = await env.apiClient();
       // сервер отзывает access-токены, но часы клиента не ушли вперёд
       env.backend.expireAccessTokens();
       final results = await Future.wait([
@@ -258,7 +256,7 @@ void main() {
         await setUpEnv();
         final gate = Completer<void>();
         env.backend.holdRefresh = gate;
-        final api = env.container.read(apiClientProvider)!;
+        final api = await env.apiClient();
         env.backend.expireAccessTokens();
         final futures = [
           for (var i = 0; i < 5; i++) api.getJson('/auth/devices'),
@@ -279,7 +277,7 @@ void main() {
         await store.create('notes', id, {'title': 'local data'});
         final device = (env.authState as SignedIn).deviceId;
         env.backend.revokeDevice(device);
-        final api = env.container.read(apiClientProvider)!;
+        final api = await env.apiClient();
         await expectLater(
           api.getJson('/auth/devices'),
           throwsA(
@@ -310,7 +308,7 @@ void main() {
       final stale = env.tokens.session!;
       // обычное обновление отрабатывает и «сжигает» старый refresh
       env.backend.expireAccessTokens();
-      await env.container.read(apiClientProvider)!.getJson('/auth/devices');
+      await (await env.apiClient()).getJson('/auth/devices');
       // клиент откатился к старому refresh (например, потерял запись)
       env.tokens.session = stale;
       final second = await AppEnv.create(
@@ -321,7 +319,7 @@ void main() {
       );
       env.backend.expireAccessTokens();
       await expectLater(
-        second.container.read(apiClientProvider)!.getJson('/auth/devices'),
+        (await second.apiClient()).getJson('/auth/devices'),
         throwsA(isA<ApiException>()),
       );
       expect(
@@ -330,6 +328,36 @@ void main() {
       );
       expect(second.tokens.session, isNull);
       second.container.dispose();
+    });
+
+    test('M3: два изолята — refresh под mutex берёт более свежую пару из '
+        'хранилища, а не старый refresh из памяти', () async {
+      await setUpEnv();
+      // «второй изолят» (WorkManager): та же БД токенов и тот же сервер
+      final other = await AppEnv.create(
+        tokens: env.tokens,
+        clock: env.clock,
+        server: env.server,
+        backend: env.backend,
+      );
+      final stale = env.tokens.session!;
+      env.backend.expireAccessTokens();
+      await (await other.apiClient()).getJson('/auth/devices');
+      final fresh = env.tokens.session!;
+      expect(fresh.refreshToken, isNot(stale.refreshToken));
+      expect(env.backend.refreshCalls, 1);
+      // основной изолят держит в памяти устаревшую пару: его запрос получает
+      // 401, но второй refresh не делается (старый refresh сжёг бы устройство)
+      await (await env.apiClient()).getJson('/auth/devices');
+      expect(env.backend.refreshCalls, 1);
+      expect(env.authState, isA<SignedIn>());
+      expect(env.tokens.session!.refreshToken, fresh.refreshToken);
+      // ещё раз: теперь основной изолят обновляется сам поверх сохранённой пары
+      env.backend.expireAccessTokens();
+      await (await env.apiClient()).getJson('/auth/devices');
+      expect(env.backend.refreshCalls, 2);
+      expect(env.authState, isA<SignedIn>());
+      other.container.dispose();
     });
 
     test('refresh_expired и неизвестный refresh: нужен вход', () async {
@@ -349,7 +377,7 @@ void main() {
         backend: env.backend,
       );
       await expectLater(
-        second.container.read(apiClientProvider)!.getJson('/auth/devices'),
+        (await second.apiClient()).getJson('/auth/devices'),
         throwsA(isA<ApiException>()),
       );
       expect((second.authState as SignedOut).reason, SignOutReason.expired);
@@ -359,7 +387,7 @@ void main() {
     test('refresh просрочен по часам клиента: сервер не беспокоим', () async {
       await setUpEnv();
       env.clock.advance(const Duration(days: 91));
-      final api = env.container.read(apiClientProvider)!;
+      final api = await env.apiClient();
       await expectLater(
         api.getJson('/auth/devices'),
         throwsA(isA<ApiException>()),
@@ -372,7 +400,7 @@ void main() {
       await setUpEnv();
       env.backend.expireAccessTokens();
       env.backend.failNext('/auth/refresh');
-      final api = env.container.read(apiClientProvider)!;
+      final api = await env.apiClient();
       await expectLater(
         api.getJson('/auth/devices'),
         throwsA(
@@ -390,7 +418,7 @@ void main() {
       'прочие 401 без refreshable-кода не ведут к бесконечному циклу',
       () async {
         await setUpEnv();
-        final api = env.container.read(apiClientProvider)!;
+        final api = await env.apiClient();
         // токен, который сервер не знает: invalid_token -> refresh -> повтор
         env.backend.expireAccessTokens();
         await api.getJson('/auth/devices');
@@ -410,7 +438,7 @@ void main() {
         expect(await store.needsResync(), isFalse);
         env.server.epoch = 'epoch-2'; // сервер восстановили из копии
         env.backend.expireAccessTokens();
-        await env.container.read(apiClientProvider)!.getJson('/auth/devices');
+        await (await env.apiClient()).getJson('/auth/devices');
         expect(await store.needsResync(), isTrue);
       },
     );
@@ -573,7 +601,7 @@ void main() {
   test('DioException без ответа превращается в сетевую ошибку', () async {
     await setUpEnv();
     env.backend.failNext('/auth/devices', count: 2);
-    final api = env.container.read(apiClientProvider)!;
+    final api = await env.apiClient();
     await expectLater(
       api.getJson('/auth/devices'),
       throwsA(isA<ApiException>()),

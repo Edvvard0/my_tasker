@@ -320,6 +320,6 @@ class TrashItem {
   final String title;
   final DateTime deletedAt;
 
-  /// Сколько полных суток осталось хранения (0 — удалится сегодня).
+  /// Сколько суток осталось хранения, округляя вверх (23 ч = 1 день).
   final int daysLeft;
 }

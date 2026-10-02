@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,6 +31,21 @@ class _Wire {
   }
 
   void send(int index, String text) => streams[index].add(utf8.encode(text));
+}
+
+class _FixedRandom implements Random {
+  _FixedRandom(this.value);
+
+  final double value;
+
+  @override
+  double nextDouble() => value;
+
+  @override
+  bool nextBool() => value > 0.5;
+
+  @override
+  int nextInt(int max) => (value * max).floor();
 }
 
 void main() {
@@ -122,7 +138,7 @@ void main() {
           final wire = _Wire()
             ..async = async
             ..failWith = const ApiException.network();
-          final client = SseClient(connect: wire.connect)..start();
+          final client = SseClient(connect: wire.connect, jitter: 0)..start();
           async.elapse(const Duration(seconds: 200));
           // попытки в 0, 1, 3, 7, 15, 31, 63, 123, 183 секунды
           expect(wire.connectTimes.map((d) => d.inSeconds), [
@@ -232,6 +248,82 @@ void main() {
         unawaited(client.stop()); // во время паузы перед повтором
         async.elapse(const Duration(minutes: 2));
         expect(wire.streams.length, lessThanOrEqualTo(3));
+        expect(client.isRunning, isFalse);
+      });
+    });
+
+    test('jitter сокращает паузу до backoff * (1 - jitter), не длиннее '
+        'backoff', () {
+      fakeAsync((async) {
+        // Random, всегда возвращающий максимум разброса.
+        final wire = _Wire()
+          ..async = async
+          ..failWith = const ApiException.network();
+        final client = SseClient(
+          connect: wire.connect,
+          jitter: 0.5,
+          random: _FixedRandom(0.999999),
+        )..start();
+        async.elapse(const Duration(seconds: 10));
+        // паузы ≈ 0,5 с, ≈ 1 с, ≈ 2 с … вместо 1, 2, 4: попыток больше
+        expect(wire.connectTimes.length, greaterThan(4));
+        for (var i = 1; i < wire.connectTimes.length; i++) {
+          final pause = wire.connectTimes[i] - wire.connectTimes[i - 1];
+          final backoff = Duration(seconds: 1 << (i - 1));
+          expect(pause, lessThanOrEqualTo(backoff));
+          if (backoff < const Duration(seconds: 60)) {
+            expect(
+              pause.inMilliseconds,
+              greaterThan(backoff.inMilliseconds / 2 - 5),
+            );
+          }
+        }
+        unawaited(client.stop());
+        async.flushMicrotasks();
+      });
+    });
+
+    test('nudge (сеть вернулась) обрывает паузу и сбрасывает backoff', () {
+      fakeAsync((async) {
+        final wire = _Wire()
+          ..async = async
+          ..failWith = const ApiException.network();
+        final client = SseClient(connect: wire.connect, jitter: 0)..start();
+        async.elapse(const Duration(seconds: 40)); // паузы выросли до 16 с
+        final before = wire.connectTimes.length;
+        wire.failWith = null;
+        client.nudge();
+        async.flushMicrotasks();
+        expect(wire.connectTimes.length, before + 1);
+        expect(client.isConnected, isTrue);
+        // соединение живо: nudge ничего не делает и не ломает backoff
+        client.nudge();
+        async.flushMicrotasks();
+        expect(wire.connectTimes.length, before + 1);
+        // после обрыва пауза снова минимальная (1 с), а не 32
+        wire.failWith = const ApiException.network();
+        unawaited(wire.streams.last.close());
+        async.elapse(const Duration(milliseconds: 1100));
+        expect(wire.connectTimes.length, before + 2);
+        unawaited(client.stop());
+        async.flushMicrotasks();
+      });
+    });
+
+    test('stop во время подключения: полученный поток отменяется', () {
+      fakeAsync((async) {
+        final gate = Completer<Stream<List<int>>>();
+        var cancelled = false;
+        final controller = StreamController<List<int>>(
+          onCancel: () => cancelled = true,
+        );
+        final client = SseClient(connect: () => gate.future)..start();
+        async.flushMicrotasks();
+        unawaited(client.stop());
+        gate.complete(controller.stream); // ответ пришёл уже после stop
+        async.flushMicrotasks();
+        expect(cancelled, isTrue);
+        expect(client.isConnected, isFalse);
         expect(client.isRunning, isFalse);
       });
     });

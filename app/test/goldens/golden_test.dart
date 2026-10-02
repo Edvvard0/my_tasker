@@ -9,6 +9,7 @@ import 'package:my_tasker/features/settings/presentation/theme_showcase_screen.d
 import '../support/fake_checker.dart';
 import '../support/pem.dart';
 import '../support/pump_app.dart';
+import '../support/stage2_env.dart';
 
 /// Golden-тесты: тема и оболочка на двух размерах (телефон и десктоп) с
 /// настоящими шрифтами (см. `test/flutter_test_config.dart`).
@@ -57,7 +58,7 @@ void main() {
 
   group('оболочка приложения', () {
     testWidgets('телефон 390×844: «Сегодня» с таб-баром', (tester) async {
-      await pumpApp(tester);
+      await pumpStage2(tester);
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('files/shell_phone.png'),
@@ -65,7 +66,7 @@ void main() {
     });
 
     testWidgets('десктоп 1440×900: «Сегодня» с левой панелью', (tester) async {
-      await pumpApp(tester, size: desktopSize);
+      await pumpStage2(tester, size: desktopSize);
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('files/shell_desktop.png'),
@@ -73,7 +74,7 @@ void main() {
     });
 
     testWidgets('окно 800×600: рейл 72 px', (tester) async {
-      await pumpApp(tester, size: mediumSize, location: '/calendar');
+      await pumpStage2(tester, size: mediumSize, location: '/calendar');
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('files/shell_rail.png'),

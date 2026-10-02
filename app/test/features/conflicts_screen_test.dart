@@ -252,9 +252,7 @@ void main() {
           },
         );
       await tester.tap(find.byKey(const Key('revert-c1')));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)),
-      );
+      await flushEvents(tester);
       await tester.pumpAndSettle();
       expect(find.text('Вернули ваше значение'), findsOneWidget);
       expect(find.text('ВОЗВРАЩЕНО'), findsOneWidget);

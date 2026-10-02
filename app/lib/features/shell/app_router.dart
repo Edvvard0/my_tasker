@@ -6,6 +6,8 @@ import 'package:my_tasker/core/auth/auth_models.dart';
 import 'package:my_tasker/features/ai_chat/ai_chat_screen.dart';
 import 'package:my_tasker/features/auth/presentation/login_screen.dart';
 import 'package:my_tasker/features/calendar/calendar_screen.dart';
+import 'package:my_tasker/features/calendar/presentation/calendar_settings_screen.dart';
+import 'package:my_tasker/features/calendar/presentation/layers_screen.dart';
 import 'package:my_tasker/features/devices/presentation/devices_screen.dart';
 import 'package:my_tasker/features/finance/finance_screen.dart';
 import 'package:my_tasker/features/settings/presentation/server_connection_screen.dart';
@@ -83,6 +85,14 @@ GoRouter createRouter({
               builder: (_, _) => const CalendarScreen(),
               routes: [
                 GoRoute(path: 'tasks', builder: (_, _) => const TasksScreen()),
+                GoRoute(
+                  path: 'layers',
+                  builder: (_, _) => const LayersScreen(),
+                ),
+                GoRoute(
+                  path: 'settings',
+                  builder: (_, _) => const CalendarSettingsScreen(),
+                ),
               ],
             ),
           ],

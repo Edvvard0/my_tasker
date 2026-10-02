@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:my_tasker/core/theme/app_spacing.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/core/widgets/app_card.dart';
@@ -20,13 +21,12 @@ class NoticeCard extends StatelessWidget {
   final StatusTone tone;
   final String text;
 
-  /// Мелкая строка под текстом («код для отладки»).
+  /// Технические подробности («код для отладки»): скрыты за «Подробнее».
   final String? details;
   final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
     final t = context.text;
     return AppCard(
       child: Column(
@@ -38,9 +38,9 @@ class NoticeCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.s3),
           Text(text, style: t.body),
-          if (details != null) ...[
+          if (details != null && details!.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.s1),
-            Text(details!, style: t.caption.copyWith(color: c.textTertiary)),
+            DetailsDisclosure(details!),
           ],
           if (actions.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.s4),
@@ -52,6 +52,61 @@ class NoticeCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// «Подробнее»: технический код (`invalid_credentials`, `op_failed`, …)
+/// прячется под раскрывашку — человек видит понятный текст, а код остаётся
+/// для сообщения об ошибке.
+class DetailsDisclosure extends StatefulWidget {
+  const DetailsDisclosure(this.details, {super.key});
+
+  final String details;
+
+  @override
+  State<DetailsDisclosure> createState() => _DetailsDisclosureState();
+}
+
+class _DetailsDisclosureState extends State<DetailsDisclosure> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = context.text;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          key: const Key('details-toggle'),
+          onTap: () => setState(() => _open = !_open),
+          borderRadius: const BorderRadius.all(Radius.circular(8)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.s1),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _open ? 'Скрыть подробности' : 'Подробнее',
+                  style: t.caption.copyWith(color: c.textSecondary),
+                ),
+                Icon(
+                  _open ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+                  size: 16,
+                  color: c.textSecondary,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_open)
+          SelectableText(
+            widget.details,
+            key: const Key('details-text'),
+            style: t.caption.copyWith(color: c.textTertiary),
+          ),
+      ],
     );
   }
 }

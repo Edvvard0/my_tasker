@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/core/format/ru_format.dart';
 import 'package:my_tasker/core/sync/ids.dart';
+import 'package:my_tasker/core/sync/registered_tables.dart'
+    show userSettingsSpec;
 import 'package:my_tasker/core/sync/sync_models.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/features/trash/presentation/trash_screen.dart';
@@ -126,19 +128,17 @@ void main() {
       await store.softDelete('user_settings', id);
     });
     await tester.pump();
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 50)),
-    );
+    await flushEvents(tester);
     await tester.pump();
-    expect(find.text('ui.theme'), findsOneWidget);
+    // «ui.theme» — известный ключ: в корзине его человеческое название.
+    expect(find.text('Тема оформления'), findsOneWidget);
+    expect(find.text('ui.theme'), findsNothing);
     expect(find.text('удалится через 30 дней'), findsOneWidget);
 
     await tester.tap(find.byKey(Key('restore-$id')));
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 50)),
-    );
+    await flushEvents(tester);
     await tester.pumpAndSettle();
-    expect(find.text('«ui.theme» восстановлено'), findsOneWidget);
+    expect(find.text('«Тема оформления» восстановлено'), findsOneWidget);
     expect(find.text('ui.theme'), findsNothing);
     final row = await tester.runAsync(() => store.getRow('user_settings', id));
     expect(row!['deleted_at'], isNull);
@@ -184,6 +184,39 @@ void main() {
       'только что',
     );
     expect(formatClock(DateTime(2026, 1, 1, 7, 5)), '07:05');
-    expect(formatDate(DateTime(2026, 3, 9), now), '9 марта');
+    expect(formatDate(DateTime(2026, 3, 9), now), '9 мар.');
+  });
+
+  test(
+    'L11: названия месяцев единообразны (сокращения с точкой, «мая» цело)',
+    () {
+      final now = DateTime(2026, 6, 15);
+      final names = [
+        for (var m = 1; m <= 12; m++) formatDate(DateTime(2026, m, 5), now),
+      ];
+      expect(names, [
+        '5 янв.',
+        '5 февр.',
+        '5 мар.',
+        '5 апр.',
+        '5 мая',
+        '5 июн.',
+        '5 июл.',
+        '5 авг.',
+        '5 сент.',
+        '5 окт.',
+        '5 нояб.',
+        '5 дек.',
+      ]);
+    },
+  );
+
+  test('L1b: user_settings в корзине — человеческое название, иначе ключ', () {
+    expect(
+      userSettingsSpec.titleOf({'key': 'calendar.week_cycle'}),
+      'Чередование недель',
+    );
+    expect(userSettingsSpec.titleOf({'key': 'ui.theme'}), 'Тема оформления');
+    expect(userSettingsSpec.titleOf({'key': 'x.unknown'}), 'x.unknown');
   });
 }

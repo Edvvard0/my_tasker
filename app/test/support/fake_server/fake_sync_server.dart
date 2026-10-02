@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:my_tasker/core/network/api_client.dart';
 import 'package:my_tasker/core/sync/hlc.dart';
@@ -118,6 +119,9 @@ class FakeSyncServer {
 
   /// Идентификатор «эпохи»: меняется при восстановлении из копии.
   String? epoch = 'epoch-1';
+
+  /// Строки, операции над которыми сервер отклоняет с `op_failed`.
+  final Set<String> failOpRowIds = <String>{};
   final Map<(String, String), _Row> _rows = {};
   final Map<String, Json> _opLog = {};
   final Map<String, int> deviceCursors = {};
@@ -208,9 +212,20 @@ class FakeSyncServer {
     if (since < 0 || limit < 1 || limit > 1000) {
       throw serverError(422, 'validation_error');
     }
+    if (since > head) {
+      // Курсор клиента опережает сервер: сервер восстановлен из старой
+      // копии (spec 3.6, 3.10). Курсор устройства не сохраняется.
+      throw serverError(410, 'resync_required', {
+        'purge_watermark': purgeWatermark,
+        'head_version': head,
+        'reason': 'cursor_ahead',
+      });
+    }
     if (since > 0 && since < purgeWatermark) {
       throw serverError(410, 'resync_required', {
         'purge_watermark': purgeWatermark,
+        'head_version': head,
+        'reason': 'purged',
       });
     }
     final all = _rows.values.where((r) => r.version > since).toList()
@@ -309,6 +324,10 @@ class FakeSyncServer {
     final fields = rawFields is Map
         ? rawFields.cast<String, Object?>()
         : <String, Object?>{};
+    if (failOpRowIds.contains(id)) {
+      // Страховочный код (spec 3.3): операцию не удалось применить.
+      return _remember(_rejected(opId, 'op_failed', 'internal failure'));
+    }
     processedOps++;
     processedBodies[opId] = deepCopy(op);
     final result = type == OpType.delete
@@ -630,7 +649,9 @@ class FakeSyncServer {
     );
     var conflictCount = 0;
     final device = hlcDevice(hlc);
-    final iso = msIso(hlcMs(hlc));
+    // Срок корзины — от получения сервером (spec 3.8): deleted_at = большее
+    // из времени HLC и времени приёма.
+    final iso = msIso(max(hlcMs(hlc), nowMs()));
     switch (decision) {
       case 'delete' || 'delete_edit_conflict':
         if (decision == 'delete_edit_conflict') {

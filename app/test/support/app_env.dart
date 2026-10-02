@@ -6,9 +6,9 @@ import 'package:my_tasker/core/auth/token_store.dart';
 import 'package:my_tasker/core/config/app_config.dart';
 import 'package:my_tasker/core/config/clock.dart';
 import 'package:my_tasker/core/db/database_providers.dart';
+import 'package:my_tasker/core/network/api_client.dart';
 import 'package:my_tasker/core/network/api_providers.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
-import 'package:my_tasker/features/settings/application/server_connection_controller.dart';
 import 'package:my_tasker/features/settings/data/server_connection_repository.dart';
 
 import 'fake_server/fake_backend.dart';
@@ -65,8 +65,10 @@ class AppEnv {
       await container
           .read(serverConnectionRepositoryProvider)
           .save(const ServerConnectionSettings(url: url));
-      container.invalidate(serverConnectionSettingsProvider);
-      await container.read(serverConnectionSettingsProvider.future);
+      // Настройки в БД, но провайдер НЕ прогрет: как при холодном старте
+      // (и в изоляте WorkManager). Раньше здесь ждали
+      // `serverConnectionSettingsProvider.future`, и тесты не видели, что
+      // клиент API на первом чтении равен `null`. Нужен клиент — `apiClient()`.
     }
     if (signedIn) await env.login();
     await container.read(authControllerProvider.notifier).ready;
@@ -78,6 +80,13 @@ class AppEnv {
   final FakeSyncServer server;
   final MemoryTokenStore tokens;
   final ManualClock clock;
+
+  /// Клиент API так, как его получает код приложения (после загрузки
+  /// настроек сервера).
+  Future<ApiClient> apiClient() async {
+    final client = await container.read(apiClientResolverProvider)();
+    return client!;
+  }
 
   AuthController get auth => container.read(authControllerProvider.notifier);
   AuthState get authState => container.read(authControllerProvider);

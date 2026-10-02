@@ -1,4 +1,6 @@
 import 'package:my_tasker/core/sync/sync_table.dart';
+import 'package:my_tasker/features/calendar/data/calendar_sync_specs.dart';
+import 'package:my_tasker/features/tasks/data/task_sync_specs.dart';
 
 /// Настройки «ключ -> значение», общие для устройств (spec 4.1).
 ///
@@ -13,9 +15,34 @@ const SyncTableSpec userSettingsSpec = SyncTableSpec(
   titleOf: _settingTitle,
 );
 
-String _settingTitle(Map<String, Object?> row) => '${row['key']}';
+/// Понятные названия известных настроек для корзины; неизвестный ключ
+/// показывается как есть.
+const Map<String, String> settingLabels = {
+  'calendar.week_cycle': 'Чередование недель',
+  'ui.theme': 'Тема оформления',
+};
+
+String _settingTitle(Map<String, Object?> row) {
+  final key = '${row['key']}';
+  return settingLabels[key] ?? key;
+}
 
 /// Все синхронизируемые таблицы приложения. Модуль, которому нужна
 /// синхронизация, добавляет сюда своё описание (и таблицу Drift в
 /// `AppDatabase`, и шаг миграции).
-const List<SyncTableSpec> registeredSyncTables = [userSettingsSpec];
+///
+/// Этап 2 (календарь и задачи): порядок — родители вперёд
+/// (`backend/src/tasker/calendar/tables.py`, `CALENDAR_TABLES`).
+const List<SyncTableSpec> registeredSyncTables = [
+  userSettingsSpec,
+  calendarsSpec,
+  eventsSpec,
+  eventOverridesSpec,
+  projectsSpec,
+  peopleSpec,
+  tagsSpec,
+  tasksSpec,
+  subtasksSpec,
+  taskTagsSpec,
+  taskCompletionsSpec,
+];

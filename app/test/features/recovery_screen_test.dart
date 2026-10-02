@@ -64,7 +64,19 @@ void main() {
       expect(find.text('Не удалось открыть локальные данные'), findsOneWidget);
       expect(find.byKey(const Key('recovery-warning')), findsOneWidget);
       expect(
-        find.textContaining('не успели отправиться на сервер'),
+        find.textContaining('Изменения, которые не успели отправиться'),
+        findsOneWidget,
+      );
+      // Сначала безобидное «Повторить», потом объяснение и сброс.
+      final retryY = tester.getTopLeft(find.byKey(const Key('recovery-retry')));
+      final warnY = tester.getTopLeft(
+        find.byKey(const Key('recovery-warning')),
+      );
+      final resetY = tester.getTopLeft(find.byKey(const Key('recovery-reset')));
+      expect(retryY.dy, lessThan(warnY.dy));
+      expect(warnY.dy, lessThan(resetY.dy));
+      expect(
+        find.textContaining('удалит базу на этом устройстве'),
         findsOneWidget,
       );
       expect(
@@ -139,7 +151,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(opener.opens, greaterThanOrEqualTo(2));
       expect(find.byKey(const Key('recovery')), findsNothing);
-      expect(find.text('Здесь будет «Сегодня»'), findsOneWidget);
+      expect(find.byKey(const Key('today-tasks')), findsOneWidget);
     });
 
     testWidgets('десктоп', (tester) async {

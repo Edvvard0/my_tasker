@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:my_tasker/core/network/api_client.dart';
@@ -89,20 +90,28 @@ class SseSignal {
 }
 
 /// Клиент `GET /events` (spec 6): долгоживущее соединение с
-/// переподключением (backoff 1 -> 60 с) и сторожем тишины (60 с без
-/// единого байта — соединение считается мёртвым).
+/// переподключением (backoff 1 -> 60 с с разбросом [jitter], чтобы
+/// устройства не подключались одновременно после падения сервера) и сторожем
+/// тишины (60 с без единого байта — соединение считается мёртвым).
 class SseClient {
   SseClient({
     required this._connect,
     this.heartbeatTimeout = const Duration(seconds: 60),
     this.minBackoff = const Duration(seconds: 1),
     this.maxBackoff = const Duration(seconds: 60),
-  });
+    this.jitter = 0.3,
+    Random? random,
+  }) : _random = random ?? Random();
 
   final Future<Stream<List<int>>> Function() _connect;
   final Duration heartbeatTimeout;
   final Duration minBackoff;
   final Duration maxBackoff;
+
+  /// Доля backoff, на которую ожидание случайно сокращается (0 — без
+  /// разброса): реальная пауза лежит в `[backoff * (1 - jitter), backoff]`.
+  final double jitter;
+  final Random _random;
 
   final StreamController<SseSignal> _signals =
       StreamController<SseSignal>.broadcast();
@@ -110,6 +119,7 @@ class SseClient {
   StreamSubscription<SseEvent>? _subscription;
   bool _connected = false;
   Future<void>? _loop;
+  Completer<void>? _wake;
 
   Stream<SseSignal> get signals => _signals.stream;
 
@@ -126,6 +136,17 @@ class SseClient {
       if (identical(_stopped, stopped)) _stopped = null;
     });
   }
+
+  /// Сеть появилась: не ждать остатка backoff, подключаться сейчас и
+  /// начать отсчёт backoff заново.
+  void nudge() {
+    final wake = _wake;
+    if (wake == null || wake.isCompleted) return; // соединение и так живо
+    _resetBackoff = true;
+    wake.complete();
+  }
+
+  bool _resetBackoff = false;
 
   /// Останавливает цикл и закрывает соединение.
   Future<void> stop() async {
@@ -146,7 +167,12 @@ class SseClient {
       var receivedHello = false;
       try {
         final bytes = await _connect();
-        if (stopped.isCompleted) return;
+        if (stopped.isCompleted) {
+          // Остановили, пока шло подключение: без подписки и отмены ответ
+          // остался бы открытым соединением.
+          unawaited(bytes.listen((_) {}, onError: (Object _) {}).cancel());
+          return;
+        }
         _connected = true;
         final ended = Completer<void>();
         // Сторож тишины: любой байт (в том числе `ping`) перезапускает его.
@@ -197,7 +223,19 @@ class SseClient {
       _connected = false;
       if (stopped.isCompleted) return;
       if (receivedHello) backoff = minBackoff;
-      await Future.any<void>([Future<void>.delayed(backoff), stopped.future]);
+      final wake = _wake = Completer<void>();
+      final pause = backoff * (1 - jitter * _random.nextDouble());
+      await Future.any<void>([
+        Future<void>.delayed(pause),
+        stopped.future,
+        wake.future,
+      ]);
+      _wake = null;
+      if (_resetBackoff) {
+        _resetBackoff = false;
+        backoff = minBackoff;
+        continue;
+      }
       final doubled = backoff * 2;
       backoff = doubled > maxBackoff ? maxBackoff : doubled;
     }

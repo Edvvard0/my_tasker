@@ -24,6 +24,16 @@ abstract final class SyncMetaKeys {
   static const needsResync = 'needs_resync';
   static const knownTables = 'known_tables';
   static const serverEpoch = 'server_epoch';
+
+  /// Сколько строк pull пропущено из-за неразборчивой метки `updated_at`.
+  static const skippedRows = 'skipped_rows';
+
+  /// Последняя пропущенная строка (`таблица/id`) — для диагностики.
+  static const lastSkippedRow = 'last_skipped_row';
+
+  /// Время (мс Unix) последнего «пульса» интерфейса: пока он свежий,
+  /// фоновая задача WorkManager не запускает цикл (см. [SyncStore.markForeground]).
+  static const foregroundHeartbeatMs = 'foreground_heartbeat_ms';
 }
 
 /// Хранилище синхронизации поверх локальной БД: строки синхронизируемых
@@ -109,6 +119,38 @@ class SyncStore {
   Future<void> markPull() => writeMeta(SyncMetaKeys.lastPullMs, '${nowMs()}');
   Future<void> markSuccess() =>
       writeMeta(SyncMetaKeys.lastSuccessMs, '${nowMs()}');
+
+  // ---- интерфейс на переднем плане (два изолята) ---------------------------
+
+  /// Пульс интерфейса действителен столько, потом считается устаревшим
+  /// (приложение убито без снятия отметки).
+  static const Duration foregroundTtl = Duration(seconds: 90);
+
+  /// Отмечает, что приложение на переднем плане. Интерфейс вызывает это при
+  /// возврате в приложение и каждые ~30 с; фоновый изолят WorkManager
+  /// читает ту же БД ([isForegroundActive]) и пропускает свой цикл — иначе
+  /// два изолята гнали бы синхронизацию и refresh параллельно.
+  Future<void> markForeground() =>
+      writeMeta(SyncMetaKeys.foregroundHeartbeatMs, '${nowMs()}');
+
+  /// Приложение ушло в фон: снимает отметку.
+  Future<void> clearForeground() =>
+      writeMeta(SyncMetaKeys.foregroundHeartbeatMs, null);
+
+  /// Есть ли свежая отметка «интерфейс на переднем плане».
+  Future<bool> isForegroundActive() async {
+    final ms = await _metaInt(SyncMetaKeys.foregroundHeartbeatMs);
+    if (ms == null) return false;
+    final age = nowMs() - ms;
+    return age >= 0 && age < foregroundTtl.inMilliseconds;
+  }
+
+  /// Сколько строк pull пропущено как неразборчивые (`updated_at`).
+  Future<int> skippedRowCount() async =>
+      (await _metaInt(SyncMetaKeys.skippedRows)) ?? 0;
+
+  /// Последняя пропущенная строка (`таблица/id`) или `null`.
+  Future<String?> lastSkippedRow() => readMeta(SyncMetaKeys.lastSkippedRow);
 
   /// Эпоха сервера, с которой клиент синхронизировался в последний раз.
   Future<String?> serverEpoch() => readMeta(SyncMetaKeys.serverEpoch);
@@ -658,11 +700,30 @@ class SyncStore {
       await (db.delete(db.syncOutbox)..where((t) => t.opId.equals(opId))).go();
       final row = await getRow(op.table, op.rowId);
       if (row == null && op.type == OpType.delete) return true;
+      // Более новые неотправленные правки той же строки главнее отклонённой:
+      // свежий HLC повтора иначе затёр бы их значения.
+      final newer = [
+        for (final o in await _rowOps(op.table, op.rowId))
+          if (o.seq > op.seq && o.state != OpState.rejected) o,
+      ];
+      var fields = op.fields;
+      if (newer.isNotEmpty) {
+        if (op.type == OpType.delete ||
+            newer.any((o) => o.type == OpType.delete)) {
+          return true; // новее уже есть решение по строке
+        }
+        final covered = {for (final o in newer) ...?o.fields?.keys};
+        fields = {
+          for (final e in (op.fields ?? const <String, Object?>{}).entries)
+            if (!covered.contains(e.key)) e.key: e.value,
+        };
+        if (fields.isEmpty) return true;
+      }
       await _emit(
         table: op.table,
         rowId: op.rowId,
         type: op.type,
-        fields: op.fields,
+        fields: fields,
         baseVersion: (row?['server_version'] as int?) ?? 0,
         hlc: await _stamp(),
       );
@@ -690,9 +751,11 @@ class SyncStore {
   // ---- применение данных сервера ---------------------------------------------
 
   Future<Map<(String, String), List<Json>>> _liveOps() async {
-    final rows = await (db.select(
-      db.syncOutbox,
-    )..where((t) => t.state.isNotValue(OpState.rejected))).get();
+    final rows =
+        await (db.select(db.syncOutbox)
+              ..where((t) => t.state.isNotValue(OpState.rejected))
+              ..orderBy([(t) => OrderingTerm.asc(t.seq)]))
+            .get();
     final map = <(String, String), List<Json>>{};
     for (final e in rows) {
       map.putIfAbsent((e.targetTable, e.rowId), () => []).add(_op(e).toLogic());
@@ -711,7 +774,15 @@ class SyncStore {
       if (spec == null) continue; // таблица новее клиента
       final serverRow = deepCopy(change.row);
       final updatedAt = serverRow['updated_at'];
-      if (updatedAt is String) clock.receive(updatedAt, nowMs());
+      // Неразборчивая метка не должна ронять всю страницу: строку
+      // пропускаем и записываем (курсор всё равно сдвинется).
+      try {
+        if (updatedAt is! String) throw const FormatException('updated_at');
+        clock.receive(updatedAt, nowMs());
+      } on FormatException {
+        await _recordSkipped(change);
+        continue;
+      }
       final rowOps = ops[(change.table, change.id)];
       final row = rowOps == null ? serverRow : rebaseRow(serverRow, rowOps);
       row['id'] = change.id;
@@ -719,6 +790,14 @@ class SyncStore {
       applied++;
     }
     return applied;
+  }
+
+  Future<void> _recordSkipped(SyncChange change) async {
+    await writeMeta(SyncMetaKeys.skippedRows, '${await skippedRowCount() + 1}');
+    await writeMeta(
+      SyncMetaKeys.lastSkippedRow,
+      '${change.table}/${change.id}',
+    );
   }
 
   /// Применяет страницу pull одной транзакцией: строки (с rebase
@@ -756,12 +835,48 @@ class SyncStore {
       );
     }
     final clock = HlcClock(await deviceId(), await _loadHlc());
-    await _applyChanges(staged, clock, await _liveOps());
+    final ops = await _liveOps();
+    await _applyChanges(staged, clock, ops);
+    await _rematerialiseCreates(staged, ops);
     await _saveHlc(clock.state);
     await writeMeta(SyncMetaKeys.cursor, '$cursorValue');
     if (epoch != null) await setServerEpoch(epoch);
     await setNeedsResync(value: false);
   });
+
+  /// После полной пересинхронизации возвращает строки, которые существуют
+  /// только благодаря неотправленным созданиям (`base_version = 0`) и
+  /// которых нет среди серверных: без них операция осталась бы в outbox, а
+  /// строка исчезла бы с экрана до её подтверждения. Правки строк, которых
+  /// нет на сервере и чьё создание уже подтверждено, не воскрешаются.
+  Future<void> _rematerialiseCreates(
+    List<SyncChange> staged,
+    Map<(String, String), List<Json>> ops,
+  ) async {
+    final onServer = {for (final c in staged) (c.table, c.id)};
+    final device = await deviceId();
+    for (final entry in ops.entries) {
+      if (onServer.contains(entry.key)) continue;
+      final spec = registry.maybeSpec(entry.key.$1);
+      final first = entry.value.first;
+      if (spec == null ||
+          first['type'] != OpType.upsert ||
+          first['base_version'] != 0) {
+        continue;
+      }
+      final fields = first['fields']! as Map<String, Object?>;
+      final hlc = first['hlc']! as String;
+      final base = <String, Object?>{
+        'id': entry.key.$2,
+        'created_at': fields['created_at'] ?? msIso(hlcMs(hlc)),
+        'updated_at': hlc,
+        'deleted_at': null,
+        'server_version': 0,
+        'origin_device_id': device,
+      };
+      await _writeRow(spec, applyOpsToRow(base, entry.value));
+    }
+  }
 
   /// Удаляет локальные надгробия старше [SyncLimits.trashDays], по которым
   /// нет неотправленных операций (spec 3.8). Возвращает число строк.
@@ -854,9 +969,27 @@ class SyncStore {
 
   /// Корзина: удалённые не более [SyncLimits.trashDays] суток назад строки
   /// зарегистрированных таблиц без удалённого родителя (spec 3.8).
+  ///
+  /// Срок считается от получения удаления сервером, поэтому строка с ещё
+  /// не отправленным удалением остаётся в корзине при любом локальном
+  /// возрасте (с полным сроком), а не пропадает раньше, чем дойдёт до
+  /// сервера. Запросов по числу строк нет: удалённые родители и очередь
+  /// читаются по одному запросу на таблицу.
   Future<List<TrashItem>> trashItems() async {
     final now = DateTime.fromMillisecondsSinceEpoch(nowMs(), isUtc: true);
     const keep = Duration(days: SyncLimits.trashDays);
+    final unsentDeletes = await _unsentDeletes();
+    final deletedIds = <String, Set<String>>{};
+    Future<Set<String>> deletedOf(String table) async => deletedIds[table] ??= {
+      for (final r
+          in await db
+              .customSelect(
+                'SELECT id FROM "$table" WHERE deleted_at IS NOT NULL',
+                readsFrom: _tables(table),
+              )
+              .get())
+        r.data['id']! as String,
+    };
     final items = <TrashItem>[];
     for (final spec in registry.specs) {
       final rows = await db
@@ -867,19 +1000,31 @@ class SyncStore {
           .get();
       for (final data in rows) {
         final row = spec.rowFromDb(data.data);
+        final id = row['id']! as String;
         final deletedAt = DateTime.tryParse(row['deleted_at']! as String);
         if (deletedAt == null) continue;
-        final left = deletedAt.add(keep).difference(now);
+        var left = deletedAt.add(keep).difference(now);
+        if (unsentDeletes.contains((spec.name, id))) left = keep;
         if (left <= Duration.zero) continue;
-        if (await _hasDeletedParent(spec, row)) continue;
+        var parentDeleted = false;
+        for (final relation in spec.parents) {
+          final parentId = row[relation.column];
+          if (parentId is String &&
+              (await deletedOf(relation.parentTable)).contains(parentId)) {
+            parentDeleted = true;
+            break;
+          }
+        }
+        if (parentDeleted) continue;
         items.add(
           TrashItem(
             table: spec.name,
             label: spec.label,
-            id: row['id']! as String,
+            id: id,
             title: spec.titleOf(row),
             deletedAt: deletedAt.toUtc(),
-            daysLeft: left.inDays,
+            daysLeft: (left.inMilliseconds / Duration.millisecondsPerDay)
+                .ceil(),
           ),
         );
       }
@@ -888,14 +1033,16 @@ class SyncStore {
     return items;
   }
 
-  Future<bool> _hasDeletedParent(SyncTableSpec spec, Json row) async {
-    for (final relation in spec.parents) {
-      final parentId = row[relation.column];
-      if (parentId is! String) continue;
-      final parent = await getRow(relation.parentTable, parentId);
-      if (parent != null && parent['deleted_at'] != null) return true;
-    }
-    return false;
+  /// Строки с неотправленной операцией `delete` (не отклонённой).
+  Future<Set<(String, String)>> _unsentDeletes() async {
+    final rows =
+        await (db.select(db.syncOutbox)..where(
+              (t) =>
+                  t.opType.equals(OpType.delete) &
+                  t.state.isNotValue(OpState.rejected),
+            ))
+            .get();
+    return {for (final r in rows) (r.targetTable, r.rowId)};
   }
 
   /// Корзина в реальном времени: пересчитывается при любом изменении

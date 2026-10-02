@@ -7,6 +7,7 @@ import 'package:my_tasker/core/db/database_bootstrap.dart';
 import 'package:my_tasker/core/layout/window_class.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
+import 'package:my_tasker/features/calendar/reminders/reminder_service.dart';
 import 'package:my_tasker/features/recovery/presentation/recovery_screen.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 import 'package:my_tasker/features/shell/splash_screen.dart';
@@ -23,7 +24,12 @@ class MyTaskerApp extends ConsumerWidget {
     final boot = ref.watch(databaseBootstrapProvider);
     final ok = boot.value?.isOk ?? false;
     // Синхронизация стартует сама после входа; без рабочей БД не трогаем её.
-    if (ok) ref.watch(syncLifecycleProvider);
+    if (ok) {
+      ref
+        ..watch(syncLifecycleProvider)
+        // Локальные напоминания (Этап 2): следят за данными календаря.
+        ..watch(reminderLifecycleProvider);
+    }
     final auth = ok ? ref.watch(authControllerProvider) : const AuthUnknown();
     return MaterialApp.router(
       title: 'My Tasker',

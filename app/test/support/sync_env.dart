@@ -59,8 +59,21 @@ const String _service =
 /// Создаёт таблицы реестра, которых нет в схеме `AppDatabase`
 /// (всё, кроме `user_settings`), по описаниям колонок.
 Future<void> createTestTables(AppDatabase db, SyncRegistry registry) async {
+  final real = {for (final t in db.allTables) t.actualTableName: t};
   for (final spec in registry.specs) {
     if (spec.name == 'user_settings') continue;
+    // Этап 2: настоящие таблицы (`tasks`, `projects`...) уже есть в схеме.
+    // Совпадают по колонкам — используем их; иначе (тестовые `tasks` и
+    // `projects` Этапа 1 с другими колонками) заменяем тестовой таблицей.
+    final existing = real[spec.name];
+    if (existing != null) {
+      final columns = {for (final c in existing.$columns) c.name};
+      final wanted = {...syncServiceColumns, ...spec.columnNames};
+      if (columns.length == wanted.length && columns.containsAll(wanted)) {
+        continue;
+      }
+      await db.customStatement('DROP TABLE ${spec.name}');
+    }
     final columns = [
       for (final c in spec.columns)
         '${c.name} ${switch (c.type) {

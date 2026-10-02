@@ -133,6 +133,7 @@ class SyncEngine {
     this.pushBatchSize = SyncLimits.pushBatchMax,
     this.pullPageSize = SyncLimits.pullPageMax,
     this.maxRounds = 10,
+    this.maxResyncAttempts = 5,
     this.defaultPause = const Duration(seconds: 60),
   }) : assert(
          pushBatchSize > 0 && pushBatchSize <= SyncLimits.pushBatchMax,
@@ -155,6 +156,10 @@ class SyncEngine {
   /// Предел повторов «push -> pull», пока в очереди появляются новые
   /// операции (правки во время цикла).
   final int maxRounds;
+
+  /// Сколько раз подряд начинать полную пересинхронизацию заново, если
+  /// эпоха сервера меняется во время загрузки.
+  final int maxResyncAttempts;
 
   /// Пауза после `429` без `Retry-After`.
   final Duration defaultPause;
@@ -383,29 +388,50 @@ class SyncEngine {
       await store.observeEpoch(epoch) == EpochAction.fullResync;
 
   /// Тянет все страницы с `since = 0` в память, затем одной транзакцией
-  /// заменяет локальные строки (spec 5.3).
+  /// заменяет локальные строки (spec 5.3). Если эпоха сервера сменилась
+  /// посреди загрузки (сервер восстановили, пока мы качали), страницы
+  /// разных «историй» смешивать нельзя: загрузка начинается заново
+  /// (spec 3.10), не более [maxResyncAttempts] раз подряд.
   Future<void> _resync() async {
     _set(_state.copyWith(phase: SyncPhase.resyncing, pulledRows: 0));
-    final staged = <SyncChange>[];
-    var since = 0;
-    String? epoch;
-    while (true) {
-      final page = await remote.pull(since: since, limit: pullPageSize);
-      epoch = page.serverEpoch ?? epoch;
-      staged.addAll(page.changes);
-      _set(_state.copyWith(pulledRows: staged.length));
-      if (!page.hasMore) {
+    for (var attempt = 0; attempt < maxResyncAttempts; attempt++) {
+      final staged = <SyncChange>[];
+      var since = 0;
+      String? epoch;
+      var restart = false;
+      while (true) {
+        final page = await remote.pull(since: since, limit: pullPageSize);
+        final pageEpoch = page.serverEpoch;
+        if (epoch == null) {
+          epoch = pageEpoch;
+        } else if (pageEpoch != null && pageEpoch != epoch) {
+          restart = true;
+          break;
+        }
+        staged.addAll(page.changes);
+        _set(_state.copyWith(pulledRows: staged.length));
+        if (!page.hasMore) {
+          since = page.nextSince;
+          break;
+        }
+        if (page.nextSince <= since) {
+          throw const ApiException(kind: ApiErrorKind.malformed);
+        }
         since = page.nextSince;
-        break;
       }
-      if (page.nextSince <= since) {
-        throw const ApiException(kind: ApiErrorKind.malformed);
+      if (restart) {
+        _set(_state.copyWith(pulledRows: 0));
+        continue;
       }
-      since = page.nextSince;
+      await store.replaceAll(staged, since, epoch: epoch);
+      await store.markPull();
+      _set(_state.copyWith(phase: SyncPhase.syncing, lastPullAt: _clock()));
+      return;
     }
-    await store.replaceAll(staged, since, epoch: epoch);
-    await store.markPull();
-    _set(_state.copyWith(phase: SyncPhase.syncing, lastPullAt: _clock()));
+    // Эпоха меняется быстрее, чем удаётся скачать данные: цикл неудачный,
+    // флаг полной пересинхронизации остаётся до следующей попытки.
+    await store.setNeedsResync(value: true);
+    throw const ApiException(kind: ApiErrorKind.malformed);
   }
 
   /// Освобождает ресурсы.

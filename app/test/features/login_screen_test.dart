@@ -166,7 +166,7 @@ void main() {
       await tester.tap(_submit);
       await tester.pumpAndSettle();
       expect(container.read(authControllerProvider), isA<SignedIn>());
-      expect(find.text('Здесь будет «Сегодня»'), findsOneWidget);
+      expect(find.byKey(const Key('today-tasks')), findsOneWidget);
       expect(backend.deviceIds, hasLength(1));
     });
 
@@ -232,7 +232,7 @@ void main() {
       await fill(tester);
       await tester.tap(_submit);
       await tester.pumpAndSettle();
-      expect(find.text('Здесь будет «Сегодня»'), findsOneWidget);
+      expect(find.byKey(const Key('today-tasks')), findsOneWidget);
     });
 
     testWidgets('приложение устарело: 426', (tester) async {
@@ -260,7 +260,7 @@ void main() {
         backend: backend,
         serverUrl: _url,
       );
-      expect(find.text('Здесь будет «Сегодня»'), findsOneWidget);
+      expect(find.byKey(const Key('today-tasks')), findsOneWidget);
       await container
           .read(authControllerProvider.notifier)
           .onDeviceRevoked('device_revoked');
@@ -344,6 +344,65 @@ void main() {
         contains('1 секунду'),
       );
     });
+
+    test(
+      'L10: owner_secret_unreadable и HTTP-статусы — человеческий текст',
+      () {
+        String t(ApiException e) => loginErrorText(e);
+        final secret = t(
+          const ApiException(
+            kind: ApiErrorKind.http,
+            status: 409,
+            code: 'owner_secret_unreadable',
+          ),
+        );
+        expect(secret, contains('user reset'));
+        expect(secret, contains('Повторять вход не нужно'));
+        expect(
+          t(
+            const ApiException(
+              kind: ApiErrorKind.http,
+              status: 401,
+              code: 'invalid_credentials',
+            ),
+          ),
+          'Неверный пароль или код. Проверь оба поля.',
+        );
+        expect(
+          t(const ApiException(kind: ApiErrorKind.http, status: 404)),
+          contains('адрес сервера'),
+        );
+        expect(
+          t(const ApiException(kind: ApiErrorKind.http, status: 403)),
+          contains('Доступ запрещён'),
+        );
+        expect(
+          t(const ApiException(kind: ApiErrorKind.http, status: 401)),
+          contains('Неверный пароль'),
+        );
+        expect(
+          t(const ApiException(kind: ApiErrorKind.http, status: 429)),
+          contains('Слишком много запросов'),
+        );
+        expect(
+          t(
+            const ApiException(
+              kind: ApiErrorKind.http,
+              status: 401,
+              code: 'device_revoked',
+            ),
+          ),
+          contains('Сессия завершена'),
+        );
+        // Сырых кодов в человеческом тексте нет.
+        for (final code in ['invalid_credentials', 'owner_secret_unreadable']) {
+          expect(
+            t(ApiException(kind: ApiErrorKind.http, status: 409, code: code)),
+            isNot(contains(code)),
+          );
+        }
+      },
+    );
 
     test('DeviceInfoSource.system заполнен', () {
       final info = DeviceInfoSource.system();

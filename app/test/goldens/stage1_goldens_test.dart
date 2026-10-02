@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/core/auth/auth_models.dart';
 import 'package:my_tasker/core/auth/device_info_source.dart';
+import 'package:my_tasker/core/format/ru_format.dart' show debugUtcOffset;
 import 'package:my_tasker/core/network/api_client.dart';
 import 'package:my_tasker/core/sync/ids.dart';
 import 'package:my_tasker/core/sync/outbox_logic.dart';
+import 'package:my_tasker/core/sync/registered_tables.dart' show settingLabels;
 import 'package:my_tasker/core/sync/sync_models.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/core/sync/sync_remote.dart';
@@ -123,6 +125,10 @@ void main() {
   late FakeBackend backend;
 
   setUp(() {
+    // Подписи времени («сегодня в 14:02») считаются в UTC, а не в поясе
+    // машины: эталоны не зависят от TZ.
+    debugUtcOffset = Duration.zero;
+    addTearDown(() => debugUtcOffset = null);
     clock = ManualClock();
     server = FakeSyncServer(registry: testRegistry(), nowMs: clock.call);
     backend = FakeBackend(server: server, now: () => clock.now);
@@ -259,7 +265,7 @@ void main() {
             message: 'value',
           ),
         ]);
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await pumpEventQueue();
       });
       await tester.pumpAndSettle();
     }
@@ -275,10 +281,14 @@ void main() {
     });
 
     testWidgets('телефон: сводка по тапу на индикатор', (tester) async {
+      // Сервер настроен (иначе «Не настроен» в списке противоречит тому,
+      // что синхронизация уже шла 20 минут назад и накопила очередь).
       await pumpApp(
         tester,
         location: '/settings',
         now: _now,
+        backend: backend,
+        serverUrl: 'http://localhost:8000',
         overrides: [
           syncStatusProvider.overrideWith(
             () => FixedStatus(
@@ -300,7 +310,7 @@ void main() {
   group('корзина', () {
     final trash = trashProvider.overrideWith(
       (ref) => Stream.value([
-        _trash('ui.theme', 27, 3),
+        _trash(settingLabels['ui.theme']!, 27, 3),
         _trash('sync.interval_minutes', 12, 18),
         _trash('a.b', 1, 29),
       ]),

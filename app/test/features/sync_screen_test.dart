@@ -9,6 +9,7 @@ import 'package:my_tasker/core/sync/sync_models.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 import 'package:my_tasker/features/sync/sync_providers_ui.dart';
+import 'package:my_tasker/features/sync/sync_texts.dart';
 
 import '../support/fake_server/fake_backend.dart';
 import '../support/fake_server/fake_sync_server.dart';
@@ -108,6 +109,10 @@ void main() {
       await _open(tester, statusOf(SyncIndicatorKind.error, rejected: 1));
       expect(find.text('НЕ СИНХРОНИЗИРОВАНО'), findsOneWidget);
       expect(find.textContaining('Сервер ответил ошибкой'), findsOneWidget);
+      // Технический код спрятан за «Подробнее».
+      expect(find.text('http 503 unavailable'), findsNothing);
+      await tester.tap(find.byKey(const Key('details-toggle')));
+      await tester.pump();
       expect(find.text('http 503 unavailable'), findsOneWidget);
     });
 
@@ -200,21 +205,31 @@ void main() {
             code: 'unknown_table',
           ),
         ]);
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await pumpEventQueue();
       });
       await tester.pumpAndSettle();
       expect(find.text('Не принято сервером'), findsWidgets);
       expect(find.text('Правка · Настройка'), findsNWidgets(2));
       expect(find.text('Сервер не принял значение поля.'), findsOneWidget);
+      expect(find.text('invalid_field · value'), findsNothing);
+      await tester.ensureVisible(
+        find.byKey(
+          Key('details-${(await tester.runAsync(store.outbox))!.first.opId}'),
+        ),
+      );
+      await tester.tap(
+        find.byKey(
+          Key('details-${(await tester.runAsync(store.outbox))!.first.opId}'),
+        ),
+      );
+      await tester.pump();
       expect(find.text('invalid_field · value'), findsOneWidget);
       final ops = await tester.runAsync(store.outbox);
       final first = ops!.first;
 
       await tester.ensureVisible(find.byKey(Key('retry-${first.opId}')));
       await tester.tap(find.byKey(Key('retry-${first.opId}')));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)),
-      );
+      await flushEvents(tester);
       await tester.pumpAndSettle();
       final afterRetry = await tester.runAsync(store.outbox);
       expect(afterRetry!.where((o) => o.state == 'rejected'), hasLength(1));
@@ -226,9 +241,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Отбросить изменение?'), findsOneWidget);
       await tester.tap(find.byKey(const Key('confirm-ok')));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)),
-      );
+      await flushEvents(tester);
       await tester.pumpAndSettle();
       final afterDiscard = await tester.runAsync(store.outbox);
       expect(afterDiscard!.where((o) => o.state == 'rejected'), isEmpty);
@@ -280,9 +293,7 @@ void main() {
       await tester.tap(find.byKey(const Key('full-resync-button')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('confirm-ok')));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 200)),
-      );
+      await flushEvents(tester);
       await tester.pumpAndSettle();
       expect(find.text('Данные загружены заново'), findsOneWidget);
       expect(backend.requests, contains('GET /sync/pull'));
@@ -315,14 +326,123 @@ void main() {
       await tester.tap(find.byKey(const Key('full-resync-button')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('confirm-ok')));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 200)),
-      );
+      await flushEvents(tester);
       await tester.pumpAndSettle();
       expect(
         find.textContaining('Не удалось пересинхронизировать'),
         findsOneWidget,
       );
     });
+  });
+
+  group('L1: низ экрана над плавающим таб-баром', () {
+    testWidgets('прокрутка до конца: последняя кнопка выше таб-бара', (
+      tester,
+    ) async {
+      // Невысокий телефон: содержимое точно длиннее окна, нужна прокрутка.
+      await _open(
+        tester,
+        statusOf(SyncIndicatorKind.error, unsent: 3, rejected: 1),
+        size: const Size(390, 520),
+      );
+      final scroll = find.byType(SingleChildScrollView).first;
+      final position = tester.state<ScrollableState>(
+        find.descendant(of: scroll, matching: find.byType(Scrollable)),
+      );
+      expect(position.position.maxScrollExtent, greaterThan(0));
+      await tester.drag(scroll, const Offset(0, -3000));
+      await tester.pumpAndSettle();
+      expect(position.position.pixels, position.position.maxScrollExtent);
+
+      final barTop = tester
+          .getTopLeft(find.byKey(const Key('floating-tab-bar')))
+          .dy;
+      final lastButton = find.byKey(const Key('open-conflicts'));
+      expect(lastButton, findsOneWidget);
+      expect(
+        tester.getBottomLeft(lastButton).dy,
+        lessThanOrEqualTo(barTop),
+        reason: 'последняя кнопка не должна прятаться за таб-баром',
+      );
+      // и кнопка по-прежнему нажимается (не перекрыта)
+      await tester.tap(lastButton);
+      await tester.pumpAndSettle();
+      expect(find.text('Журнал конфликтов'), findsWidgets);
+    });
+
+    testWidgets('содержимое любого экрана настроек заканчивается над '
+        'таб-баром', (tester) async {
+      for (final path in [
+        '/settings/sync',
+        '/settings/trash',
+        '/settings/devices',
+        '/settings/server',
+        '/settings',
+      ]) {
+        await _open(
+          tester,
+          statusOf(SyncIndicatorKind.synced),
+          size: const Size(390, 520),
+        );
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(MaterialApp)),
+        );
+        container.read(routerProvider).go(path);
+        await tester.pumpAndSettle();
+        final scroll = find.byType(SingleChildScrollView);
+        if (scroll.evaluate().isEmpty) {
+          // экран со своим списком: тогда он сам обязан учитывать нижний отступ
+          final barTop = tester
+              .getTopLeft(find.byKey(const Key('floating-tab-bar')))
+              .dy;
+          final listPadding = tester
+              .widget<ListView>(find.byType(ListView).first)
+              .padding;
+          expect(
+            listPadding!.resolve(TextDirection.ltr).bottom,
+            greaterThan(0),
+            reason: '$path: у списка нет нижнего отступа под таб-бар ($barTop)',
+          );
+          continue;
+        }
+        await tester.drag(scroll.first, const Offset(0, -3000));
+        await tester.pumpAndSettle();
+        final barTop = tester
+            .getTopLeft(find.byKey(const Key('floating-tab-bar')))
+            .dy;
+        // Первый Column внутри прокрутки — колонка содержимого экрана
+        // (сам Padding прокрутки включает нижний отступ и в счёт не идёт).
+        final content = find
+            .descendant(of: scroll.first, matching: find.byType(Column))
+            .first;
+        expect(
+          tester.getBottomLeft(content).dy,
+          lessThanOrEqualTo(barTop),
+          reason: path,
+        );
+      }
+    });
+  });
+
+  test('L10: коды отклонения — человеческий текст, включая op_failed', () {
+    expect(rejectCodeText('op_failed'), contains('не смог применить'));
+    expect(rejectCodeText('op_failed'), isNot(contains('op_failed')));
+    for (final code in [
+      'unknown_table',
+      'invalid_field',
+      'immutable_field',
+      'missing_fields',
+      'parent_not_found',
+      'validation_failed',
+      'hlc_device_mismatch',
+      'invalid_op',
+      'op_failed',
+      'something_new',
+      null,
+    ]) {
+      final text = rejectCodeText(code);
+      expect(text, isNotEmpty);
+      expect(code == null ? '' : text, isNot(contains('_')), reason: '$code');
+    }
   });
 }

@@ -57,5 +57,8 @@ String rejectCodeText(String? code) => switch (code) {
   'validation_failed' => 'Нарушено правило данных.',
   'hlc_device_mismatch' => 'Изменение сделано с другого устройства.',
   'invalid_op' || 'invalid_id' || 'invalid_hlc' => 'Некорректная операция.',
+  'op_failed' =>
+    'Сервер не смог применить изменение. Оно не синхронизировано — '
+        'можно повторить.',
   _ => 'Сервер отклонил изменение.',
 };

@@ -47,6 +47,13 @@ class AuthController extends Notifier<AuthState>
     return const AuthUnknown();
   }
 
+  /// Клиент входа: дожидается настроек сервера (холодный старт).
+  Future<AuthApi?> _authApi() async {
+    await resolveApiClient(ref);
+    final api = ref.read(authApiProvider);
+    return api;
+  }
+
   DateTime _now() => ref.read(clockProvider)();
 
   Future<void> _load() async {
@@ -64,7 +71,7 @@ class AuthController extends Notifier<AuthState>
     required DeviceInfo device,
   }) async {
     await ready;
-    final api = ref.read(authApiProvider);
+    final api = await _authApi();
     if (api == null) throw const ApiException.notConfigured();
     final session = await api.login(
       password: password,
@@ -85,7 +92,7 @@ class AuthController extends Notifier<AuthState>
   Future<void> logout() async {
     await ready;
     try {
-      await ref.read(authApiProvider)?.logout();
+      await (await _authApi())?.logout();
     } on ApiException {
       // Нет сети или сессия уже недействительна: выходим локально.
     }
@@ -112,17 +119,29 @@ class AuthController extends Notifier<AuthState>
   @override
   Future<String?> refreshAfterUnauthorized(String? usedToken) =>
       _refreshMutex.protect(() async {
-        final session = _session;
+        var session = _session;
         if (session == null) return null;
         // Кто-то уже обновил токены, пока этот запрос ждал очереди.
         if (usedToken != null && session.accessToken != usedToken) {
           return session.accessToken;
         }
+        // Два изолята (интерфейс и WorkManager) делят одно хранилище токенов,
+        // но не память: другой мог уже сделать refresh. Старый refresh после
+        // ротации отзовёт устройство (spec 1.3), поэтому под mutex читаем
+        // хранилище и берём оттуда более свежую пару.
+        final stored = await ref.read(tokenStoreProvider).read();
+        if (stored != null && stored.refreshToken != session.refreshToken) {
+          _session = session = stored;
+          if (stored.accessToken != usedToken &&
+              stored.accessExpiresAt.difference(_now()) > accessRefreshMargin) {
+            return stored.accessToken;
+          }
+        }
         if (!session.refreshExpiresAt.isAfter(_now())) {
           await _endSession(SignOutReason.expired);
           return null;
         }
-        final api = ref.read(authApiProvider);
+        final api = await _authApi();
         if (api == null) throw const ApiException.notConfigured();
         try {
           final fresh = await api.refresh(session.refreshToken);

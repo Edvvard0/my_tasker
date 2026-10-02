@@ -269,13 +269,14 @@ class _RejectedTile extends ConsumerWidget {
             rejectCodeText(op.rejectCode),
             style: t.bodyS.copyWith(color: c.textSecondary),
           ),
-          Text(
-            [
-              ?op.rejectCode,
-              if (op.rejectMessage != null) op.rejectMessage!,
-            ].join(' · '),
-            style: t.caption.copyWith(color: c.textTertiary),
-          ),
+          if (op.rejectCode != null || op.rejectMessage != null)
+            DetailsDisclosure(
+              [
+                ?op.rejectCode,
+                if (op.rejectMessage != null) op.rejectMessage!,
+              ].join(' · '),
+              key: Key('details-${op.opId}'),
+            ),
           const SizedBox(height: AppSpacing.s3),
           Wrap(
             spacing: AppSpacing.s3,

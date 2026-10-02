@@ -99,17 +99,6 @@ class _RecoveryScreenState extends ConsumerState<RecoveryScreen> {
                     style: t.body.copyWith(color: c.textSecondary),
                     textAlign: TextAlign.center,
                   ),
-                  if (canReset) ...[
-                    const SizedBox(height: AppSpacing.s4),
-                    const AppCard(
-                      key: Key('recovery-warning'),
-                      child: Text(
-                        'Изменения, которые не успели отправиться на сервер, '
-                        'будут потеряны. После сброса нужно снова указать '
-                        'сервер и войти.',
-                      ),
-                    ),
-                  ],
                   if (_failed) ...[
                     const SizedBox(height: AppSpacing.s3),
                     Text(
@@ -128,8 +117,33 @@ class _RecoveryScreenState extends ConsumerState<RecoveryScreen> {
                       ),
                     )
                   else ...[
-                    if (canReset)
-                      FilledButton(
+                    // Сначала безобидное: повтор открытия (ключ хранилища
+                    // системы бывает временно недоступен).
+                    FilledButton(
+                      key: const Key('recovery-retry'),
+                      onPressed: ref.read(localDataRetryProvider),
+                      child: const Text('Повторить'),
+                    ),
+                    if (canReset) ...[
+                      const SizedBox(height: AppSpacing.s6),
+                      Text(
+                        'Если повтор не помогает',
+                        style: t.bodyStrong,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: AppSpacing.s2),
+                      const AppCard(
+                        key: Key('recovery-warning'),
+                        child: Text(
+                          'Сброс удалит базу на этом устройстве вместе с '
+                          'ключом шифрования и загрузит данные с сервера '
+                          'заново. Изменения, которые не успели отправиться, '
+                          'будут потеряны. После сброса нужно снова указать '
+                          'сервер и войти.',
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.s3),
+                      ElevatedButton(
                         key: const Key('recovery-reset'),
                         onPressed: _reset,
                         child: const Text(
@@ -137,12 +151,7 @@ class _RecoveryScreenState extends ConsumerState<RecoveryScreen> {
                           textAlign: TextAlign.center,
                         ),
                       ),
-                    const SizedBox(height: AppSpacing.s3),
-                    ElevatedButton(
-                      key: const Key('recovery-retry'),
-                      onPressed: ref.read(localDataRetryProvider),
-                      child: const Text('Повторить'),
-                    ),
+                    ],
                   ],
                 ],
               ),

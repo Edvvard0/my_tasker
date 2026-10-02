@@ -107,7 +107,7 @@ void main() {
       await tester.tap(find.byKey(const Key('segment-tasks')));
       await tester.pumpAndSettle();
       expect(_location(tester), '/calendar/tasks');
-      expect(find.textContaining('Списки задач'), findsOneWidget);
+      expect(find.byKey(const Key('tasks-empty')), findsOneWidget);
       // Раздел «Календарь» остаётся активным в таб-баре.
       expect(_isActive(tester, AppSection.calendar), isTrue);
       expect(_isActive(tester, AppSection.today), isFalse);
@@ -186,17 +186,22 @@ void main() {
       expect(_location(tester), '/today');
     });
 
-    testWidgets('«+» открывает окно «Создать» (заглушка) снизу', (
-      tester,
-    ) async {
+    testWidgets('«+» открывает окно «Создать» снизу', (tester) async {
       await _pump(tester);
       await tester.tap(find.byKey(const Key('create-fab')));
       await tester.pumpAndSettle();
       expect(find.text('Создать'), findsOneWidget);
-      expect(find.textContaining('Быстрое создание'), findsOneWidget);
-      await tester.tap(find.text('Закрыть'));
+      expect(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byKey(const Key('quick-add-field')),
+        ),
+        findsOneWidget,
+      );
+      // Закрывается тапом по затемнению.
+      await tester.tapAt(const Offset(195, 40));
       await tester.pumpAndSettle();
-      expect(find.text('Закрыть'), findsNothing);
+      expect(find.byType(BottomSheet), findsNothing);
     });
 
     testWidgets('корневой адрес / перенаправляет на «Сегодня»', (tester) async {
@@ -204,11 +209,23 @@ void main() {
       expect(_location(tester), '/today');
     });
 
+    testWidgets('экраны Этапа 2 открываются без ошибок', (tester) async {
+      const routes = {
+        '/today': 'today-tasks',
+        '/calendar': 'calendar-title',
+        '/calendar/tasks': 'tasks-empty',
+        '/calendar/layers': 'layers-list',
+        '/calendar/settings': 'cycle-card',
+      };
+      for (final entry in routes.entries) {
+        await _pump(tester, location: entry.key);
+        expect(find.byKey(Key(entry.value)), findsOneWidget, reason: entry.key);
+        expect(tester.takeException(), isNull, reason: entry.key);
+      }
+    });
+
     testWidgets('все экраны-заглушки открываются без ошибок', (tester) async {
       const routes = {
-        '/today': 'этапе 2',
-        '/calendar': 'этапе 2',
-        '/calendar/tasks': 'этапе 2',
         '/work': 'этапе 4',
         '/work/servers': 'этапе 9',
         '/finance': 'этапе 5',
@@ -322,7 +339,15 @@ void main() {
       await tester.tap(find.byKey(const Key('create-button')));
       await tester.pumpAndSettle();
       expect(find.byType(Dialog), findsOneWidget);
-      await tester.tap(find.text('Закрыть'));
+      expect(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.byKey(const Key('quick-add-field')),
+        ),
+        findsOneWidget,
+      );
+      // Закрывается тапом по затемнению.
+      await tester.tapAt(const Offset(5, 5));
       await tester.pumpAndSettle();
       expect(find.byType(Dialog), findsNothing);
     });

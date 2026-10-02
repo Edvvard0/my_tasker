@@ -55,10 +55,10 @@ void main() {
     tearDown(() => db.close());
 
     test(
-      'создаёт схему v2: настройки устройства и таблицы синхронизации',
+      'создаёт схему v3: настройки, синхронизация и таблицы календаря',
       () async {
         expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
-        expect(db.schemaVersion, 2);
+        expect(db.schemaVersion, 3);
         final tables = await db
             .customSelect(
               "SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -66,9 +66,19 @@ void main() {
             )
             .get();
         expect(tables.map((r) => r.read<String>('name')), [
+          'calendars',
+          'event_overrides',
+          'events',
           'local_settings',
+          'people',
+          'projects',
+          'subtasks',
           'sync_meta',
           'sync_outbox',
+          'tags',
+          'task_completions',
+          'task_tags',
+          'tasks',
           'user_settings',
         ]);
       },
@@ -115,8 +125,8 @@ void main() {
       );
     });
 
-    test('в реестре AppDatabase есть шаг до v2 (синхронизация)', () {
-      expect(AppDatabase.migrationSteps.keys, [2]);
+    test('в реестре AppDatabase есть шаги до v2 и v3 (календарь)', () {
+      expect(AppDatabase.migrationSteps.keys, [2, 3]);
     });
   });
 
@@ -139,7 +149,10 @@ void main() {
       addTearDown(db.close);
       expect(await LocalSettingsRepository(db).read('k'), 'v');
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.read<int>('user_version'), 2);
+      expect(
+        version.read<int>('user_version'),
+        AppDatabase.currentSchemaVersion,
+      );
     });
 
     test('миграция v1 -> v2 сохраняет данные и добавляет таблицы', () async {
@@ -165,7 +178,43 @@ void main() {
           .get();
       expect(tables, hasLength(3));
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.read<int>('user_version'), 2);
+      expect(
+        version.read<int>('user_version'),
+        AppDatabase.currentSchemaVersion,
+      );
+    });
+
+    test('миграция v2 -> v3 добавляет таблицы календаря и индексы', () async {
+      // Настоящая БД v2: создаём схему через шаги до v2 и понижаем версию.
+      final first = AppDatabase(NativeDatabase(file));
+      await first.customSelect('SELECT 1').get();
+      await first.close();
+      sqlite3.open(file.path)
+        ..execute('DROP TABLE tasks')
+        ..execute('DROP TABLE events')
+        ..execute('DROP TABLE calendars')
+        ..execute('DROP TABLE event_overrides')
+        ..execute('DROP TABLE projects')
+        ..execute('DROP TABLE people')
+        ..execute('DROP TABLE tags')
+        ..execute('DROP TABLE subtasks')
+        ..execute('DROP TABLE task_tags')
+        ..execute('DROP TABLE task_completions')
+        ..execute('PRAGMA user_version = 2')
+        ..close();
+
+      final db = AppDatabase(NativeDatabase(file));
+      addTearDown(db.close);
+      final names = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE name LIKE 'tasks%' "
+            "OR name LIKE 'events%'",
+          )
+          .get();
+      expect(
+        names.map((r) => r.read<String>('name')),
+        containsAll(['tasks', 'tasks_due_date_idx', 'events']),
+      );
     });
 
     test('БД более новой схемы не открывается старым кодом', () async {
@@ -296,6 +345,29 @@ void main() {
       final asText = String.fromCharCodes(bytes);
       expect(asText.contains('TOP-SECRET-VALUE'), isFalse);
       expect(asText.contains('local_settings'), isFalse);
+    });
+
+    test('M3: WAL и busy_timeout включены; второе соединение читает, пока '
+        'первое пишет', () async {
+      final db = AppDatabase(opener(keyA).open());
+      final second = AppDatabase(opener(keyA).open());
+      addTearDown(second.close);
+      addTearDown(db.close);
+      Future<Object?> pragma(AppDatabase d, String name) async =>
+          (await d.customSelect('PRAGMA $name').getSingle()).data.values.first;
+      expect(await pragma(db, 'journal_mode'), 'wal');
+      expect(await pragma(db, 'busy_timeout'), 5000);
+      expect(await pragma(second, 'journal_mode'), 'wal');
+      expect(await pragma(second, 'busy_timeout'), 5000);
+      await LocalSettingsRepository(db).write('k', 'v1');
+      String? seen;
+      await db.transaction(() async {
+        await LocalSettingsRepository(db).write('k', 'v2'); // не зафиксировано
+        // читатель в другом соединении не блокируется и видит старое значение
+        seen = await LocalSettingsRepository(second).read('k');
+      });
+      expect(seen, 'v1');
+      expect(await LocalSettingsRepository(second).read('k'), 'v2');
     });
 
     test('чужой ключ не открывает БД', () async {

@@ -30,6 +30,9 @@ dependencies:
   workmanager: ^0.10.10
 
   riverpod: any
+  timezone: ^0.11.1
+  flutter_local_notifications: ^22.3.1
+  flutter_timezone: ^5.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

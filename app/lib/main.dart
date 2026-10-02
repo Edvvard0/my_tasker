@@ -4,10 +4,13 @@ import 'package:my_tasker/app.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/core/sync/workmanager_background_sync.dart';
 import 'package:my_tasker/core/theme/font_licenses.dart';
+import 'package:my_tasker/features/calendar/reminders/platform_reminder_scheduler.dart';
+import 'package:my_tasker/features/calendar/reminders/reminder_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   registerFontLicenses();
+  final reminders = createPlatformReminderScheduler(now: DateTime.now);
   runApp(
     ProviderScope(
       overrides: [
@@ -16,6 +19,8 @@ void main() {
         backgroundSyncProvider.overrideWithValue(
           const WorkmanagerBackgroundSync(),
         ),
+        // Локальные напоминания: Android — zonedSchedule, Windows — таймеры.
+        reminderSchedulerProvider.overrideWithValue(reminders),
       ],
       child: const MyTaskerApp(),
     ),

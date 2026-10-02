@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/core/auth/auth_models.dart';
 import 'package:my_tasker/core/network/api_client.dart';
 import 'package:my_tasker/core/sync/sync_coordinator.dart';
@@ -103,3 +104,9 @@ Future<AuthSession> loginOtherDevice(
   );
   return AuthSession.fromJson(json);
 }
+
+/// Даёт реальному циклу событий выполнить накопившиеся асинхронные операции
+/// (запросы к БД, потоки Drift) — без пауз по времени: только повороты
+/// очереди событий.
+Future<void> flushEvents(WidgetTester tester) =>
+    tester.runAsync(pumpEventQueue).then((_) {});

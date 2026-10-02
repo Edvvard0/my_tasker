@@ -61,8 +61,22 @@ class EncryptedDatabaseOpener implements AppDatabaseOpener {
 ///
 /// Отдельная функция (а не замыкание в классе), чтобы колбэк можно было
 /// передать в фоновый изолят.
-void Function(Database) _cipherSetup(String hexKey) =>
-    (db) => applyCipherKey(db, hexKey);
+void Function(Database) _cipherSetup(String hexKey) => (db) {
+  // Ожидание блокировки нужно уже при проверке ключа: второй изолят может
+  // держать БД в этот момент.
+  applyBusyTimeout(db);
+  applyCipherKey(db, hexKey);
+  enableWal(db);
+};
+
+/// Писатель ждёт снятия блокировки до 5 с вместо мгновенного
+/// `SQLITE_BUSY` (два изолята — интерфейс и WorkManager — открывают один
+/// файл БД).
+void applyBusyTimeout(Database db) => db.execute('PRAGMA busy_timeout = 5000;');
+
+/// `WAL`: читатели не блокируются писателем. Вызывается после установки
+/// ключа; `journal_mode` можно менять только вне транзакции.
+void enableWal(Database db) => db.execute('PRAGMA journal_mode = WAL;');
 
 /// Включает шифрование и проверяет, что ключ подошёл.
 ///
