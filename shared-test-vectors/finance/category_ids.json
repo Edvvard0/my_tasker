@@ -1,0 +1,201 @@
+{
+  "description": "category_id(system_key): uuid5 of the preset categories",
+  "cases": [
+    {
+      "name": "id_of_expense.groceries",
+      "input": {
+        "system_key": "expense.groceries"
+      },
+      "expected": "01f83d01-9902-5d71-9018-b1b2acf68322"
+    },
+    {
+      "name": "id_of_expense.eating_out",
+      "input": {
+        "system_key": "expense.eating_out"
+      },
+      "expected": "0cb1f1b5-e1a9-5b4f-8898-57da3f14c32a"
+    },
+    {
+      "name": "id_of_expense.transport",
+      "input": {
+        "system_key": "expense.transport"
+      },
+      "expected": "039bc419-da5a-5a48-9ae3-2adf3b7098a2"
+    },
+    {
+      "name": "id_of_expense.housing",
+      "input": {
+        "system_key": "expense.housing"
+      },
+      "expected": "a318f922-0a22-5841-85b8-e3f153d9a0d6"
+    },
+    {
+      "name": "id_of_expense.communication",
+      "input": {
+        "system_key": "expense.communication"
+      },
+      "expected": "6e88372c-7b89-5992-9ced-d3c05c22b75f"
+    },
+    {
+      "name": "id_of_expense.health",
+      "input": {
+        "system_key": "expense.health"
+      },
+      "expected": "6e88476f-613e-5ba1-ac1a-f1cabb222745"
+    },
+    {
+      "name": "id_of_expense.clothes",
+      "input": {
+        "system_key": "expense.clothes"
+      },
+      "expected": "f4a84158-1ac6-5391-aad2-c3e1b069ba9a"
+    },
+    {
+      "name": "id_of_expense.entertainment",
+      "input": {
+        "system_key": "expense.entertainment"
+      },
+      "expected": "ae1b154a-2061-5c26-932f-e552b0bde65f"
+    },
+    {
+      "name": "id_of_expense.education",
+      "input": {
+        "system_key": "expense.education"
+      },
+      "expected": "c36b215d-3e7f-5883-a30b-0228b80dbeb4"
+    },
+    {
+      "name": "id_of_expense.gifts",
+      "input": {
+        "system_key": "expense.gifts"
+      },
+      "expected": "dfba5473-0715-5eb4-8f03-16985a1768fa"
+    },
+    {
+      "name": "id_of_expense.home_goods",
+      "input": {
+        "system_key": "expense.home_goods"
+      },
+      "expected": "8cd27152-19b8-591f-9c4c-e699a344e757"
+    },
+    {
+      "name": "id_of_expense.subscriptions",
+      "input": {
+        "system_key": "expense.subscriptions"
+      },
+      "expected": "2dbf82fb-e74d-5384-9bb8-2909f42cd1e2"
+    },
+    {
+      "name": "id_of_expense.car",
+      "input": {
+        "system_key": "expense.car"
+      },
+      "expected": "ce3f1d76-0049-5925-b378-900209dbd1a3"
+    },
+    {
+      "name": "id_of_expense.travel",
+      "input": {
+        "system_key": "expense.travel"
+      },
+      "expected": "b6fd6c30-9403-5631-9b76-45086c3c46df"
+    },
+    {
+      "name": "id_of_expense.other",
+      "input": {
+        "system_key": "expense.other"
+      },
+      "expected": "2b6d9db2-50f4-56e5-9b23-5b49a7d72af6"
+    },
+    {
+      "name": "id_of_expense.transport.taxi",
+      "input": {
+        "system_key": "expense.transport.taxi"
+      },
+      "expected": "ef02eec2-4318-5a7e-938d-021b2a21f823"
+    },
+    {
+      "name": "id_of_expense.transport.public",
+      "input": {
+        "system_key": "expense.transport.public"
+      },
+      "expected": "083b65ae-6072-5cea-8bbb-fb2a298a34bd"
+    },
+    {
+      "name": "id_of_expense.car.fuel",
+      "input": {
+        "system_key": "expense.car.fuel"
+      },
+      "expected": "b9185c56-a2b3-50fe-9bdf-79bbf09e011a"
+    },
+    {
+      "name": "id_of_expense.car.service",
+      "input": {
+        "system_key": "expense.car.service"
+      },
+      "expected": "2f646de2-64b7-5c6b-90ef-63a7e7380337"
+    },
+    {
+      "name": "id_of_expense.housing.rent",
+      "input": {
+        "system_key": "expense.housing.rent"
+      },
+      "expected": "58d32ec8-72da-5f8c-93db-d7adb8cd437e"
+    },
+    {
+      "name": "id_of_expense.housing.utilities",
+      "input": {
+        "system_key": "expense.housing.utilities"
+      },
+      "expected": "e7f44fef-894d-58c2-80ca-7fe1313a01a9"
+    },
+    {
+      "name": "id_of_expense.health.pharmacy",
+      "input": {
+        "system_key": "expense.health.pharmacy"
+      },
+      "expected": "78eefed7-7155-57c3-803a-7e141305432a"
+    },
+    {
+      "name": "id_of_expense.health.doctors",
+      "input": {
+        "system_key": "expense.health.doctors"
+      },
+      "expected": "df87a631-71b4-50c1-8c80-dea9817475d0"
+    },
+    {
+      "name": "id_of_income.salary",
+      "input": {
+        "system_key": "income.salary"
+      },
+      "expected": "7fd63005-0b53-5a7c-a8e6-67b592406581"
+    },
+    {
+      "name": "id_of_income.projects",
+      "input": {
+        "system_key": "income.projects"
+      },
+      "expected": "6cc2a4cf-e6c9-582f-91e5-25e02d382546"
+    },
+    {
+      "name": "id_of_income.gifts",
+      "input": {
+        "system_key": "income.gifts"
+      },
+      "expected": "d6837208-498f-5505-a027-39403fb745af"
+    },
+    {
+      "name": "id_of_income.interest",
+      "input": {
+        "system_key": "income.interest"
+      },
+      "expected": "136e8d5e-5e3e-59b5-bb54-77285dd2d708"
+    },
+    {
+      "name": "id_of_income.other",
+      "input": {
+        "system_key": "income.other"
+      },
+      "expected": "57688865-5cfc-5238-b4f6-4e7ee00e80df"
+    }
+  ]
+}

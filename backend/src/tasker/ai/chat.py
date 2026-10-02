@@ -220,14 +220,20 @@ async def _agent(session: Any, agent_id: uuid.UUID | None) -> tuple[str | None, 
     table = ai_agent_profiles.table
     row = (
         await session.execute(
-            sa.select(table.c.system_prompt, table.c.prompt_version, table.c.enabled_tools).where(
-                table.c.id == agent_id, table.c.deleted_at.is_(None)
-            )
+            sa.select(
+                table.c.system_prompt,
+                table.c.prompt_version,
+                table.c.enabled_tools,
+                table.c.seed_key,
+            ).where(table.c.id == agent_id, table.c.deleted_at.is_(None))
         )
     ).first()
     if row is None:
         raise ApiError(404, "agent_not_found", "The agent profile is not on the server")
-    return row.system_prompt, int(row.prompt_version), row.enabled_tools
+    tools = row.enabled_tools
+    if row.seed_key in agents.SEED_BY_KEY:  # built-in: the tool list comes from code
+        tools = agents.builtin_tools(row.seed_key)
+    return row.system_prompt, int(row.prompt_version), tools
 
 
 async def _week_cycle(session: Any) -> Any:

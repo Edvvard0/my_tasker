@@ -1,0 +1,936 @@
+{
+  "description": "category_breakdown(transactions, categories, kind, period)",
+  "cases": [
+    {
+      "name": "empty",
+      "input": {
+        "transactions": [],
+        "categories": [
+          {
+            "id": "c-food",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-cafe",
+            "kind": "expense",
+            "parent_id": "c-food"
+          },
+          {
+            "id": "c-car",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-taxi",
+            "kind": "expense",
+            "parent_id": "c-car"
+          },
+          {
+            "id": "c-salary",
+            "kind": "income",
+            "parent_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null
+      },
+      "expected": {
+        "total": 0,
+        "groups": []
+      }
+    },
+    {
+      "name": "children_roll_up_into_the_parent",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 1000,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-food",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 400,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-cafe",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 250,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-cafe",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "categories": [
+          {
+            "id": "c-food",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-cafe",
+            "kind": "expense",
+            "parent_id": "c-food"
+          },
+          {
+            "id": "c-car",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-taxi",
+            "kind": "expense",
+            "parent_id": "c-car"
+          },
+          {
+            "id": "c-salary",
+            "kind": "income",
+            "parent_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null
+      },
+      "expected": {
+        "total": 1650,
+        "groups": [
+          {
+            "category_id": "c-food",
+            "total": 1650,
+            "own": 1000,
+            "count": 3,
+            "children": [
+              {
+                "category_id": "c-cafe",
+                "total": 650,
+                "count": 2
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "groups_are_ordered_by_total_then_children_by_total",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-food",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 900,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-car",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 300,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-taxi",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t4",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 200,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-cafe",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t5",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 700,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-taxi",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "categories": [
+          {
+            "id": "c-food",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-cafe",
+            "kind": "expense",
+            "parent_id": "c-food"
+          },
+          {
+            "id": "c-car",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-taxi",
+            "kind": "expense",
+            "parent_id": "c-car"
+          },
+          {
+            "id": "c-salary",
+            "kind": "income",
+            "parent_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null
+      },
+      "expected": {
+        "total": 2200,
+        "groups": [
+          {
+            "category_id": "c-car",
+            "total": 1900,
+            "own": 900,
+            "count": 3,
+            "children": [
+              {
+                "category_id": "c-taxi",
+                "total": 1000,
+                "count": 2
+              }
+            ]
+          },
+          {
+            "category_id": "c-food",
+            "total": 300,
+            "own": 100,
+            "count": 2,
+            "children": [
+              {
+                "category_id": "c-cafe",
+                "total": 200,
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "uncategorised_is_its_own_group_and_goes_last_on_a_tie",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 500,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 500,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-food",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "categories": [
+          {
+            "id": "c-food",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-cafe",
+            "kind": "expense",
+            "parent_id": "c-food"
+          },
+          {
+            "id": "c-car",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-taxi",
+            "kind": "expense",
+            "parent_id": "c-car"
+          },
+          {
+            "id": "c-salary",
+            "kind": "income",
+            "parent_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null
+      },
+      "expected": {
+        "total": 1000,
+        "groups": [
+          {
+            "category_id": "c-food",
+            "total": 500,
+            "own": 500,
+            "count": 1,
+            "children": []
+          },
+          {
+            "category_id": null,
+            "total": 500,
+            "own": 500,
+            "count": 1,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown_or_deleted_category_counts_as_uncategorised",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 300,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-gone",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 200,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "categories": [
+          {
+            "id": "c-food",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-cafe",
+            "kind": "expense",
+            "parent_id": "c-food"
+          },
+          {
+            "id": "c-car",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-taxi",
+            "kind": "expense",
+            "parent_id": "c-car"
+          },
+          {
+            "id": "c-salary",
+            "kind": "income",
+            "parent_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null
+      },
+      "expected": {
+        "total": 500,
+        "groups": [
+          {
+            "category_id": null,
+            "total": 500,
+            "own": 500,
+            "count": 2,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "child_without_a_live_parent_stands_alone",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 300,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-cafe",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "categories": [
+          {
+            "id": "c-cafe",
+            "kind": "expense",
+            "parent_id": "c-food"
+          }
+        ],
+        "kind": "expense",
+        "period": null
+      },
+      "expected": {
+        "total": 300,
+        "groups": [
+          {
+            "category_id": "c-cafe",
+            "total": 300,
+            "own": 300,
+            "count": 1,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "equal_totals_are_ordered_by_id",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-car",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-food",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "categories": [
+          {
+            "id": "c-food",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-cafe",
+            "kind": "expense",
+            "parent_id": "c-food"
+          },
+          {
+            "id": "c-car",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-taxi",
+            "kind": "expense",
+            "parent_id": "c-car"
+          },
+          {
+            "id": "c-salary",
+            "kind": "income",
+            "parent_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null
+      },
+      "expected": {
+        "total": 200,
+        "groups": [
+          {
+            "category_id": "c-car",
+            "total": 100,
+            "own": 100,
+            "count": 1,
+            "children": []
+          },
+          {
+            "category_id": "c-food",
+            "total": 100,
+            "own": 100,
+            "count": 1,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "income_kind",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "income",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 5000,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-salary",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-food",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "categories": [
+          {
+            "id": "c-food",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-cafe",
+            "kind": "expense",
+            "parent_id": "c-food"
+          },
+          {
+            "id": "c-car",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-taxi",
+            "kind": "expense",
+            "parent_id": "c-car"
+          },
+          {
+            "id": "c-salary",
+            "kind": "income",
+            "parent_id": null
+          }
+        ],
+        "kind": "income",
+        "period": null
+      },
+      "expected": {
+        "total": 5000,
+        "groups": [
+          {
+            "category_id": "c-salary",
+            "total": 5000,
+            "own": 5000,
+            "count": 1,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "transfers_drafts_and_debt_movements_are_left_out",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "transfer",
+            "account_id": "a1",
+            "to_account_id": "a2",
+            "amount": 9000,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 800,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-food",
+            "merchant": null,
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 700,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-food",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": "d"
+          },
+          {
+            "id": "t4",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 10,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-food",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "categories": [
+          {
+            "id": "c-food",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-cafe",
+            "kind": "expense",
+            "parent_id": "c-food"
+          },
+          {
+            "id": "c-car",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-taxi",
+            "kind": "expense",
+            "parent_id": "c-car"
+          },
+          {
+            "id": "c-salary",
+            "kind": "income",
+            "parent_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null
+      },
+      "expected": {
+        "total": 10,
+        "groups": [
+          {
+            "category_id": "c-food",
+            "total": 10,
+            "own": 10,
+            "count": 1,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "period_in_moscow_dates",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 1,
+            "occurred_at": "2026-10-09T20:59:59Z",
+            "category_id": "c-food",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 10,
+            "occurred_at": "2026-10-09T21:00:00Z",
+            "category_id": "c-food",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-10T20:59:59Z",
+            "category_id": "c-food",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t4",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 1000,
+            "occurred_at": "2026-10-10T21:00:00Z",
+            "category_id": "c-food",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "categories": [
+          {
+            "id": "c-food",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-cafe",
+            "kind": "expense",
+            "parent_id": "c-food"
+          },
+          {
+            "id": "c-car",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-taxi",
+            "kind": "expense",
+            "parent_id": "c-car"
+          },
+          {
+            "id": "c-salary",
+            "kind": "income",
+            "parent_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": {
+          "from": "2026-10-10",
+          "to": "2026-10-10"
+        }
+      },
+      "expected": {
+        "total": 110,
+        "groups": [
+          {
+            "category_id": "c-food",
+            "total": 110,
+            "own": 110,
+            "count": 2,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "category_of_the_other_kind_is_grouped_as_recorded",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": "c-salary",
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "categories": [
+          {
+            "id": "c-food",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-cafe",
+            "kind": "expense",
+            "parent_id": "c-food"
+          },
+          {
+            "id": "c-car",
+            "kind": "expense",
+            "parent_id": null
+          },
+          {
+            "id": "c-taxi",
+            "kind": "expense",
+            "parent_id": "c-car"
+          },
+          {
+            "id": "c-salary",
+            "kind": "income",
+            "parent_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null
+      },
+      "expected": {
+        "total": 100,
+        "groups": [
+          {
+            "category_id": "c-salary",
+            "total": 100,
+            "own": 100,
+            "count": 1,
+            "children": []
+          }
+        ]
+      }
+    }
+  ]
+}

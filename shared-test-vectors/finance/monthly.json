@@ -1,0 +1,640 @@
+{
+  "description": "monthly_totals(transactions, account_ids, period)",
+  "cases": [
+    {
+      "name": "empty",
+      "input": {
+        "transactions": [],
+        "account_ids": null,
+        "period": null
+      },
+      "expected": []
+    },
+    {
+      "name": "income_and_expense_in_one_month",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "income",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100000,
+            "occurred_at": "2026-10-02T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 30000,
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 5050,
+            "occurred_at": "2026-10-04T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "account_ids": null,
+        "period": null
+      },
+      "expected": [
+        {
+          "month": "2026-10",
+          "income": 100000,
+          "expense": 35050,
+          "net": 64950
+        }
+      ]
+    },
+    {
+      "name": "transfers_are_never_income_or_expense",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "transfer",
+            "account_id": "a1",
+            "to_account_id": "a2",
+            "amount": 90000,
+            "occurred_at": "2026-10-02T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 1000,
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "account_ids": null,
+        "period": null
+      },
+      "expected": [
+        {
+          "month": "2026-10",
+          "income": 0,
+          "expense": 1000,
+          "net": -1000
+        }
+      ]
+    },
+    {
+      "name": "a_month_of_transfers_only_is_absent",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "transfer",
+            "account_id": "a1",
+            "to_account_id": "a2",
+            "amount": 90000,
+            "occurred_at": "2026-10-02T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "account_ids": null,
+        "period": null
+      },
+      "expected": []
+    },
+    {
+      "name": "drafts_and_needs_review_are_excluded",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 1000,
+            "occurred_at": "2026-10-02T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "income",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 2000,
+            "occurred_at": "2026-10-02T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "needs_review",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 300,
+            "occurred_at": "2026-10-02T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "account_ids": null,
+        "period": null
+      },
+      "expected": [
+        {
+          "month": "2026-10",
+          "income": 0,
+          "expense": 300,
+          "net": -300
+        }
+      ]
+    },
+    {
+      "name": "debt_movements_are_not_income_or_expense",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 50000,
+            "occurred_at": "2026-10-02T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": "d1"
+          },
+          {
+            "id": "t2",
+            "kind": "income",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 20000,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": "d1"
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 300,
+            "occurred_at": "2026-10-06T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "account_ids": null,
+        "period": null
+      },
+      "expected": [
+        {
+          "month": "2026-10",
+          "income": 0,
+          "expense": 300,
+          "net": -300
+        }
+      ]
+    },
+    {
+      "name": "month_boundary_in_moscow_september",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-09-30T20:59:59Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "account_ids": null,
+        "period": null
+      },
+      "expected": [
+        {
+          "month": "2026-09",
+          "income": 0,
+          "expense": 100,
+          "net": -100
+        }
+      ]
+    },
+    {
+      "name": "month_boundary_in_moscow_october",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-09-30T21:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "account_ids": null,
+        "period": null
+      },
+      "expected": [
+        {
+          "month": "2026-10",
+          "income": 0,
+          "expense": 100,
+          "net": -100
+        }
+      ]
+    },
+    {
+      "name": "year_boundary",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-12-31T20:59:59Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 200,
+            "occurred_at": "2026-12-31T21:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "account_ids": null,
+        "period": null
+      },
+      "expected": [
+        {
+          "month": "2026-12",
+          "income": 0,
+          "expense": 100,
+          "net": -100
+        },
+        {
+          "month": "2027-01",
+          "income": 0,
+          "expense": 200,
+          "net": -200
+        }
+      ]
+    },
+    {
+      "name": "months_come_ascending_whatever_the_input_order",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "income",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-11-10T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "income",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 200,
+            "occurred_at": "2026-08-10T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 50,
+            "occurred_at": "2026-10-10T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "account_ids": null,
+        "period": null
+      },
+      "expected": [
+        {
+          "month": "2026-08",
+          "income": 200,
+          "expense": 0,
+          "net": 200
+        },
+        {
+          "month": "2026-10",
+          "income": 0,
+          "expense": 50,
+          "net": -50
+        },
+        {
+          "month": "2026-11",
+          "income": 100,
+          "expense": 0,
+          "net": 100
+        }
+      ]
+    },
+    {
+      "name": "account_filter",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-02T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a2",
+            "to_account_id": null,
+            "amount": 700,
+            "occurred_at": "2026-10-02T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "income",
+            "account_id": "a3",
+            "to_account_id": null,
+            "amount": 5000,
+            "occurred_at": "2026-10-02T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "account_ids": [
+          "a1",
+          "a2"
+        ],
+        "period": null
+      },
+      "expected": [
+        {
+          "month": "2026-10",
+          "income": 0,
+          "expense": 800,
+          "net": -800
+        }
+      ]
+    },
+    {
+      "name": "period_cuts_a_month_in_the_middle",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-09T20:59:59Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 700,
+            "occurred_at": "2026-10-09T21:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 5000,
+            "occurred_at": "2026-10-20T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "account_ids": null,
+        "period": {
+          "from": "2026-10-10",
+          "to": "2026-10-20"
+        }
+      },
+      "expected": [
+        {
+          "month": "2026-10",
+          "income": 0,
+          "expense": 5700,
+          "net": -5700
+        }
+      ]
+    },
+    {
+      "name": "net_may_be_negative",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "income",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-09T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 700,
+            "occurred_at": "2026-10-09T10:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "account_ids": null,
+        "period": null
+      },
+      "expected": [
+        {
+          "month": "2026-10",
+          "income": 100,
+          "expense": 700,
+          "net": -600
+        }
+      ]
+    }
+  ]
+}

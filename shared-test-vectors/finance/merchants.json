@@ -1,0 +1,478 @@
+{
+  "description": "top_merchants(transactions, kind, period, limit)",
+  "cases": [
+    {
+      "name": "empty",
+      "input": {
+        "transactions": [],
+        "kind": "expense",
+        "period": null,
+        "limit": 10
+      },
+      "expected": []
+    },
+    {
+      "name": "same_shop_in_different_spellings_is_one",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "Пятёрочка",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 250,
+            "occurred_at": "2026-10-06T09:00:00Z",
+            "category_id": null,
+            "merchant": "ПЯТЁРОЧКА",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 50,
+            "occurred_at": "2026-10-07T09:00:00Z",
+            "category_id": null,
+            "merchant": "  пятёрочка  ",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null,
+        "limit": 10
+      },
+      "expected": [
+        {
+          "merchant": "Пятёрочка",
+          "total": 400,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "name": "shown_spelling_is_the_earliest",
+      "input": {
+        "transactions": [
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 1,
+            "occurred_at": "2026-10-06T09:00:00Z",
+            "category_id": null,
+            "merchant": "ЛЕНТА",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 1,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "Лента",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null,
+        "limit": 10
+      },
+      "expected": [
+        {
+          "merchant": "Лента",
+          "total": 2,
+          "count": 2
+        }
+      ]
+    },
+    {
+      "name": "blank_and_missing_merchants_are_skipped",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "   ",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 5,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "Кофе",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null,
+        "limit": 10
+      },
+      "expected": [
+        {
+          "merchant": "Кофе",
+          "total": 5,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "name": "limit_keeps_the_biggest",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "A",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 300,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "B",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 200,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "C",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null,
+        "limit": 2
+      },
+      "expected": [
+        {
+          "merchant": "B",
+          "total": 300,
+          "count": 1
+        },
+        {
+          "merchant": "C",
+          "total": 200,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "name": "tie_on_total_goes_to_more_purchases_then_name",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "Бета",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 50,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "Альфа",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 50,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "Альфа",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t4",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "Аз",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null,
+        "limit": 10
+      },
+      "expected": [
+        {
+          "merchant": "Альфа",
+          "total": 100,
+          "count": 2
+        },
+        {
+          "merchant": "Аз",
+          "total": 100,
+          "count": 1
+        },
+        {
+          "merchant": "Бета",
+          "total": 100,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "name": "period_filter",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-09T20:59:59Z",
+            "category_id": null,
+            "merchant": "A",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 200,
+            "occurred_at": "2026-10-09T21:00:00Z",
+            "category_id": null,
+            "merchant": "A",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": {
+          "from": "2026-10-10",
+          "to": null
+        },
+        "limit": 10
+      },
+      "expected": [
+        {
+          "merchant": "A",
+          "total": 200,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "name": "income_kind",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "income",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 700,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "ООО Ромашка",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 100,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "Лента",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "kind": "income",
+        "period": null,
+        "limit": 10
+      },
+      "expected": [
+        {
+          "merchant": "ООО Ромашка",
+          "total": 700,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "name": "transfers_and_drafts_do_not_count",
+      "input": {
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "transfer",
+            "account_id": "a1",
+            "to_account_id": "a2",
+            "amount": 500,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "Сбер",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 500,
+            "occurred_at": "2026-10-05T09:00:00Z",
+            "category_id": null,
+            "merchant": "Сбер",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "kind": "expense",
+        "period": null,
+        "limit": 10
+      },
+      "expected": []
+    }
+  ]
+}

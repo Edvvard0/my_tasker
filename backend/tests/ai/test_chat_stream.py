@@ -232,23 +232,26 @@ async def test_profile_tools_decide_and_unknown_future_tools_are_skipped(
 ) -> None:
     phone = await aienv.device()
     conversation = await make_conversation(phone)
-    boot = (await phone.post("/ai/bootstrap")).json()
-    agent = next(a for a in boot["agents"] if a["seed_key"] == "work")
-    row = next(
-        c["row"]
-        for c in await phone.pull_all()
-        if c["table"] == "ai_agent_profiles" and c["id"] == agent["id"]
-    )
+    await phone.post("/ai/bootstrap")
+    custom = uuid7()
     await phone.push_ok(
         [
             phone.op(
                 "ai_agent_profiles",
-                uuid.UUID(agent["id"]),
-                fields={"enabled_tools": ["get_events", "add_expense", "get_events"]},
-                base=row["server_version"],
+                custom,
+                fields={
+                    "name": "Мой",
+                    "topic": "work",
+                    "system_prompt": "Ты помощник.",
+                    "prompt_version": 1,
+                    "enabled_tools": ["get_events", "add_expense", "get_events"],
+                    "position": 9,
+                    "created_at": phone.created(),
+                },
             )
         ]
     )
+    agent = {"id": str(custom)}
 
     await run_chat(phone, chat_body(conversation, agent_id=agent["id"]))
     assert [t["function"]["name"] for t in fake.chat_requests[0].json["tools"]] == ["get_events"]
@@ -256,3 +259,37 @@ async def test_profile_tools_decide_and_unknown_future_tools_are_skipped(
     sse = await run_chat(phone, chat_body(conversation, agent_id=agent["id"], tools=[]))
     assert sse.of("start")[0]["tools_enabled"] is False
     assert "tools" not in fake.chat_requests[1].json
+
+
+async def test_builtin_profiles_take_their_tools_from_code_not_from_storage(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    boot = (await phone.post("/ai/bootstrap")).json()
+    work = next(a for a in boot["agents"] if a["seed_key"] == "work")
+    row = next(
+        c["row"]
+        for c in await phone.pull_all()
+        if c["table"] == "ai_agent_profiles" and c["id"] == work["id"]
+    )
+    await phone.push_ok(
+        [
+            phone.op(
+                "ai_agent_profiles",
+                uuid.UUID(work["id"]),
+                fields={"enabled_tools": ["get_events"]},  # a stale snapshot
+                base=row["server_version"],
+            )
+        ]
+    )
+    await run_chat(phone, chat_body(conversation, agent_id=work["id"]))
+    names = [t["function"]["name"] for t in fake.chat_requests[0].json["tools"]]
+    assert names == [
+        "get_tasks",
+        "get_events",
+        "create_task",
+        "get_projects",
+        "get_receivables",
+        "get_work_hours",
+    ]

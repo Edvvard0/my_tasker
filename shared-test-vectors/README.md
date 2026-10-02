@@ -78,3 +78,35 @@
 | `week_cycle.json` | номер недели цикла (`op: week_number`) и первая подходящая дата (`op: first_date`), в том числе сдвиги чётности |
 | `holidays.json` | нерабочий ли день по `shared-data/calendar/holidays_ru.json` |
 | `ids.json` | детерминированные id (`uuid5`) календарей, тегов, переопределений, связей и отметок |
+
+## Домен `work`
+
+Работа: проекты, оплаты, часы (спецификация: `docs/specs/stage4_work.md`, раздел 4). Деньги — целые копейки, **без округления**; три деления округляют вниз. Строки — «JSON-строки» таблиц (`id`, `project_id`, `amount`, `status`, `paid_at`, …), моменты `YYYY-MM-DDTHH:MM:SSZ`, даты `YYYY-MM-DD`; необязательные значения — по умолчанию из спецификации (`status = null` ≡ `active`, `base_amount = null` ≡ 0). Московская дата = дата момента + 3 часа. Исходные входы — `backend/tests/work_vectors_gen.py`, ожидаемое — эталон `backend/src/tasker/work/reference.py`; пересборка `cd backend && uv run python -m tests.work_vectors_gen`. Python: `backend/tests/test_work_vectors.py`; Dart: `app/test/`.
+
+| Файл | Что проверяет |
+|---|---|
+| `scalars.json` | `input.op` выбирает функцию: `paid_bp {received,total}`, `per_hour {amount,seconds}` (`null` при нуле секунд), `hourly_billable {rate,seconds}`, `seconds {entry}` (`null` у идущей записи; доли секунды отбрасываются у каждого момента до вычитания), `moscow_date {at}`, `moscow_month {at}` |
+| `project_summary.json` | `input {project, change_requests, allocations}` → `{total, received, remaining (со знаком), overpaid, paid_bp, base_received, base_remaining, change_requests: [{id, amount, received, remaining}]}` |
+| `receivables.json` | `input {projects, change_requests, allocations}` → `{total, clients: [{client_id, remaining, projects: [{id, remaining}]}]}`; порядок элементов — часть ожидаемого результата |
+| `income.json` | `input {projects, change_requests, payments, allocations, time_entries, period, project_id}` → `{seconds, received, accrued, per_hour_fact, per_hour_accrued, projects: [{id, seconds, received, accrued, per_hour_fact, per_hour_accrued}]}`; порядок проектов — как во входе |
+| `monthly.json` | `input {payments, allocations, project_id}` → список `{month, received, unallocated}` |
+| `integrity.json` | `input {change_requests, payments, allocations}` → список `{code, id, excess}` |
+
+## Домен `finance`
+
+Финансы: счета, операции, переводы, сверки, долги, цели, аналитика (спецификация: `docs/specs/stage5_finance.md`). Деньги — целые копейки, **без округления**; деление одно (`progress_bp`, вниз). Строки — «JSON-строки» таблиц (`id` — строки; `kind`, `account_id`, `to_account_id`, `amount`, `occurred_at`, `status`, `category_id`, `merchant`, `external_id`, `dedup_hash`, `work_payment_id`, `debt_id`, …), моменты `YYYY-MM-DDTHH:MM:SSZ` (доли секунды отбрасываются), даты `YYYY-MM-DD`; московская дата = дата момента + 3 часа. Исходные входы — `backend/tests/finance_vectors_gen.py`, ожидаемое — эталон `backend/src/tasker/finance/reference.py`; пересборка `cd backend && uv run python -m tests.finance_vectors_gen`. Python: `backend/tests/test_finance_vectors.py`; Dart: `app/test/`.
+
+| Файл | Что проверяет |
+|---|---|
+| `scalars.json` | `input.op` выбирает функцию: `progress_bp {have,target}`, `opening_instant {date}` и `end_of_day {date}` → момент `…Z`, `month_end {month}` → дата, `moscow_month {at}`, `fold_merchant {text}`, `dedup_key {transaction}` (`null` без ключа), `effect {transaction, account_id}` |
+| `balances.json` | `input {accounts, transactions, checkpoints, at}` (`at` — момент или `null`) → `{accounts: [{id, balance, in_total}], total}`; порядок счетов — как во входе |
+| `adjustments.json` | `input {account, transactions, checkpoints}` → список `{checkpoint_id, checked_at, actual, expected, adjustment}` |
+| `monthly.json` | `input {transactions, account_ids, period}` → список `{month, income, expense, net}` |
+| `categories.json` | `input {transactions, categories, kind, period}` → `{total, groups: [{category_id, total, own, count, children: [{category_id, total, count}]}]}`; порядок — часть ожидаемого результата |
+| `merchants.json` | `input {transactions, kind, period, limit}` → список `{merchant, total, count}` |
+| `dynamics.json` | `input {accounts, transactions, checkpoints, dates}` → список `{date, total}` (баланс на конец московской даты) |
+| `debts.json` | `input {debts, repayments, today}` → `{owed_to_me, i_owe, debts: [{id, direction, amount, repaid, remaining, overpaid, status, overdue}]}` |
+| `goals.json` | `input {goal, accounts, transactions, checkpoints, debts, repayments, projects, change_requests, allocations}` → `{have, target, missing (со знаком), reached, surplus, progress_bp, terms: [{kind, value}]}`; включает **случай Excel** (`excel_*`: 329 600 / 454 600 / «не хватает −54 600») |
+| `work_links.json` | `input {payments, transactions}` → список `{payment_id, amount, linked, unlinked}` |
+| `integrity.json` | `input {categories, transactions, debts, repayments, payments}` → список `{code, id, excess}` |
+| `category_ids.json` | `input {system_key}` → `uuid5(uuid5(NAMESPACE_URL, "urn:my-tasker:categories"), system_key)` строкой; id предустановленных категорий |

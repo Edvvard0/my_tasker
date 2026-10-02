@@ -36,6 +36,13 @@ async def test_bootstrap_seeds_six_agents_once(aienv: AiEnv) -> None:
         "get_tasks": "read",
         "get_events": "read",
         "create_task": "write",
+        "get_projects": "read",
+        "get_receivables": "read",
+        "get_work_hours": "read",
+        "get_accounts": "read",
+        "get_finance_summary": "read",
+        "get_goals": "read",
+        "get_debts": "read",
     }
     create = [t for t in first["tools"] if t["name"] == "create_task"][0]
     assert create["parameters"]["required"] == ["title"]
@@ -53,6 +60,25 @@ async def test_bootstrap_seeds_six_agents_once(aienv: AiEnv) -> None:
             SERVER_DEVICE_ID
         )
         assert general["enabled_tools"] == ["get_tasks", "get_events", "create_task"]
+        work = [p for p in profiles if p["seed_key"] == "work"][0]
+        assert work["enabled_tools"] == [
+            "get_tasks",
+            "get_events",
+            "create_task",
+            "get_projects",
+            "get_receivables",
+            "get_work_hours",
+        ]
+        finance = [p for p in profiles if p["seed_key"] == "finance"][0]
+        assert finance["enabled_tools"] == [
+            "get_tasks",
+            "get_events",
+            "create_task",
+            "get_accounts",
+            "get_finance_summary",
+            "get_goals",
+            "get_debts",
+        ]
         assert general["system_prompt"] == agents.SEED_BY_KEY["general"].prompt
         version = [v for v in versions if v["profile_id"] == general["id"]][0]
         assert (version["version"], version["source"]) == (1, "seed")

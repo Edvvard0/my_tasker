@@ -14,8 +14,18 @@ def system_calendar_id(system_key: str) -> uuid.UUID:
     return uuid.uuid5(namespace("calendars"), system_key)
 
 
+def fold_tag_name(name: str) -> str:
+    """Case folding for tag names, identical in every client: only ASCII and Cyrillic capitals are
+    lowered (``str.lower`` / ``toLowerCase`` differ between runtimes for Greek final sigma, Turkish
+    dotted I and the like, which would give two devices different ids for the same tag)."""
+    return "".join(
+        chr(ord(c) + 32) if "A" <= c <= "Z" or "А" <= c <= "Я" else "ё" if c == "Ё" else c  # noqa: RUF001
+        for c in name
+    )
+
+
 def tag_id(name: str) -> uuid.UUID:
-    return uuid.uuid5(namespace("tags"), name.lower())
+    return uuid.uuid5(namespace("tags"), fold_tag_name(name))
 
 
 def override_id(event_id: uuid.UUID | str, original_start: str) -> uuid.UUID:

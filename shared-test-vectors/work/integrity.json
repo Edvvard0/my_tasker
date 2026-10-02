@@ -1,0 +1,141 @@
+{
+  "description": "integrity_problems(change_requests, payments, allocations)",
+  "cases": [
+    {
+      "name": "clean",
+      "input": {
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 100
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 100
+          }
+        ]
+      },
+      "expected": []
+    },
+    {
+      "name": "over_allocated_by_two_allocations",
+      "input": {
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 100
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 70
+          },
+          {
+            "id": "b",
+            "payment_id": "x",
+            "project_id": "p2",
+            "change_request_id": null,
+            "amount": 50
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "over_allocated",
+          "id": "x",
+          "excess": 20
+        }
+      ]
+    },
+    {
+      "name": "change_request_of_another_project",
+      "input": {
+        "change_requests": [
+          {
+            "id": "c1",
+            "project_id": "p2",
+            "amount": 10,
+            "status": "in_progress"
+          }
+        ],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 100
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": "c1",
+            "amount": 10
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "change_request_mismatch",
+          "id": "a",
+          "excess": null
+        }
+      ]
+    },
+    {
+      "name": "both_problems_sorted_by_code",
+      "input": {
+        "change_requests": [
+          {
+            "id": "c1",
+            "project_id": "p2",
+            "amount": 10,
+            "status": "in_progress"
+          }
+        ],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 5
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": "c1",
+            "amount": 10
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "change_request_mismatch",
+          "id": "a",
+          "excess": null
+        },
+        {
+          "code": "over_allocated",
+          "id": "x",
+          "excess": 5
+        }
+      ]
+    }
+  ]
+}

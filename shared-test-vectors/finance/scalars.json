@@ -1,0 +1,485 @@
+{
+  "description": "Scalar rules (input.op selects the function): progress_bp, opening_instant, end_of_day, month_end, moscow_month, fold_merchant, dedup_key, effect",
+  "cases": [
+    {
+      "name": "progress_zero_have",
+      "input": {
+        "op": "progress_bp",
+        "have": 0,
+        "target": 40000000
+      },
+      "expected": 0
+    },
+    {
+      "name": "progress_negative_have",
+      "input": {
+        "op": "progress_bp",
+        "have": -5,
+        "target": 100
+      },
+      "expected": 0
+    },
+    {
+      "name": "progress_half",
+      "input": {
+        "op": "progress_bp",
+        "have": 50000,
+        "target": 100000
+      },
+      "expected": 5000
+    },
+    {
+      "name": "progress_third_floors",
+      "input": {
+        "op": "progress_bp",
+        "have": 1,
+        "target": 3
+      },
+      "expected": 3333
+    },
+    {
+      "name": "progress_excel_over_target",
+      "input": {
+        "op": "progress_bp",
+        "have": 45460000,
+        "target": 40000000
+      },
+      "expected": 11365
+    },
+    {
+      "name": "progress_almost_not_100",
+      "input": {
+        "op": "progress_bp",
+        "have": 99999,
+        "target": 100000
+      },
+      "expected": 9999
+    },
+    {
+      "name": "progress_zero_target",
+      "input": {
+        "op": "progress_bp",
+        "have": 10,
+        "target": 0
+      },
+      "expected": 0
+    },
+    {
+      "name": "progress_huge",
+      "input": {
+        "op": "progress_bp",
+        "have": 99999999999998,
+        "target": 99999999999999
+      },
+      "expected": 9999
+    },
+    {
+      "name": "opening_instant_plain",
+      "input": {
+        "op": "opening_instant",
+        "date": "2026-10-01"
+      },
+      "expected": "2026-09-30T21:00:00Z"
+    },
+    {
+      "name": "opening_instant_new_year",
+      "input": {
+        "op": "opening_instant",
+        "date": "2026-01-01"
+      },
+      "expected": "2025-12-31T21:00:00Z"
+    },
+    {
+      "name": "opening_instant_leap_day",
+      "input": {
+        "op": "opening_instant",
+        "date": "2028-02-29"
+      },
+      "expected": "2028-02-28T21:00:00Z"
+    },
+    {
+      "name": "end_of_day_plain",
+      "input": {
+        "op": "end_of_day",
+        "date": "2026-10-01"
+      },
+      "expected": "2026-10-01T20:59:59Z"
+    },
+    {
+      "name": "end_of_day_new_year_eve",
+      "input": {
+        "op": "end_of_day",
+        "date": "2026-12-31"
+      },
+      "expected": "2026-12-31T20:59:59Z"
+    },
+    {
+      "name": "month_end_february",
+      "input": {
+        "op": "month_end",
+        "month": "2026-02"
+      },
+      "expected": "2026-02-28"
+    },
+    {
+      "name": "month_end_leap_february",
+      "input": {
+        "op": "month_end",
+        "month": "2028-02"
+      },
+      "expected": "2028-02-29"
+    },
+    {
+      "name": "month_end_april",
+      "input": {
+        "op": "month_end",
+        "month": "2026-04"
+      },
+      "expected": "2026-04-30"
+    },
+    {
+      "name": "month_end_december",
+      "input": {
+        "op": "month_end",
+        "month": "2026-12"
+      },
+      "expected": "2026-12-31"
+    },
+    {
+      "name": "month_end_january",
+      "input": {
+        "op": "month_end",
+        "month": "2026-01"
+      },
+      "expected": "2026-01-31"
+    },
+    {
+      "name": "moscow_month_last_second_of_september",
+      "input": {
+        "op": "moscow_month",
+        "at": "2026-09-30T20:59:59Z"
+      },
+      "expected": "2026-09"
+    },
+    {
+      "name": "moscow_month_first_second_of_october",
+      "input": {
+        "op": "moscow_month",
+        "at": "2026-09-30T21:00:00Z"
+      },
+      "expected": "2026-10"
+    },
+    {
+      "name": "fold_merchant_trims_and_collapses",
+      "input": {
+        "op": "fold_merchant",
+        "text": "  Пятёрочка   №12 "
+      },
+      "expected": "пятёрочка №12"
+    },
+    {
+      "name": "fold_merchant_cyrillic_capitals",
+      "input": {
+        "op": "fold_merchant",
+        "text": "ЛЕНТА Ёлки"
+      },
+      "expected": "лента ёлки"
+    },
+    {
+      "name": "fold_merchant_nbsp_and_tab",
+      "input": {
+        "op": "fold_merchant",
+        "text": "Яндекс Go\t Такси"
+      },
+      "expected": "яндекс go такси"
+    },
+    {
+      "name": "fold_merchant_ascii",
+      "input": {
+        "op": "fold_merchant",
+        "text": "McDonald's"
+      },
+      "expected": "mcdonald's"
+    },
+    {
+      "name": "fold_merchant_other_scripts_untouched",
+      "input": {
+        "op": "fold_merchant",
+        "text": "ÄB ΣΑΣ"
+      },
+      "expected": "Äb ΣΑΣ"
+    },
+    {
+      "name": "dedup_key_external_id",
+      "input": {
+        "op": "dedup_key",
+        "transaction": {
+          "id": "t",
+          "kind": "expense",
+          "account_id": "a1",
+          "to_account_id": null,
+          "amount": 1,
+          "occurred_at": "2026-10-05T09:00:00Z",
+          "category_id": null,
+          "merchant": null,
+          "status": "confirmed",
+          "external_id": "X-1",
+          "dedup_hash": null,
+          "work_payment_id": null,
+          "debt_id": null
+        }
+      },
+      "expected": "ext|a1|X-1"
+    },
+    {
+      "name": "dedup_key_hash",
+      "input": {
+        "op": "dedup_key",
+        "transaction": {
+          "id": "t",
+          "kind": "expense",
+          "account_id": "a1",
+          "to_account_id": null,
+          "amount": 1,
+          "occurred_at": "2026-10-05T09:00:00Z",
+          "category_id": null,
+          "merchant": null,
+          "status": "confirmed",
+          "external_id": null,
+          "dedup_hash": "abababababababababababababababab",
+          "work_payment_id": null,
+          "debt_id": null
+        }
+      },
+      "expected": "hash|a1|abababababababababababababababab"
+    },
+    {
+      "name": "dedup_key_external_id_wins_over_hash",
+      "input": {
+        "op": "dedup_key",
+        "transaction": {
+          "id": "t",
+          "kind": "expense",
+          "account_id": "a1",
+          "to_account_id": null,
+          "amount": 1,
+          "occurred_at": "2026-10-05T09:00:00Z",
+          "category_id": null,
+          "merchant": null,
+          "status": "confirmed",
+          "external_id": "X",
+          "dedup_hash": "abababababababababababababababab",
+          "work_payment_id": null,
+          "debt_id": null
+        }
+      },
+      "expected": "ext|a1|X"
+    },
+    {
+      "name": "dedup_key_none",
+      "input": {
+        "op": "dedup_key",
+        "transaction": {
+          "id": "t",
+          "kind": "expense",
+          "account_id": "a1",
+          "to_account_id": null,
+          "amount": 1,
+          "occurred_at": "2026-10-05T09:00:00Z",
+          "category_id": null,
+          "merchant": null,
+          "status": "confirmed",
+          "external_id": null,
+          "dedup_hash": null,
+          "work_payment_id": null,
+          "debt_id": null
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "effect_expense",
+      "input": {
+        "op": "effect",
+        "transaction": {
+          "id": "t",
+          "kind": "expense",
+          "account_id": "a1",
+          "to_account_id": null,
+          "amount": 500,
+          "occurred_at": "2026-10-05T09:00:00Z",
+          "category_id": null,
+          "merchant": null,
+          "status": "confirmed",
+          "external_id": null,
+          "dedup_hash": null,
+          "work_payment_id": null,
+          "debt_id": null
+        },
+        "account_id": "a1"
+      },
+      "expected": -500
+    },
+    {
+      "name": "effect_expense_other_account",
+      "input": {
+        "op": "effect",
+        "transaction": {
+          "id": "t",
+          "kind": "expense",
+          "account_id": "a1",
+          "to_account_id": null,
+          "amount": 500,
+          "occurred_at": "2026-10-05T09:00:00Z",
+          "category_id": null,
+          "merchant": null,
+          "status": "confirmed",
+          "external_id": null,
+          "dedup_hash": null,
+          "work_payment_id": null,
+          "debt_id": null
+        },
+        "account_id": "a2"
+      },
+      "expected": 0
+    },
+    {
+      "name": "effect_income",
+      "input": {
+        "op": "effect",
+        "transaction": {
+          "id": "t",
+          "kind": "income",
+          "account_id": "a1",
+          "to_account_id": null,
+          "amount": 500,
+          "occurred_at": "2026-10-05T09:00:00Z",
+          "category_id": null,
+          "merchant": null,
+          "status": "confirmed",
+          "external_id": null,
+          "dedup_hash": null,
+          "work_payment_id": null,
+          "debt_id": null
+        },
+        "account_id": "a1"
+      },
+      "expected": 500
+    },
+    {
+      "name": "effect_transfer_source",
+      "input": {
+        "op": "effect",
+        "transaction": {
+          "id": "t",
+          "kind": "transfer",
+          "account_id": "a1",
+          "to_account_id": "a2",
+          "amount": 500,
+          "occurred_at": "2026-10-05T09:00:00Z",
+          "category_id": null,
+          "merchant": null,
+          "status": "confirmed",
+          "external_id": null,
+          "dedup_hash": null,
+          "work_payment_id": null,
+          "debt_id": null
+        },
+        "account_id": "a1"
+      },
+      "expected": -500
+    },
+    {
+      "name": "effect_transfer_destination",
+      "input": {
+        "op": "effect",
+        "transaction": {
+          "id": "t",
+          "kind": "transfer",
+          "account_id": "a1",
+          "to_account_id": "a2",
+          "amount": 500,
+          "occurred_at": "2026-10-05T09:00:00Z",
+          "category_id": null,
+          "merchant": null,
+          "status": "confirmed",
+          "external_id": null,
+          "dedup_hash": null,
+          "work_payment_id": null,
+          "debt_id": null
+        },
+        "account_id": "a2"
+      },
+      "expected": 500
+    },
+    {
+      "name": "effect_transfer_third_account",
+      "input": {
+        "op": "effect",
+        "transaction": {
+          "id": "t",
+          "kind": "transfer",
+          "account_id": "a1",
+          "to_account_id": "a2",
+          "amount": 500,
+          "occurred_at": "2026-10-05T09:00:00Z",
+          "category_id": null,
+          "merchant": null,
+          "status": "confirmed",
+          "external_id": null,
+          "dedup_hash": null,
+          "work_payment_id": null,
+          "debt_id": null
+        },
+        "account_id": "a3"
+      },
+      "expected": 0
+    },
+    {
+      "name": "effect_draft_is_nothing",
+      "input": {
+        "op": "effect",
+        "transaction": {
+          "id": "t",
+          "kind": "income",
+          "account_id": "a1",
+          "to_account_id": null,
+          "amount": 500,
+          "occurred_at": "2026-10-05T09:00:00Z",
+          "category_id": null,
+          "merchant": null,
+          "status": "draft",
+          "external_id": null,
+          "dedup_hash": null,
+          "work_payment_id": null,
+          "debt_id": null
+        },
+        "account_id": "a1"
+      },
+      "expected": 0
+    },
+    {
+      "name": "effect_needs_review_is_nothing",
+      "input": {
+        "op": "effect",
+        "transaction": {
+          "id": "t",
+          "kind": "expense",
+          "account_id": "a1",
+          "to_account_id": null,
+          "amount": 500,
+          "occurred_at": "2026-10-05T09:00:00Z",
+          "category_id": null,
+          "merchant": null,
+          "status": "needs_review",
+          "external_id": null,
+          "dedup_hash": null,
+          "work_payment_id": null,
+          "debt_id": null
+        },
+        "account_id": "a1"
+      },
+      "expected": 0
+    }
+  ]
+}

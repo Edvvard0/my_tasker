@@ -1,0 +1,1053 @@
+{
+  "description": "income(projects, change_requests, payments, allocations, time_entries, period, project)",
+  "cases": [
+    {
+      "name": "zero_hours_gives_no_rate",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 1000000
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 500000
+          }
+        ],
+        "time_entries": [],
+        "period": null,
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 0,
+        "received": 500000,
+        "accrued": 0,
+        "per_hour_fact": null,
+        "per_hour_accrued": null,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 0,
+            "received": 500000,
+            "accrued": 0,
+            "per_hour_fact": null,
+            "per_hour_accrued": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "fact_exact_rate",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 1000000
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 1000000
+          }
+        ],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-05T07:00:00Z",
+            "ended_at": "2026-10-05T17:00:00Z",
+            "billable": true
+          }
+        ],
+        "period": null,
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 36000,
+        "received": 1000000,
+        "accrued": 0,
+        "per_hour_fact": 100000,
+        "per_hour_accrued": 0,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 36000,
+            "received": 1000000,
+            "accrued": 0,
+            "per_hour_fact": 100000,
+            "per_hour_accrued": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "fact_rate_rounds_down",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 100000
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 100000
+          }
+        ],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-05T07:00:00Z",
+            "ended_at": "2026-10-05T10:00:00Z",
+            "billable": true
+          }
+        ],
+        "period": null,
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 10800,
+        "received": 100000,
+        "accrued": 0,
+        "per_hour_fact": 33333,
+        "per_hour_accrued": 0,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 10800,
+            "received": 100000,
+            "accrued": 0,
+            "per_hour_fact": 33333,
+            "per_hour_accrued": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "non_billable_entries_are_not_hours",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 1000000
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 400000
+          }
+        ],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-05T07:00:00Z",
+            "ended_at": "2026-10-05T09:00:00Z",
+            "billable": true
+          },
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-06T07:00:00Z",
+            "ended_at": "2026-10-06T15:00:00Z",
+            "billable": false
+          }
+        ],
+        "period": null,
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 7200,
+        "received": 400000,
+        "accrued": 0,
+        "per_hour_fact": 200000,
+        "per_hour_accrued": 0,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 7200,
+            "received": 400000,
+            "accrued": 0,
+            "per_hour_fact": 200000,
+            "per_hour_accrued": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "running_timer_is_not_counted",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 1000000
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 400000
+          }
+        ],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-05T07:00:00Z",
+            "ended_at": "2026-10-05T09:00:00Z",
+            "billable": true
+          },
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-07T07:00:00Z",
+            "ended_at": null,
+            "billable": true
+          }
+        ],
+        "period": null,
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 7200,
+        "received": 400000,
+        "accrued": 0,
+        "per_hour_fact": 200000,
+        "per_hour_accrued": 0,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 7200,
+            "received": 400000,
+            "accrued": 0,
+            "per_hour_fact": 200000,
+            "per_hour_accrued": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "accrual_closed_change_requests_and_completed_base",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 500000,
+            "status": "completed",
+            "client_id": null,
+            "completed_date": "2026-10-01"
+          }
+        ],
+        "change_requests": [
+          {
+            "id": "c1",
+            "project_id": "p1",
+            "amount": 100000,
+            "status": "closed",
+            "closed_date": "2026-09-20"
+          },
+          {
+            "id": "c2",
+            "project_id": "p1",
+            "amount": 70000,
+            "status": "in_progress"
+          },
+          {
+            "id": "c3",
+            "project_id": "p1",
+            "amount": 30000,
+            "status": "cancelled"
+          }
+        ],
+        "payments": [],
+        "allocations": [],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-09-10T07:00:00Z",
+            "ended_at": "2026-09-10T12:00:00Z",
+            "billable": true
+          }
+        ],
+        "period": null,
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 18000,
+        "received": 0,
+        "accrued": 600000,
+        "per_hour_fact": 0,
+        "per_hour_accrued": 120000,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 18000,
+            "received": 0,
+            "accrued": 600000,
+            "per_hour_fact": 0,
+            "per_hour_accrued": 120000
+          }
+        ]
+      }
+    },
+    {
+      "name": "accrual_base_of_active_project_does_not_count",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 500000,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [
+          {
+            "id": "c1",
+            "project_id": "p1",
+            "amount": 100000,
+            "status": "closed",
+            "closed_date": "2026-09-20"
+          }
+        ],
+        "payments": [],
+        "allocations": [],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-09-10T07:00:00Z",
+            "ended_at": "2026-09-10T11:00:00Z",
+            "billable": true
+          }
+        ],
+        "period": null,
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 14400,
+        "received": 0,
+        "accrued": 100000,
+        "per_hour_fact": 0,
+        "per_hour_accrued": 25000,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 14400,
+            "received": 0,
+            "accrued": 100000,
+            "per_hour_fact": 0,
+            "per_hour_accrued": 25000
+          }
+        ]
+      }
+    },
+    {
+      "name": "fact_and_accrual_differ",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 300000,
+            "status": "completed",
+            "client_id": null,
+            "completed_date": "2026-10-03"
+          }
+        ],
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 100000
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 100000
+          }
+        ],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-02T07:00:00Z",
+            "ended_at": "2026-10-02T13:00:00Z",
+            "billable": true
+          }
+        ],
+        "period": null,
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 21600,
+        "received": 100000,
+        "accrued": 300000,
+        "per_hour_fact": 16666,
+        "per_hour_accrued": 50000,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 21600,
+            "received": 100000,
+            "accrued": 300000,
+            "per_hour_fact": 16666,
+            "per_hour_accrued": 50000
+          }
+        ]
+      }
+    },
+    {
+      "name": "totals_are_not_an_average_of_projects",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          },
+          {
+            "id": "p2",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 900000
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 100000
+          },
+          {
+            "id": "b",
+            "payment_id": "x",
+            "project_id": "p2",
+            "change_request_id": null,
+            "amount": 800000
+          }
+        ],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-02T07:00:00Z",
+            "ended_at": "2026-10-02T08:00:00Z",
+            "billable": true
+          },
+          {
+            "project_id": "p2",
+            "started_at": "2026-10-02T07:00:00Z",
+            "ended_at": "2026-10-02T15:00:00Z",
+            "billable": true
+          }
+        ],
+        "period": null,
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 32400,
+        "received": 900000,
+        "accrued": 0,
+        "per_hour_fact": 100000,
+        "per_hour_accrued": 0,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 3600,
+            "received": 100000,
+            "accrued": 0,
+            "per_hour_fact": 100000,
+            "per_hour_accrued": 0
+          },
+          {
+            "id": "p2",
+            "seconds": 28800,
+            "received": 800000,
+            "accrued": 0,
+            "per_hour_fact": 100000,
+            "per_hour_accrued": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "project_filter_by_id",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          },
+          {
+            "id": "p2",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 900000
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 100000
+          },
+          {
+            "id": "b",
+            "payment_id": "x",
+            "project_id": "p2",
+            "change_request_id": null,
+            "amount": 800000
+          }
+        ],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-02T07:00:00Z",
+            "ended_at": "2026-10-02T08:00:00Z",
+            "billable": true
+          },
+          {
+            "project_id": "p2",
+            "started_at": "2026-10-02T07:00:00Z",
+            "ended_at": "2026-10-02T15:00:00Z",
+            "billable": true
+          }
+        ],
+        "period": null,
+        "project_id": "p2"
+      },
+      "expected": {
+        "seconds": 28800,
+        "received": 800000,
+        "accrued": 0,
+        "per_hour_fact": 100000,
+        "per_hour_accrued": 0,
+        "projects": [
+          {
+            "id": "p2",
+            "seconds": 28800,
+            "received": 800000,
+            "accrued": 0,
+            "per_hour_fact": 100000,
+            "per_hour_accrued": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "period_uses_moscow_payment_date",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-09-30T20:59:59Z",
+            "amount": 100000
+          },
+          {
+            "id": "y",
+            "paid_at": "2026-09-30T21:00:00Z",
+            "amount": 200000
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 100000
+          },
+          {
+            "id": "b",
+            "payment_id": "y",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 200000
+          }
+        ],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-02T07:00:00Z",
+            "ended_at": "2026-10-02T08:00:00Z",
+            "billable": true
+          }
+        ],
+        "period": {
+          "from": "2026-10-01",
+          "to": "2026-10-31"
+        },
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 3600,
+        "received": 200000,
+        "accrued": 0,
+        "per_hour_fact": 200000,
+        "per_hour_accrued": 0,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 3600,
+            "received": 200000,
+            "accrued": 0,
+            "per_hour_fact": 200000,
+            "per_hour_accrued": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "period_uses_moscow_start_date_of_entries",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 1000000
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 100000
+          }
+        ],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-09-30T20:00:00Z",
+            "ended_at": "2026-09-30T21:00:00Z",
+            "billable": true
+          },
+          {
+            "project_id": "p1",
+            "started_at": "2026-09-30T21:00:00Z",
+            "ended_at": "2026-09-30T23:00:00Z",
+            "billable": true
+          },
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-31T20:59:00Z",
+            "ended_at": "2026-10-31T21:59:00Z",
+            "billable": true
+          }
+        ],
+        "period": {
+          "from": "2026-10-01",
+          "to": "2026-10-31"
+        },
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 10800,
+        "received": 100000,
+        "accrued": 0,
+        "per_hour_fact": 33333,
+        "per_hour_accrued": 0,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 10800,
+            "received": 100000,
+            "accrued": 0,
+            "per_hour_fact": 33333,
+            "per_hour_accrued": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "period_filters_accrual_by_closed_and_completed_dates",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 200000,
+            "status": "completed",
+            "client_id": null,
+            "completed_date": "2026-10-15"
+          }
+        ],
+        "change_requests": [
+          {
+            "id": "c1",
+            "project_id": "p1",
+            "amount": 10000,
+            "status": "closed",
+            "closed_date": "2026-09-30"
+          },
+          {
+            "id": "c2",
+            "project_id": "p1",
+            "amount": 20000,
+            "status": "closed",
+            "closed_date": "2026-10-01"
+          },
+          {
+            "id": "c3",
+            "project_id": "p1",
+            "amount": 40000,
+            "status": "closed",
+            "closed_date": "2026-10-31"
+          },
+          {
+            "id": "c4",
+            "project_id": "p1",
+            "amount": 80000,
+            "status": "closed",
+            "closed_date": "2026-11-01"
+          }
+        ],
+        "payments": [],
+        "allocations": [],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-02T07:00:00Z",
+            "ended_at": "2026-10-02T09:00:00Z",
+            "billable": true
+          }
+        ],
+        "period": {
+          "from": "2026-10-01",
+          "to": "2026-10-31"
+        },
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 7200,
+        "received": 0,
+        "accrued": 260000,
+        "per_hour_fact": 0,
+        "per_hour_accrued": 130000,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 7200,
+            "received": 0,
+            "accrued": 260000,
+            "per_hour_fact": 0,
+            "per_hour_accrued": 130000
+          }
+        ]
+      }
+    },
+    {
+      "name": "open_ended_period",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-08-05T09:00:00Z",
+            "amount": 10000
+          },
+          {
+            "id": "y",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 20000
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 10000
+          },
+          {
+            "id": "b",
+            "payment_id": "y",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 20000
+          }
+        ],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-08-05T07:00:00Z",
+            "ended_at": "2026-08-05T08:00:00Z",
+            "billable": true
+          },
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-05T07:00:00Z",
+            "ended_at": "2026-10-05T08:00:00Z",
+            "billable": true
+          }
+        ],
+        "period": {
+          "from": "2026-09-01",
+          "to": null
+        },
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 3600,
+        "received": 20000,
+        "accrued": 0,
+        "per_hour_fact": 20000,
+        "per_hour_accrued": 0,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 3600,
+            "received": 20000,
+            "accrued": 0,
+            "per_hour_fact": 20000,
+            "per_hour_accrued": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "allocation_of_unknown_payment_is_ignored",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "payments": [
+          {
+            "id": "x",
+            "paid_at": "2026-10-05T09:00:00Z",
+            "amount": 1000000
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 10000
+          },
+          {
+            "id": "b",
+            "payment_id": "ghost",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 99999
+          }
+        ],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-05T07:00:00Z",
+            "ended_at": "2026-10-05T08:00:00Z",
+            "billable": true
+          }
+        ],
+        "period": null,
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 3600,
+        "received": 109999,
+        "accrued": 0,
+        "per_hour_fact": 109999,
+        "per_hour_accrued": 0,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 3600,
+            "received": 109999,
+            "accrued": 0,
+            "per_hour_fact": 109999,
+            "per_hour_accrued": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty_everything",
+      "input": {
+        "projects": [],
+        "change_requests": [],
+        "payments": [],
+        "allocations": [],
+        "time_entries": [],
+        "period": null,
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 0,
+        "received": 0,
+        "accrued": 0,
+        "per_hour_fact": null,
+        "per_hour_accrued": null,
+        "projects": []
+      }
+    },
+    {
+      "name": "time_on_a_project_without_money",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 0,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "payments": [],
+        "allocations": [],
+        "time_entries": [
+          {
+            "project_id": "p1",
+            "started_at": "2026-10-05T07:00:00Z",
+            "ended_at": "2026-10-05T10:00:00Z",
+            "billable": true
+          }
+        ],
+        "period": null,
+        "project_id": null
+      },
+      "expected": {
+        "seconds": 10800,
+        "received": 0,
+        "accrued": 0,
+        "per_hour_fact": 0,
+        "per_hour_accrued": 0,
+        "projects": [
+          {
+            "id": "p1",
+            "seconds": 10800,
+            "received": 0,
+            "accrued": 0,
+            "per_hour_fact": 0,
+            "per_hour_accrued": 0
+          }
+        ]
+      }
+    }
+  ]
+}

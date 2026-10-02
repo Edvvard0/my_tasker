@@ -1,0 +1,310 @@
+{
+  "description": "Scalar rules: paid_bp, per_hour, hourly_billable, seconds, moscow_date, moscow_month (input.op selects the function)",
+  "cases": [
+    {
+      "name": "paid_bp_zero",
+      "input": {
+        "op": "paid_bp",
+        "received": 0,
+        "total": 100000
+      },
+      "expected": 0
+    },
+    {
+      "name": "paid_bp_half",
+      "input": {
+        "op": "paid_bp",
+        "received": 50000,
+        "total": 100000
+      },
+      "expected": 5000
+    },
+    {
+      "name": "paid_bp_full",
+      "input": {
+        "op": "paid_bp",
+        "received": 100000,
+        "total": 100000
+      },
+      "expected": 10000
+    },
+    {
+      "name": "paid_bp_third_floors",
+      "input": {
+        "op": "paid_bp",
+        "received": 1,
+        "total": 3
+      },
+      "expected": 3333
+    },
+    {
+      "name": "paid_bp_two_thirds_floors",
+      "input": {
+        "op": "paid_bp",
+        "received": 2,
+        "total": 3
+      },
+      "expected": 6666
+    },
+    {
+      "name": "paid_bp_almost_full_not_100",
+      "input": {
+        "op": "paid_bp",
+        "received": 99999,
+        "total": 100000
+      },
+      "expected": 9999
+    },
+    {
+      "name": "paid_bp_overpaid",
+      "input": {
+        "op": "paid_bp",
+        "received": 150000,
+        "total": 100000
+      },
+      "expected": 15000
+    },
+    {
+      "name": "paid_bp_zero_total",
+      "input": {
+        "op": "paid_bp",
+        "received": 5,
+        "total": 0
+      },
+      "expected": 0
+    },
+    {
+      "name": "paid_bp_huge",
+      "input": {
+        "op": "paid_bp",
+        "received": 99999999999998,
+        "total": 99999999999999
+      },
+      "expected": 9999
+    },
+    {
+      "name": "per_hour_exact",
+      "input": {
+        "op": "per_hour",
+        "amount": 1000000,
+        "seconds": 36000
+      },
+      "expected": 100000
+    },
+    {
+      "name": "per_hour_floors",
+      "input": {
+        "op": "per_hour",
+        "amount": 100000,
+        "seconds": 10800
+      },
+      "expected": 33333
+    },
+    {
+      "name": "per_hour_zero_seconds",
+      "input": {
+        "op": "per_hour",
+        "amount": 100000,
+        "seconds": 0
+      },
+      "expected": null
+    },
+    {
+      "name": "per_hour_zero_amount",
+      "input": {
+        "op": "per_hour",
+        "amount": 0,
+        "seconds": 3600
+      },
+      "expected": 0
+    },
+    {
+      "name": "per_hour_under_one_kopeck",
+      "input": {
+        "op": "per_hour",
+        "amount": 1,
+        "seconds": 7200
+      },
+      "expected": 0
+    },
+    {
+      "name": "per_hour_one_second",
+      "input": {
+        "op": "per_hour",
+        "amount": 1,
+        "seconds": 1
+      },
+      "expected": 3600
+    },
+    {
+      "name": "per_hour_huge",
+      "input": {
+        "op": "per_hour",
+        "amount": 99999999999999,
+        "seconds": 25200
+      },
+      "expected": 14285714285714
+    },
+    {
+      "name": "hourly_billable_exact",
+      "input": {
+        "op": "hourly_billable",
+        "rate": 150000,
+        "seconds": 7200
+      },
+      "expected": 300000
+    },
+    {
+      "name": "hourly_billable_floors",
+      "input": {
+        "op": "hourly_billable",
+        "rate": 100,
+        "seconds": 1799
+      },
+      "expected": 49
+    },
+    {
+      "name": "hourly_billable_zero",
+      "input": {
+        "op": "hourly_billable",
+        "rate": 150000,
+        "seconds": 0
+      },
+      "expected": 0
+    },
+    {
+      "name": "seconds_one_hour",
+      "input": {
+        "op": "seconds",
+        "entry": {
+          "project_id": "p",
+          "started_at": "2026-10-05T07:00:00Z",
+          "ended_at": "2026-10-05T08:00:00Z",
+          "billable": true
+        }
+      },
+      "expected": 3600
+    },
+    {
+      "name": "seconds_zero_length",
+      "input": {
+        "op": "seconds",
+        "entry": {
+          "project_id": "p",
+          "started_at": "2026-10-05T07:00:00Z",
+          "ended_at": "2026-10-05T07:00:00Z",
+          "billable": true
+        }
+      },
+      "expected": 0
+    },
+    {
+      "name": "seconds_running_is_null",
+      "input": {
+        "op": "seconds",
+        "entry": {
+          "project_id": "p",
+          "started_at": "2026-10-05T07:00:00Z",
+          "ended_at": null,
+          "billable": true
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "seconds_across_midnight",
+      "input": {
+        "op": "seconds",
+        "entry": {
+          "project_id": "p",
+          "started_at": "2026-10-05T22:30:00Z",
+          "ended_at": "2026-10-06T01:15:30Z",
+          "billable": true
+        }
+      },
+      "expected": 9930
+    },
+    {
+      "name": "seconds_fractions_dropped_before_subtracting",
+      "input": {
+        "op": "seconds",
+        "entry": {
+          "project_id": "p",
+          "started_at": "2026-10-05T07:00:00.900Z",
+          "ended_at": "2026-10-05T07:00:01.100Z",
+          "billable": true
+        }
+      },
+      "expected": 1
+    },
+    {
+      "name": "seconds_offset_input",
+      "input": {
+        "op": "seconds",
+        "entry": {
+          "project_id": "p",
+          "started_at": "2026-10-05T10:00:00+03:00",
+          "ended_at": "2026-10-05T08:00:00Z",
+          "billable": true
+        }
+      },
+      "expected": 3600
+    },
+    {
+      "name": "moscow_date_morning",
+      "input": {
+        "op": "moscow_date",
+        "at": "2026-10-05T07:00:00Z"
+      },
+      "expected": "2026-10-05"
+    },
+    {
+      "name": "moscow_date_just_before_midnight_utc_is_next_day",
+      "input": {
+        "op": "moscow_date",
+        "at": "2026-10-05T21:00:00Z"
+      },
+      "expected": "2026-10-06"
+    },
+    {
+      "name": "moscow_date_last_second_of_day",
+      "input": {
+        "op": "moscow_date",
+        "at": "2026-10-05T20:59:59Z"
+      },
+      "expected": "2026-10-05"
+    },
+    {
+      "name": "moscow_date_new_year",
+      "input": {
+        "op": "moscow_date",
+        "at": "2026-12-31T21:00:00Z"
+      },
+      "expected": "2027-01-01"
+    },
+    {
+      "name": "moscow_date_leap_day",
+      "input": {
+        "op": "moscow_date",
+        "at": "2028-02-28T21:30:00Z"
+      },
+      "expected": "2028-02-29"
+    },
+    {
+      "name": "moscow_date_summer_no_dst",
+      "input": {
+        "op": "moscow_date",
+        "at": "2026-07-01T20:59:59Z"
+      },
+      "expected": "2026-07-01"
+    },
+    {
+      "name": "moscow_month_boundary",
+      "input": {
+        "op": "moscow_month",
+        "at": "2026-09-30T21:00:00Z"
+      },
+      "expected": "2026-10"
+    }
+  ]
+}

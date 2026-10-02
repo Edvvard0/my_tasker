@@ -11,6 +11,8 @@ from calendar import monthrange
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
+from tasker.calendar.ids import fold_tag_name
+
 _SPLIT = re.compile("[ \t\n\r   ]+")
 _PRIORITY = re.compile(r"![1-5]")
 _INT = re.compile(r"[0-9]+")
@@ -19,6 +21,7 @@ _RANGE = re.compile(r"([01]?[0-9]|2[0-3]):([0-5][0-9])[-–—]([01]?[0-9]|2[0-3
 _NUMERIC_DATE = re.compile(r"([0-9]{1,2})\.([0-9]{1,2})(?:\.([0-9]{4}|[0-9]{2}))?")
 _ISO_DATE = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})")
 _YEAR = re.compile(r"20[0-9]{2}")
+_HALF_HOURS = re.compile(r"([0-9]{1,2})[.,]5(ч|час|часа|часов)?")
 
 WEEKDAYS = {
     "понедельник": 0, "пн": 0,
@@ -43,7 +46,7 @@ WEEK_WORDS = ("неделю", "недели", "недель")
 MONTH_WORDS = ("месяц", "месяца", "месяцев")
 MINUTE_WORDS = ("минуту", "минуты", "минут", "мин")
 HOUR_WORDS = ("час", "часа", "часов", "ч")
-PERIODS = ("утра", "дня", "вечера")
+PERIODS = ("утра", "дня", "вечера", "ночи")
 DAYPART_TIMES = {"утром": (9, 0), "днем": (13, 0), "вечером": (19, 0)}
 DAY_OFFSETS = {"сегодня": 0, "завтра": 1, "послезавтра": 2}
 
@@ -104,6 +107,11 @@ def _key(token: str) -> str:
     return token.lower().replace("ё", "е").rstrip(",;:")
 
 
+def _evening(hour: int) -> int:
+    """A bare hour 1..7 means the evening (13:00-19:00); everything else is taken literally."""
+    return hour + 12 if 1 <= hour <= 7 else hour
+
+
 def _add_months(day: date, months: int) -> date:
     index = day.year * 12 + day.month - 1 + months
     year, month = divmod(index, 12)
@@ -155,7 +163,7 @@ def _record(meta: _Meta, sigil: str, name: str) -> None:
         meta.project = name  # the last project wins
         return
     bucket = meta.people if sigil == "@" else meta.tags
-    if name.lower() not in [item.lower() for item in bucket]:
+    if fold_tag_name(name) not in [fold_tag_name(item) for item in bucket]:
         bucket.append(name)
 
 
@@ -297,11 +305,23 @@ def _hour_phrase(keys: list[str], i: int) -> _Match | None:
         j += 1
         if not 1 <= amount <= 12:
             return None
-        hour = amount % 12 if period == "утра" else amount % 12 + 12
-        return _Match(j - i, clock=(hour, 0))
+        hour = _period_hour(amount, period)
+        return None if hour is None else _Match(j - i, clock=(hour, 0))
     if has_word and has_prep and 0 <= amount <= 23:
-        return _Match(j - i, clock=(amount, 0))
+        return _Match(j - i, clock=(_evening(amount), 0))
     return None
+
+
+def _period_hour(amount: int, period: str) -> int | None:
+    if period == "утра":
+        return amount % 12
+    if period == "ночи":  # 12 ночи = 00:00, 1..5 ночи = 01:00..05:00, 9..11 ночи = 21:00..23:00
+        if amount == 12:
+            return 0
+        if 1 <= amount <= 5:
+            return amount
+        return amount + 12 if 9 <= amount <= 11 else None
+    return amount % 12 + 12
 
 
 def _duration_phrase(state: _State, i: int) -> _Match | None:
@@ -315,6 +335,13 @@ def _duration_phrase(state: _State, i: int) -> _Match | None:
         return _Match(2, duration=30)
     if following == "полтора" and i + 2 < len(keys) and keys[i + 2] == "часа":
         return _Match(3, duration=90)
+    half = _HALF_HOURS.fullmatch(following)
+    if half:  # "на 1.5ч", "на 2,5 часа": N and a half hours
+        used = 2 if half.group(2) else 3
+        word = keys[i + 2] if used == 3 and i + 2 < len(keys) else ""
+        if half.group(2) or word in HOUR_WORDS:
+            return _Match(used, duration=int(half.group(1)) * 60 + 30)
+        return None
     amount = _number(keys, i + 1)
     unit = keys[i + 2] if i + 2 < len(keys) else ""
     if amount is None:
@@ -379,7 +406,7 @@ def _bare_hour(state: _State) -> None:
             continue
         if state.day is None and i + 2 != len(keys):
             continue
-        state.clock = (amount, 0)
+        state.clock = (_evening(amount), 0)
         state.consumed[i] = state.consumed[i + 1] = True
         return
 

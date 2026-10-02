@@ -1,0 +1,1858 @@
+{
+  "description": "goal_progress(goal, accounts, transactions, checkpoints, debts, repayments, projects, change_requests, allocations)",
+  "cases": [
+    {
+      "name": "excel_have_329600_without_the_credit_card",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 40000000,
+          "formula": [
+            {
+              "kind": "accounts",
+              "sign": "+",
+              "account_ids": [
+                "a-cash",
+                "a-card",
+                "a-save"
+              ]
+            },
+            {
+              "kind": "debts_to_me",
+              "sign": "+"
+            },
+            {
+              "kind": "receivables",
+              "sign": "+",
+              "client_ids": null
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 32960000,
+        "target": 40000000,
+        "missing": 7040000,
+        "reached": false,
+        "surplus": 0,
+        "progress_bp": 8240,
+        "terms": [
+          {
+            "kind": "accounts",
+            "value": 23600000
+          },
+          {
+            "kind": "debts_to_me",
+            "value": 1310000
+          },
+          {
+            "kind": "receivables",
+            "value": 8050000
+          }
+        ]
+      }
+    },
+    {
+      "name": "excel_default_formula_with_the_credit_card_have_454600_missing_minus_54600",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 40000000,
+          "formula": [
+            {
+              "kind": "all_accounts",
+              "sign": "+"
+            },
+            {
+              "kind": "debts_to_me",
+              "sign": "+"
+            },
+            {
+              "kind": "receivables",
+              "sign": "+",
+              "client_ids": null
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 45460000,
+        "target": 40000000,
+        "missing": -5460000,
+        "reached": true,
+        "surplus": 5460000,
+        "progress_bp": 11365,
+        "terms": [
+          {
+            "kind": "all_accounts",
+            "value": 36100000
+          },
+          {
+            "kind": "debts_to_me",
+            "value": 1310000
+          },
+          {
+            "kind": "receivables",
+            "value": 8050000
+          }
+        ]
+      }
+    },
+    {
+      "name": "excel_credit_card_outside_the_total_gives_329600_again",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 40000000,
+          "formula": [
+            {
+              "kind": "all_accounts",
+              "sign": "+"
+            },
+            {
+              "kind": "debts_to_me",
+              "sign": "+"
+            },
+            {
+              "kind": "receivables",
+              "sign": "+",
+              "client_ids": null
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": false,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 32960000,
+        "target": 40000000,
+        "missing": 7040000,
+        "reached": false,
+        "surplus": 0,
+        "progress_bp": 8240,
+        "terms": [
+          {
+            "kind": "all_accounts",
+            "value": 23600000
+          },
+          {
+            "kind": "debts_to_me",
+            "value": 1310000
+          },
+          {
+            "kind": "receivables",
+            "value": 8050000
+          }
+        ]
+      }
+    },
+    {
+      "name": "excel_credit_card_added_as_its_own_term",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 40000000,
+          "formula": [
+            {
+              "kind": "accounts",
+              "sign": "+",
+              "account_ids": [
+                "a-cash",
+                "a-card",
+                "a-save"
+              ]
+            },
+            {
+              "kind": "accounts",
+              "sign": "+",
+              "account_ids": [
+                "a-credit"
+              ]
+            },
+            {
+              "kind": "debts_to_me",
+              "sign": "+"
+            },
+            {
+              "kind": "receivables",
+              "sign": "+",
+              "client_ids": [
+                "roma"
+              ]
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 45460000,
+        "target": 40000000,
+        "missing": -5460000,
+        "reached": true,
+        "surplus": 5460000,
+        "progress_bp": 11365,
+        "terms": [
+          {
+            "kind": "accounts",
+            "value": 23600000
+          },
+          {
+            "kind": "accounts",
+            "value": 12500000
+          },
+          {
+            "kind": "debts_to_me",
+            "value": 1310000
+          },
+          {
+            "kind": "receivables",
+            "value": 8050000
+          }
+        ]
+      }
+    },
+    {
+      "name": "target_exactly_reached",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 45460000,
+          "formula": [
+            {
+              "kind": "all_accounts",
+              "sign": "+"
+            },
+            {
+              "kind": "debts_to_me",
+              "sign": "+"
+            },
+            {
+              "kind": "receivables",
+              "sign": "+",
+              "client_ids": null
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 45460000,
+        "target": 45460000,
+        "missing": 0,
+        "reached": true,
+        "surplus": 0,
+        "progress_bp": 10000,
+        "terms": [
+          {
+            "kind": "all_accounts",
+            "value": 36100000
+          },
+          {
+            "kind": "debts_to_me",
+            "value": 1310000
+          },
+          {
+            "kind": "receivables",
+            "value": 8050000
+          }
+        ]
+      }
+    },
+    {
+      "name": "one_kopeck_short",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 45460001,
+          "formula": [
+            {
+              "kind": "all_accounts",
+              "sign": "+"
+            },
+            {
+              "kind": "debts_to_me",
+              "sign": "+"
+            },
+            {
+              "kind": "receivables",
+              "sign": "+",
+              "client_ids": null
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 45460000,
+        "target": 45460001,
+        "missing": 1,
+        "reached": false,
+        "surplus": 0,
+        "progress_bp": 9999,
+        "terms": [
+          {
+            "kind": "all_accounts",
+            "value": 36100000
+          },
+          {
+            "kind": "debts_to_me",
+            "value": 1310000
+          },
+          {
+            "kind": "receivables",
+            "value": 8050000
+          }
+        ]
+      }
+    },
+    {
+      "name": "my_debts_are_subtracted",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 40000000,
+          "formula": [
+            {
+              "kind": "all_accounts",
+              "sign": "+"
+            },
+            {
+              "kind": "debts_to_me",
+              "sign": "+"
+            },
+            {
+              "kind": "receivables",
+              "sign": "+",
+              "client_ids": null
+            },
+            {
+              "kind": "my_debts",
+              "sign": "-"
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          },
+          {
+            "id": "d4",
+            "direction": "i_owe",
+            "amount": 1000000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 44460000,
+        "target": 40000000,
+        "missing": -4460000,
+        "reached": true,
+        "surplus": 4460000,
+        "progress_bp": 11115,
+        "terms": [
+          {
+            "kind": "all_accounts",
+            "value": 36100000
+          },
+          {
+            "kind": "debts_to_me",
+            "value": 1310000
+          },
+          {
+            "kind": "receivables",
+            "value": 8050000
+          },
+          {
+            "kind": "my_debts",
+            "value": -1000000
+          }
+        ]
+      }
+    },
+    {
+      "name": "repayments_shrink_debts_to_me",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 40000000,
+          "formula": [
+            {
+              "kind": "debts_to_me",
+              "sign": "+"
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [
+          {
+            "id": "r1",
+            "debt_id": "d1",
+            "amount": 500000,
+            "transaction_id": null
+          }
+        ],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 810000,
+        "target": 40000000,
+        "missing": 39190000,
+        "reached": false,
+        "surplus": 0,
+        "progress_bp": 202,
+        "terms": [
+          {
+            "kind": "debts_to_me",
+            "value": 810000
+          }
+        ]
+      }
+    },
+    {
+      "name": "receivables_of_selected_customers_only",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 10000000,
+          "formula": [
+            {
+              "kind": "receivables",
+              "sign": "+",
+              "client_ids": [
+                "elena"
+              ]
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p3",
+            "base_amount": 1500000,
+            "status": "active",
+            "client_id": "elena"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 1500000,
+        "target": 10000000,
+        "missing": 8500000,
+        "reached": false,
+        "surplus": 0,
+        "progress_bp": 1500,
+        "terms": [
+          {
+            "kind": "receivables",
+            "value": 1500000
+          }
+        ]
+      }
+    },
+    {
+      "name": "receivables_of_all_include_projects_without_a_customer",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 10000000,
+          "formula": [
+            {
+              "kind": "receivables",
+              "sign": "+",
+              "client_ids": null
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p9",
+            "base_amount": 500000,
+            "status": "active",
+            "client_id": null
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 2500000,
+        "target": 10000000,
+        "missing": 7500000,
+        "reached": false,
+        "surplus": 0,
+        "progress_bp": 2500,
+        "terms": [
+          {
+            "kind": "receivables",
+            "value": 2500000
+          }
+        ]
+      }
+    },
+    {
+      "name": "receivables_follow_work_payments",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 10000000,
+          "formula": [
+            {
+              "kind": "receivables",
+              "sign": "+",
+              "client_ids": null
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": [
+          {
+            "id": "al1",
+            "payment_id": "pay1",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 1200000
+          }
+        ]
+      },
+      "expected": {
+        "have": 800000,
+        "target": 10000000,
+        "missing": 9200000,
+        "reached": false,
+        "surplus": 0,
+        "progress_bp": 800,
+        "terms": [
+          {
+            "kind": "receivables",
+            "value": 800000
+          }
+        ]
+      }
+    },
+    {
+      "name": "an_account_listed_twice_in_one_term_counts_once",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 10000000,
+          "formula": [
+            {
+              "kind": "accounts",
+              "sign": "+",
+              "account_ids": [
+                "a-cash",
+                "a-cash"
+              ]
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 5400000,
+        "target": 10000000,
+        "missing": 4600000,
+        "reached": false,
+        "surplus": 0,
+        "progress_bp": 5400,
+        "terms": [
+          {
+            "kind": "accounts",
+            "value": 5400000
+          }
+        ]
+      }
+    },
+    {
+      "name": "a_deleted_account_in_a_term_counts_nothing",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 10000000,
+          "formula": [
+            {
+              "kind": "accounts",
+              "sign": "+",
+              "account_ids": [
+                "a-cash",
+                "a-gone"
+              ]
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 5400000,
+        "target": 10000000,
+        "missing": 4600000,
+        "reached": false,
+        "surplus": 0,
+        "progress_bp": 5400,
+        "terms": [
+          {
+            "kind": "accounts",
+            "value": 5400000
+          }
+        ]
+      }
+    },
+    {
+      "name": "minus_sign_on_accounts",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 10000000,
+          "formula": [
+            {
+              "kind": "accounts",
+              "sign": "+",
+              "account_ids": [
+                "a-cash"
+              ]
+            },
+            {
+              "kind": "accounts",
+              "sign": "-",
+              "account_ids": [
+                "a-save"
+              ]
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 4600000,
+        "target": 10000000,
+        "missing": 5400000,
+        "reached": false,
+        "surplus": 0,
+        "progress_bp": 4600,
+        "terms": [
+          {
+            "kind": "accounts",
+            "value": 5400000
+          },
+          {
+            "kind": "accounts",
+            "value": -800000
+          }
+        ]
+      }
+    },
+    {
+      "name": "have_below_zero_gives_zero_progress",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 10000000,
+          "formula": [
+            {
+              "kind": "accounts",
+              "sign": "-",
+              "account_ids": [
+                "a-cash"
+              ]
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a-cash",
+            "kind": "cash",
+            "opening_balance": 5400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-card",
+            "kind": "debit_card",
+            "opening_balance": 17400000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-save",
+            "kind": "savings",
+            "opening_balance": 800000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a-credit",
+            "kind": "credit_card",
+            "opening_balance": 12500000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false,
+            "credit_limit": 30000000
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 2000000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 6050000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": -5400000,
+        "target": 10000000,
+        "missing": 15400000,
+        "reached": false,
+        "surplus": 0,
+        "progress_bp": 0,
+        "terms": [
+          {
+            "kind": "accounts",
+            "value": -5400000
+          }
+        ]
+      }
+    },
+    {
+      "name": "balances_follow_transactions_and_checkpoints",
+      "input": {
+        "goal": {
+          "id": "g",
+          "target_amount": 10000000,
+          "formula": [
+            {
+              "kind": "all_accounts",
+              "sign": "+"
+            }
+          ]
+        },
+        "accounts": [
+          {
+            "id": "a1",
+            "kind": "debit_card",
+            "opening_balance": 100000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a2",
+            "kind": "debit_card",
+            "opening_balance": 0,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          }
+        ],
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "transfer",
+            "account_id": "a1",
+            "to_account_id": "a2",
+            "amount": 40000,
+            "occurred_at": "2026-03-01T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "income",
+            "account_id": "a2",
+            "to_account_id": null,
+            "amount": 5000,
+            "occurred_at": "2026-03-02T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "income",
+            "account_id": "a2",
+            "to_account_id": null,
+            "amount": 9999900,
+            "occurred_at": "2026-03-02T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "checkpoints": [
+          {
+            "id": "c1",
+            "account_id": "a1",
+            "checked_at": "2026-03-10T09:00:00Z",
+            "actual_balance": 50000
+          }
+        ],
+        "debts": [],
+        "repayments": [],
+        "projects": [],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "have": 95000,
+        "target": 10000000,
+        "missing": 9905000,
+        "reached": false,
+        "surplus": 0,
+        "progress_bp": 95,
+        "terms": [
+          {
+            "kind": "all_accounts",
+            "value": 95000
+          }
+        ]
+      }
+    }
+  ]
+}

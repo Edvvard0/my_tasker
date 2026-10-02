@@ -1,0 +1,404 @@
+{
+  "description": "debts_summary(debts, repayments, today)",
+  "cases": [
+    {
+      "name": "no_debts",
+      "input": {
+        "debts": [],
+        "repayments": [],
+        "today": "2026-10-05"
+      },
+      "expected": {
+        "owed_to_me": 0,
+        "i_owe": 0,
+        "debts": []
+      }
+    },
+    {
+      "name": "open_debt",
+      "input": {
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 10000,
+            "due_date": null
+          }
+        ],
+        "repayments": [],
+        "today": "2026-10-05"
+      },
+      "expected": {
+        "owed_to_me": 10000,
+        "i_owe": 0,
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 10000,
+            "repaid": 0,
+            "remaining": 10000,
+            "overpaid": 0,
+            "status": "open",
+            "overdue": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "partly_repaid",
+      "input": {
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 10000,
+            "due_date": null
+          }
+        ],
+        "repayments": [
+          {
+            "id": "r1",
+            "debt_id": "d1",
+            "amount": 3000,
+            "transaction_id": null
+          },
+          {
+            "id": "r2",
+            "debt_id": "d1",
+            "amount": 1500,
+            "transaction_id": null
+          }
+        ],
+        "today": "2026-10-05"
+      },
+      "expected": {
+        "owed_to_me": 5500,
+        "i_owe": 0,
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 10000,
+            "repaid": 4500,
+            "remaining": 5500,
+            "overpaid": 0,
+            "status": "partial",
+            "overdue": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "fully_repaid_is_closed",
+      "input": {
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "i_owe",
+            "amount": 10000,
+            "due_date": null
+          }
+        ],
+        "repayments": [
+          {
+            "id": "r1",
+            "debt_id": "d1",
+            "amount": 6000,
+            "transaction_id": null
+          },
+          {
+            "id": "r2",
+            "debt_id": "d1",
+            "amount": 4000,
+            "transaction_id": null
+          }
+        ],
+        "today": "2026-10-05"
+      },
+      "expected": {
+        "owed_to_me": 0,
+        "i_owe": 0,
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "i_owe",
+            "amount": 10000,
+            "repaid": 10000,
+            "remaining": 0,
+            "overpaid": 0,
+            "status": "closed",
+            "overdue": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "over_repaid_is_closed_with_a_surplus",
+      "input": {
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "i_owe",
+            "amount": 10000,
+            "due_date": null
+          }
+        ],
+        "repayments": [
+          {
+            "id": "r1",
+            "debt_id": "d1",
+            "amount": 10001,
+            "transaction_id": null
+          }
+        ],
+        "today": "2026-10-05"
+      },
+      "expected": {
+        "owed_to_me": 0,
+        "i_owe": 0,
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "i_owe",
+            "amount": 10000,
+            "repaid": 10001,
+            "remaining": 0,
+            "overpaid": 1,
+            "status": "closed",
+            "overdue": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "due_yesterday_is_overdue",
+      "input": {
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 10000,
+            "due_date": "2026-10-04"
+          }
+        ],
+        "repayments": [],
+        "today": "2026-10-05"
+      },
+      "expected": {
+        "owed_to_me": 10000,
+        "i_owe": 0,
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 10000,
+            "repaid": 0,
+            "remaining": 10000,
+            "overpaid": 0,
+            "status": "open",
+            "overdue": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "due_today_is_not_overdue",
+      "input": {
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 10000,
+            "due_date": "2026-10-05"
+          }
+        ],
+        "repayments": [],
+        "today": "2026-10-05"
+      },
+      "expected": {
+        "owed_to_me": 10000,
+        "i_owe": 0,
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 10000,
+            "repaid": 0,
+            "remaining": 10000,
+            "overpaid": 0,
+            "status": "open",
+            "overdue": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "a_closed_debt_is_never_overdue",
+      "input": {
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 10000,
+            "due_date": "2026-01-01"
+          }
+        ],
+        "repayments": [
+          {
+            "id": "r1",
+            "debt_id": "d1",
+            "amount": 10000,
+            "transaction_id": null
+          }
+        ],
+        "today": "2026-10-05"
+      },
+      "expected": {
+        "owed_to_me": 0,
+        "i_owe": 0,
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 10000,
+            "repaid": 10000,
+            "remaining": 0,
+            "overpaid": 0,
+            "status": "closed",
+            "overdue": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "no_today_means_no_overdue",
+      "input": {
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 10000,
+            "due_date": "2026-01-01"
+          }
+        ],
+        "repayments": [],
+        "today": null
+      },
+      "expected": {
+        "owed_to_me": 10000,
+        "i_owe": 0,
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 10000,
+            "repaid": 0,
+            "remaining": 10000,
+            "overpaid": 0,
+            "status": "open",
+            "overdue": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "totals_per_direction_and_foreign_repayments_ignored",
+      "input": {
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "due_date": null
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "due_date": null
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "due_date": null
+          },
+          {
+            "id": "d4",
+            "direction": "i_owe",
+            "amount": 1000000,
+            "due_date": null
+          }
+        ],
+        "repayments": [
+          {
+            "id": "r1",
+            "debt_id": "d2",
+            "amount": 60000,
+            "transaction_id": null
+          },
+          {
+            "id": "r2",
+            "debt_id": "d4",
+            "amount": 250000,
+            "transaction_id": null
+          },
+          {
+            "id": "r3",
+            "debt_id": "gone",
+            "amount": 999999,
+            "transaction_id": null
+          }
+        ],
+        "today": "2026-10-05"
+      },
+      "expected": {
+        "owed_to_me": 1250000,
+        "i_owe": 750000,
+        "debts": [
+          {
+            "id": "d1",
+            "direction": "owed_to_me",
+            "amount": 750000,
+            "repaid": 0,
+            "remaining": 750000,
+            "overpaid": 0,
+            "status": "open",
+            "overdue": false
+          },
+          {
+            "id": "d2",
+            "direction": "owed_to_me",
+            "amount": 260000,
+            "repaid": 60000,
+            "remaining": 200000,
+            "overpaid": 0,
+            "status": "partial",
+            "overdue": false
+          },
+          {
+            "id": "d3",
+            "direction": "owed_to_me",
+            "amount": 300000,
+            "repaid": 0,
+            "remaining": 300000,
+            "overpaid": 0,
+            "status": "open",
+            "overdue": false
+          },
+          {
+            "id": "d4",
+            "direction": "i_owe",
+            "amount": 1000000,
+            "repaid": 250000,
+            "remaining": 750000,
+            "overpaid": 0,
+            "status": "partial",
+            "overdue": false
+          }
+        ]
+      }
+    }
+  ]
+}

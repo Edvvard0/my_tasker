@@ -55,11 +55,29 @@ def test_decode_line() -> None:
 
 
 def test_the_registry_has_the_builtin_tools() -> None:
-    assert sorted(TOOLS.names()) == ["create_task", "get_events", "get_tasks"]
+    assert sorted(TOOLS.names()) == [
+        "create_task",
+        "get_accounts",
+        "get_debts",
+        "get_events",
+        "get_finance_summary",
+        "get_goals",
+        "get_projects",
+        "get_receivables",
+        "get_tasks",
+        "get_work_hours",
+    ]
     assert {s.name: s.kind for s in TOOLS.all()} == {
         "get_tasks": "read",
         "get_events": "read",
         "create_task": "write",
+        "get_projects": "read",
+        "get_receivables": "read",
+        "get_work_hours": "read",
+        "get_accounts": "read",
+        "get_finance_summary": "read",
+        "get_goals": "read",
+        "get_debts": "read",
     }
     assert TOOLS.get("nothing") is None
     spec = TOOLS.get("get_tasks")

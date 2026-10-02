@@ -1,0 +1,567 @@
+{
+  "description": "receivables(projects, change_requests, allocations)",
+  "cases": [
+    {
+      "name": "empty",
+      "input": {
+        "projects": [],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "total": 0,
+        "clients": []
+      }
+    },
+    {
+      "name": "one_customer_one_project",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 100000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": [
+          {
+            "id": "a1",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 30000
+          }
+        ]
+      },
+      "expected": {
+        "total": 70000,
+        "clients": [
+          {
+            "client_id": "roma",
+            "remaining": 70000,
+            "projects": [
+              {
+                "id": "p1",
+                "remaining": 70000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "several_customers_and_total",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 100000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 250000,
+            "status": "active",
+            "client_id": "elena"
+          },
+          {
+            "id": "p3",
+            "base_amount": 40000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": [
+          {
+            "id": "a1",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 100000
+          },
+          {
+            "id": "a2",
+            "payment_id": "y",
+            "project_id": "p2",
+            "change_request_id": null,
+            "amount": 50000
+          }
+        ]
+      },
+      "expected": {
+        "total": 240000,
+        "clients": [
+          {
+            "client_id": "elena",
+            "remaining": 200000,
+            "projects": [
+              {
+                "id": "p2",
+                "remaining": 200000
+              }
+            ]
+          },
+          {
+            "client_id": "roma",
+            "remaining": 40000,
+            "projects": [
+              {
+                "id": "p3",
+                "remaining": 40000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "projects_of_one_customer_sorted_by_remaining",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 10000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 90000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p3",
+            "base_amount": 50000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "total": 150000,
+        "clients": [
+          {
+            "client_id": "roma",
+            "remaining": 150000,
+            "projects": [
+              {
+                "id": "p2",
+                "remaining": 90000
+              },
+              {
+                "id": "p3",
+                "remaining": 50000
+              },
+              {
+                "id": "p1",
+                "remaining": 10000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "lead_project_is_not_a_debt",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 100000,
+            "status": "lead",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 3000,
+            "status": "paused",
+            "client_id": "elena"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "total": 3000,
+        "clients": [
+          {
+            "client_id": "elena",
+            "remaining": 3000,
+            "projects": [
+              {
+                "id": "p2",
+                "remaining": 3000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "cancelled_project_is_not_a_debt",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 100000,
+            "status": "cancelled",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 5000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "total": 5000,
+        "clients": [
+          {
+            "client_id": "roma",
+            "remaining": 5000,
+            "projects": [
+              {
+                "id": "p2",
+                "remaining": 5000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "fully_paid_customer_is_left_out",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 100000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 1000,
+            "status": "active",
+            "client_id": "elena"
+          }
+        ],
+        "change_requests": [],
+        "allocations": [
+          {
+            "id": "a1",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 100000
+          }
+        ]
+      },
+      "expected": {
+        "total": 1000,
+        "clients": [
+          {
+            "client_id": "elena",
+            "remaining": 1000,
+            "projects": [
+              {
+                "id": "p2",
+                "remaining": 1000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "overpaid_project_does_not_offset_another_debt",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 100000,
+            "status": "active",
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 70000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": [
+          {
+            "id": "a1",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 150000
+          }
+        ]
+      },
+      "expected": {
+        "total": 70000,
+        "clients": [
+          {
+            "client_id": "roma",
+            "remaining": 70000,
+            "projects": [
+              {
+                "id": "p2",
+                "remaining": 70000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "completed_project_with_unpaid_rest_still_owed",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 100000,
+            "status": "completed",
+            "client_id": "roma",
+            "completed_date": "2026-09-01"
+          }
+        ],
+        "change_requests": [],
+        "allocations": [
+          {
+            "id": "a1",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": null,
+            "amount": 60000
+          }
+        ]
+      },
+      "expected": {
+        "total": 40000,
+        "clients": [
+          {
+            "client_id": "roma",
+            "remaining": 40000,
+            "projects": [
+              {
+                "id": "p1",
+                "remaining": 40000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "cancelled_change_request_is_not_a_debt",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 10000,
+            "status": "active",
+            "client_id": "elena"
+          }
+        ],
+        "change_requests": [
+          {
+            "id": "c1",
+            "project_id": "p1",
+            "amount": 20000,
+            "status": "in_progress"
+          },
+          {
+            "id": "c2",
+            "project_id": "p1",
+            "amount": 50000,
+            "status": "cancelled"
+          },
+          {
+            "id": "c3",
+            "project_id": "p1",
+            "amount": 5000,
+            "status": "closed",
+            "closed_date": "2026-09-02"
+          }
+        ],
+        "allocations": [
+          {
+            "id": "a1",
+            "payment_id": "x",
+            "project_id": "p1",
+            "change_request_id": "c3",
+            "amount": 5000
+          }
+        ]
+      },
+      "expected": {
+        "total": 30000,
+        "clients": [
+          {
+            "client_id": "elena",
+            "remaining": 30000,
+            "projects": [
+              {
+                "id": "p1",
+                "remaining": 30000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "project_without_customer_goes_last",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 1000,
+            "status": "active",
+            "client_id": null
+          },
+          {
+            "id": "p2",
+            "base_amount": 1000,
+            "status": "active",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "total": 2000,
+        "clients": [
+          {
+            "client_id": "roma",
+            "remaining": 1000,
+            "projects": [
+              {
+                "id": "p2",
+                "remaining": 1000
+              }
+            ]
+          },
+          {
+            "client_id": null,
+            "remaining": 1000,
+            "projects": [
+              {
+                "id": "p1",
+                "remaining": 1000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "equal_debts_sorted_by_customer_id",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 5000,
+            "status": "active",
+            "client_id": "b"
+          },
+          {
+            "id": "p2",
+            "base_amount": 5000,
+            "status": "active",
+            "client_id": "a"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "total": 10000,
+        "clients": [
+          {
+            "client_id": "a",
+            "remaining": 5000,
+            "projects": [
+              {
+                "id": "p2",
+                "remaining": 5000
+              }
+            ]
+          },
+          {
+            "client_id": "b",
+            "remaining": 5000,
+            "projects": [
+              {
+                "id": "p1",
+                "remaining": 5000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "missing_status_is_active_and_lead_is_excluded",
+      "input": {
+        "projects": [
+          {
+            "id": "p1",
+            "base_amount": 1000,
+            "status": null,
+            "client_id": "roma"
+          },
+          {
+            "id": "p2",
+            "base_amount": 2000,
+            "status": "lead",
+            "client_id": "roma"
+          },
+          {
+            "id": "p3",
+            "base_amount": 4000,
+            "status": "paused",
+            "client_id": "roma"
+          }
+        ],
+        "change_requests": [],
+        "allocations": []
+      },
+      "expected": {
+        "total": 5000,
+        "clients": [
+          {
+            "client_id": "roma",
+            "remaining": 5000,
+            "projects": [
+              {
+                "id": "p3",
+                "remaining": 4000
+              },
+              {
+                "id": "p1",
+                "remaining": 1000
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

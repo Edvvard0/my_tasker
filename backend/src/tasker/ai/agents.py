@@ -19,6 +19,8 @@ from tasker.tables import app_meta
 SEED_PROMPT_VERSION = 1
 SEED_MARKER = "ai.seed.v1"
 DEFAULT_TOOLS = ["get_tasks", "get_events", "create_task"]
+WORK_TOOLS = ["get_projects", "get_receivables", "get_work_hours"]
+FINANCE_TOOLS = ["get_accounts", "get_finance_summary", "get_goals", "get_debts"]
 
 _COMMON = (
     "Отвечай по-русски, кратко и по делу. Не выдумывай данные пользователя: если нужны задачи "
@@ -56,15 +58,18 @@ SEED_PROFILES: tuple[SeedProfile, ...] = (
         "work",
         "Работа",
         "Ты — помощник по рабочим проектам: сроки, доработки, заказчики, оплаты. Помогай "
-        "формулировать задачи, оценивать объём и готовить сообщения заказчикам. " + _COMMON,
+        "формулировать задачи, оценивать объём и готовить сообщения заказчикам. Данные о проектах, "
+        "долгах заказчиков и часах бери инструментами get_projects, get_receivables и "
+        "get_work_hours; суммы в них даны в копейках и текстом. " + _COMMON,
         2,
     ),
     SeedProfile(
         "finance",
         "Финансы",
         "Ты — помощник по личным финансам. Суммы указывай в рублях, считай аккуратно и "
-        "показывай расчёт. Данные о счетах и операциях используй только из переданного "
-        "контекста; ничего не угадывай. " + _COMMON,
+        "показывай расчёт. Данные о счетах, доходах и расходах, целях и долгах бери "
+        "инструментами get_accounts, get_finance_summary, get_goals и get_debts (суммы в них "
+        "даны в копейках и текстом); ничего не угадывай. " + _COMMON,
         3,
     ),
     SeedProfile(
@@ -87,6 +92,14 @@ SEED_PROFILES: tuple[SeedProfile, ...] = (
 SEED_BY_KEY = {seed.key: seed for seed in SEED_PROFILES}
 
 
+def builtin_tools(seed_key: str) -> list[str]:
+    """The tools of a built-in profile. Derived from code on every chat request (the stored
+    ``enabled_tools`` of a built-in profile is only a snapshot), so a new stage's tools appear
+    without a reset. Custom profiles keep their stored lists."""
+    extra = {"work": WORK_TOOLS, "finance": FINANCE_TOOLS}.get(seed_key, [])
+    return [*DEFAULT_TOOLS, *extra]
+
+
 def _profile_fields(seed: SeedProfile, version: int) -> dict[str, Any]:
     return {
         "seed_key": seed.key,
@@ -94,7 +107,7 @@ def _profile_fields(seed: SeedProfile, version: int) -> dict[str, Any]:
         "topic": seed.key,
         "system_prompt": seed.prompt,
         "prompt_version": version,
-        "enabled_tools": list(DEFAULT_TOOLS),
+        "enabled_tools": builtin_tools(seed.key),
         "position": seed.position,
     }
 

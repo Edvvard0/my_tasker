@@ -259,3 +259,22 @@ def test_deterministic_ids_are_stable_and_distinct() -> None:
     assert ids.override_id(event, "2026-10-05") != ids.override_id(event, "2026-10-06")
     assert ids.system_calendar_id("personal") != ids.system_calendar_id("work")
     assert ids.task_tag_id(event, event) != ids.completion_id(event, "2026-10-05")
+
+
+def test_tag_fold_lowers_only_ascii_and_cyrillic() -> None:
+    assert ids.fold_tag_name("Работа-ЁЖ_Urgent1") == "работа-ёж_urgent1"
+    # str.lower() differs between runtimes on these; the fold leaves them alone.
+    for name in ("ΣΑΣ", "İstanbul", "ΑΣ", "straße"):
+        assert ids.fold_tag_name(name) == name
+    assert ids.fold_tag_name("STRAßE") == "straße"
+    assert ids.tag_id("Ёж") == ids.tag_id("ёж")
+    assert ids.tag_id("ΣΑΣ") != ids.tag_id("σας")
+
+
+def test_quick_input_bare_evening_hour_rule() -> None:
+    now = datetime(2026, 9, 30, 14, 5)
+    assert parse_quick_input("купить 3 яблока в 5", now).time == "17:00"
+    assert parse_quick_input("в 5 утра", now).time == "05:00"
+    assert parse_quick_input("позвонить в 8", now).time == "08:00"
+    assert parse_quick_input("в 12 ночи", now).date == "2026-10-01"
+    assert parse_quick_input("на 1.5ч", now).duration_minutes == 90

@@ -1,0 +1,381 @@
+{
+  "description": "adjustments(account, transactions, checkpoints)",
+  "cases": [
+    {
+      "name": "no_checkpoints",
+      "input": {
+        "account": {
+          "id": "a1",
+          "kind": "debit_card",
+          "opening_balance": 100000,
+          "opening_date": "2026-01-01",
+          "include_in_total": true,
+          "archived": false
+        },
+        "transactions": [],
+        "checkpoints": []
+      },
+      "expected": []
+    },
+    {
+      "name": "checkpoint_matches_the_books",
+      "input": {
+        "account": {
+          "id": "a1",
+          "kind": "debit_card",
+          "opening_balance": 100000,
+          "opening_date": "2026-01-01",
+          "include_in_total": true,
+          "archived": false
+        },
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 10000,
+            "occurred_at": "2026-03-01T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "checkpoints": [
+          {
+            "id": "c1",
+            "account_id": "a1",
+            "checked_at": "2026-03-05T09:00:00Z",
+            "actual_balance": 90000
+          }
+        ]
+      },
+      "expected": [
+        {
+          "checkpoint_id": "c1",
+          "checked_at": "2026-03-05T09:00:00Z",
+          "actual": 90000,
+          "expected": 90000,
+          "adjustment": 0
+        }
+      ]
+    },
+    {
+      "name": "bank_shows_more_than_the_books",
+      "input": {
+        "account": {
+          "id": "a1",
+          "kind": "debit_card",
+          "opening_balance": 17320000,
+          "opening_date": "2026-01-01",
+          "include_in_total": true,
+          "archived": false
+        },
+        "transactions": [],
+        "checkpoints": [
+          {
+            "id": "c1",
+            "account_id": "a1",
+            "checked_at": "2026-03-05T09:00:00Z",
+            "actual_balance": 17400000
+          }
+        ]
+      },
+      "expected": [
+        {
+          "checkpoint_id": "c1",
+          "checked_at": "2026-03-05T09:00:00Z",
+          "actual": 17400000,
+          "expected": 17320000,
+          "adjustment": 80000
+        }
+      ]
+    },
+    {
+      "name": "bank_shows_less_than_the_books",
+      "input": {
+        "account": {
+          "id": "a1",
+          "kind": "debit_card",
+          "opening_balance": 100000,
+          "opening_date": "2026-01-01",
+          "include_in_total": true,
+          "archived": false
+        },
+        "transactions": [],
+        "checkpoints": [
+          {
+            "id": "c1",
+            "account_id": "a1",
+            "checked_at": "2026-03-05T09:00:00Z",
+            "actual_balance": 99000
+          }
+        ]
+      },
+      "expected": [
+        {
+          "checkpoint_id": "c1",
+          "checked_at": "2026-03-05T09:00:00Z",
+          "actual": 99000,
+          "expected": 100000,
+          "adjustment": -1000
+        }
+      ]
+    },
+    {
+      "name": "second_checkpoint_starts_from_the_first",
+      "input": {
+        "account": {
+          "id": "a1",
+          "kind": "debit_card",
+          "opening_balance": 100000,
+          "opening_date": "2026-01-01",
+          "include_in_total": true,
+          "archived": false
+        },
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 10000,
+            "occurred_at": "2026-03-01T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "income",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 3000,
+            "occurred_at": "2026-03-08T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t3",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 500,
+            "occurred_at": "2026-03-20T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "checkpoints": [
+          {
+            "id": "c2",
+            "account_id": "a1",
+            "checked_at": "2026-03-10T09:00:00Z",
+            "actual_balance": 94000
+          },
+          {
+            "id": "c1",
+            "account_id": "a1",
+            "checked_at": "2026-03-05T09:00:00Z",
+            "actual_balance": 91000
+          }
+        ]
+      },
+      "expected": [
+        {
+          "checkpoint_id": "c1",
+          "checked_at": "2026-03-05T09:00:00Z",
+          "actual": 91000,
+          "expected": 90000,
+          "adjustment": 1000
+        },
+        {
+          "checkpoint_id": "c2",
+          "checked_at": "2026-03-10T09:00:00Z",
+          "actual": 94000,
+          "expected": 94000,
+          "adjustment": 0
+        }
+      ]
+    },
+    {
+      "name": "draft_does_not_explain_a_gap",
+      "input": {
+        "account": {
+          "id": "a1",
+          "kind": "debit_card",
+          "opening_balance": 100000,
+          "opening_date": "2026-01-01",
+          "include_in_total": true,
+          "archived": false
+        },
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 10000,
+            "occurred_at": "2026-03-01T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "checkpoints": [
+          {
+            "id": "c1",
+            "account_id": "a1",
+            "checked_at": "2026-03-05T09:00:00Z",
+            "actual_balance": 90000
+          }
+        ]
+      },
+      "expected": [
+        {
+          "checkpoint_id": "c1",
+          "checked_at": "2026-03-05T09:00:00Z",
+          "actual": 90000,
+          "expected": 100000,
+          "adjustment": -10000
+        }
+      ]
+    },
+    {
+      "name": "checkpoint_before_the_opening_is_not_listed",
+      "input": {
+        "account": {
+          "id": "a1",
+          "kind": "debit_card",
+          "opening_balance": 100000,
+          "opening_date": "2026-10-01",
+          "include_in_total": true,
+          "archived": false
+        },
+        "transactions": [],
+        "checkpoints": [
+          {
+            "id": "c1",
+            "account_id": "a1",
+            "checked_at": "2026-09-01T09:00:00Z",
+            "actual_balance": 5
+          }
+        ]
+      },
+      "expected": []
+    },
+    {
+      "name": "checkpoints_at_one_instant_are_ordered_by_id",
+      "input": {
+        "account": {
+          "id": "a1",
+          "kind": "debit_card",
+          "opening_balance": 100000,
+          "opening_date": "2026-01-01",
+          "include_in_total": true,
+          "archived": false
+        },
+        "transactions": [],
+        "checkpoints": [
+          {
+            "id": "c2",
+            "account_id": "a1",
+            "checked_at": "2026-03-05T09:00:00Z",
+            "actual_balance": 95000
+          },
+          {
+            "id": "c1",
+            "account_id": "a1",
+            "checked_at": "2026-03-05T09:00:00Z",
+            "actual_balance": 90000
+          }
+        ]
+      },
+      "expected": [
+        {
+          "checkpoint_id": "c1",
+          "checked_at": "2026-03-05T09:00:00Z",
+          "actual": 90000,
+          "expected": 100000,
+          "adjustment": -10000
+        },
+        {
+          "checkpoint_id": "c2",
+          "checked_at": "2026-03-05T09:00:00Z",
+          "actual": 95000,
+          "expected": 90000,
+          "adjustment": 5000
+        }
+      ]
+    },
+    {
+      "name": "transfer_in_explains_the_gap",
+      "input": {
+        "account": {
+          "id": "a1",
+          "kind": "debit_card",
+          "opening_balance": 100000,
+          "opening_date": "2026-01-01",
+          "include_in_total": true,
+          "archived": false
+        },
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "transfer",
+            "account_id": "a2",
+            "to_account_id": "a1",
+            "amount": 7000,
+            "occurred_at": "2026-03-01T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "checkpoints": [
+          {
+            "id": "c1",
+            "account_id": "a1",
+            "checked_at": "2026-03-05T09:00:00Z",
+            "actual_balance": 107000
+          }
+        ]
+      },
+      "expected": [
+        {
+          "checkpoint_id": "c1",
+          "checked_at": "2026-03-05T09:00:00Z",
+          "actual": 107000,
+          "expected": 107000,
+          "adjustment": 0
+        }
+      ]
+    }
+  ]
+}

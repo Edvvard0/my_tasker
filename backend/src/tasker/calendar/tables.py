@@ -31,6 +31,7 @@ from tasker.sync.registry import (
     uuid_column,
 )
 from tasker.tables import metadata
+from tasker.work.schema import PERSON_EXTRA_COLUMNS, PROJECT_EXTRA_COLUMNS, project_problem
 
 Row = Mapping[str, Any]
 Validator = Callable[[Row], str | None]
@@ -314,21 +315,28 @@ projects: SyncTableSpec = define_sync_table(
         text_column("title", min_length=1, max_length=200),
         text_column("color", max_length=7, pattern=COLOR_PATTERN, nullable=True, required=False),
         bool_column("archived"),
+        *PROJECT_EXTRA_COLUMNS,  # Stage 4, docs/specs/stage4_work.md
     ),
-    validators=(_name_valid("title"),),
+    validators=(_name_valid("title"), project_problem),
 )
 
 people: SyncTableSpec = define_sync_table(
     metadata,
     "people",
-    (text_column("name", min_length=1, max_length=100), bool_column("archived")),
+    (
+        text_column("name", min_length=1, max_length=100),
+        bool_column("archived"),
+        *PERSON_EXTRA_COLUMNS,  # Stage 4
+    ),
     validators=(_name_valid("name"),),
 )
 
 
 def _tag_id_rule(row_id: uuid.UUID, values: Row) -> str | None:
     return (
-        None if row_id == ids.tag_id(values["name"]) else "id must be uuid5(namespace, lower(name))"
+        None
+        if row_id == ids.tag_id(values["name"])
+        else "id must be uuid5(namespace, fold_tag_name(name))"
     )
 
 

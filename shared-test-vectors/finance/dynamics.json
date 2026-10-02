@@ -1,0 +1,265 @@
+{
+  "description": "balance_dynamics(accounts, transactions, checkpoints, dates)",
+  "cases": [
+    {
+      "name": "month_ends_with_an_account_opened_later",
+      "input": {
+        "accounts": [
+          {
+            "id": "a1",
+            "kind": "debit_card",
+            "opening_balance": 100000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a2",
+            "kind": "debit_card",
+            "opening_balance": 50000,
+            "opening_date": "2026-03-15",
+            "include_in_total": true,
+            "archived": false
+          }
+        ],
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 10000,
+            "occurred_at": "2026-02-10T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "checkpoints": [],
+        "dates": [
+          "2026-01-31",
+          "2026-02-28",
+          "2026-03-31"
+        ]
+      },
+      "expected": [
+        {
+          "date": "2026-01-31",
+          "total": 100000
+        },
+        {
+          "date": "2026-02-28",
+          "total": 90000
+        },
+        {
+          "date": "2026-03-31",
+          "total": 140000
+        }
+      ]
+    },
+    {
+      "name": "a_transaction_on_the_last_evening_belongs_to_that_day",
+      "input": {
+        "accounts": [
+          {
+            "id": "a1",
+            "kind": "debit_card",
+            "opening_balance": 100000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          }
+        ],
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 1000,
+            "occurred_at": "2026-01-31T20:59:59Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          },
+          {
+            "id": "t2",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 20000,
+            "occurred_at": "2026-01-31T21:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "checkpoints": [],
+        "dates": [
+          "2026-01-31",
+          "2026-02-28"
+        ]
+      },
+      "expected": [
+        {
+          "date": "2026-01-31",
+          "total": 99000
+        },
+        {
+          "date": "2026-02-28",
+          "total": 79000
+        }
+      ]
+    },
+    {
+      "name": "a_checkpoint_in_the_middle_resets_the_line",
+      "input": {
+        "accounts": [
+          {
+            "id": "a1",
+            "kind": "debit_card",
+            "opening_balance": 100000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          }
+        ],
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "expense",
+            "account_id": "a1",
+            "to_account_id": null,
+            "amount": 1000,
+            "occurred_at": "2026-02-10T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "checkpoints": [
+          {
+            "id": "c1",
+            "account_id": "a1",
+            "checked_at": "2026-02-15T09:00:00Z",
+            "actual_balance": 70000
+          }
+        ],
+        "dates": [
+          "2026-01-31",
+          "2026-02-14",
+          "2026-02-15",
+          "2026-02-28"
+        ]
+      },
+      "expected": [
+        {
+          "date": "2026-01-31",
+          "total": 100000
+        },
+        {
+          "date": "2026-02-14",
+          "total": 99000
+        },
+        {
+          "date": "2026-02-15",
+          "total": 70000
+        },
+        {
+          "date": "2026-02-28",
+          "total": 70000
+        }
+      ]
+    },
+    {
+      "name": "accounts_outside_the_total_are_not_summed",
+      "input": {
+        "accounts": [
+          {
+            "id": "a1",
+            "kind": "debit_card",
+            "opening_balance": 100000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          },
+          {
+            "id": "a2",
+            "kind": "debit_card",
+            "opening_balance": 50000,
+            "opening_date": "2026-01-01",
+            "include_in_total": false,
+            "archived": false
+          }
+        ],
+        "transactions": [
+          {
+            "id": "t1",
+            "kind": "transfer",
+            "account_id": "a1",
+            "to_account_id": "a2",
+            "amount": 40000,
+            "occurred_at": "2026-02-10T09:00:00Z",
+            "category_id": null,
+            "merchant": null,
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null,
+            "work_payment_id": null,
+            "debt_id": null
+          }
+        ],
+        "checkpoints": [],
+        "dates": [
+          "2026-01-31",
+          "2026-02-28"
+        ]
+      },
+      "expected": [
+        {
+          "date": "2026-01-31",
+          "total": 100000
+        },
+        {
+          "date": "2026-02-28",
+          "total": 60000
+        }
+      ]
+    },
+    {
+      "name": "no_dates",
+      "input": {
+        "accounts": [
+          {
+            "id": "a1",
+            "kind": "debit_card",
+            "opening_balance": 100000,
+            "opening_date": "2026-01-01",
+            "include_in_total": true,
+            "archived": false
+          }
+        ],
+        "transactions": [],
+        "checkpoints": [],
+        "dates": []
+      },
+      "expected": []
+    }
+  ]
+}
