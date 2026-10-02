@@ -83,3 +83,11 @@ flutter analyze                                            # 0 замечани�
 flutter test --coverage && dart tool/check_coverage.dart --min=90
 flutter test --update-goldens test/goldens                 # эталоны: только Linux, смотреть PNG глазами
 ```
+
+### Windows (локальная разработка)
+
+- Flutter 3.47.5 нужен отдельной копией (стандартный `C:\flutter` старее): `git clone --depth 1 -b 3.47.5 https://github.com/flutter/flutter.git C:\fl347` (`git config core.longpaths true`), затем `export PATH=/c/fl347/bin:$PATH`.
+- Проверка форматирования (длинный `$(git ls-files ...)` на Windows не работает): `git ls-files 'lib/**.dart' 'test/**.dart' 'tool/**.dart' | xargs -n 80 dart format --output=none --set-exit-if-changed`; новые (неотслеживаемые) файлы форматировать явно.
+- `flutter pub get` на Windows меняет только концы строк в `app/windows/flutter/generated_plugin_registrant.*` и `generated_plugins.cmake` — откатывать `git checkout --`, не коммитить.
+- Полный `flutter test` ≈ 15 минут: запускать в фоне, вывод в файл. Известные падения только на Windows: два теста в `test/app_test.dart` (жёсткий `/` в пути; блокировка файла SQLCipher).
+- Бэкенд: `uv` нет в PATH — `python -m pip install --user uv`, дальше `python -m uv run ...`. Полный `pytest` ≈ 10 минут; на Windows не проходят `tests/test_worker.py` (3 теста посылают SIGTERM самому pytest) и `tests/ai/test_chat_upstream.py::test_a_cut_stream_is_never_retried` — запускать с `--deselect` этих тестов, на Linux-CI они зелёные.

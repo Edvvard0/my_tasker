@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:my_tasker/core/db/calendar_tables.dart';
+import 'package:my_tasker/core/db/finance_tables.dart';
 import 'package:my_tasker/core/db/migration_steps.dart';
 import 'package:my_tasker/core/db/sync_tables.dart';
 import 'package:my_tasker/features/ai_chat/data/ai_tables.dart';
@@ -31,6 +32,11 @@ class LocalSettings extends Table {
 ///   `ai_context_presets`, `ai_model_favorites`, `ai_conversations`,
 ///   `ai_messages`, `ai_tool_proposals` (`features/ai_chat/data/ai_tables.dart`).
 ///
+/// * v5 — Этап 5 (Финансы): `accounts`, `categories`, `transactions`,
+///   `balance_checkpoints`, `debts`, `debt_repayments`, `goals`
+///   (`finance_tables.dart`); все семь — одним шагом, чтобы срезы 5b–5d не
+///   требовали новой миграции.
+///
 /// Правила миграций: любое изменение схемы = `schemaVersion + 1` и новый шаг
 /// в [migrationSteps]; шаги применяются последовательно. Откат версии
 /// приложения (схема БД новее кода) Drift тоже передаёт в `onUpgrade`
@@ -58,13 +64,20 @@ class LocalSettings extends Table {
     AiConversations,
     AiMessages,
     AiToolProposals,
+    Accounts,
+    Categories,
+    Transactions,
+    BalanceCheckpoints,
+    Debts,
+    DebtRepayments,
+    Goals,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   /// Текущая версия схемы (то же значение, что и [schemaVersion]).
-  static const int currentSchemaVersion = 4;
+  static const int currentSchemaVersion = 5;
 
   @override
   int get schemaVersion => currentSchemaVersion;
@@ -109,6 +122,21 @@ class AppDatabase extends _$AppDatabase {
       await m.createIndex(db.aiPromptVersionsProfileIdx);
       await m.createIndex(db.aiMessagesConversationIdx);
       await m.createIndex(db.aiToolProposalsMessageIdx);
+    },
+    5: (m) async {
+      final db = m.database as AppDatabase;
+      await m.createTable(db.accounts);
+      await m.createTable(db.categories);
+      await m.createTable(db.transactions);
+      await m.createTable(db.balanceCheckpoints);
+      await m.createTable(db.debts);
+      await m.createTable(db.debtRepayments);
+      await m.createTable(db.goals);
+      await m.createIndex(db.transactionsAccountIdx);
+      await m.createIndex(db.transactionsToAccountIdx);
+      await m.createIndex(db.transactionsOccurredIdx);
+      await m.createIndex(db.balanceCheckpointsAccountIdx);
+      await m.createIndex(db.debtRepaymentsDebtIdx);
     },
   };
 

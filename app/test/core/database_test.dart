@@ -55,10 +55,10 @@ void main() {
     tearDown(() => db.close());
 
     test(
-      'создаёт схему v4: настройки, синхронизация, календарь и ИИ-чат',
+      'создаёт схему v5: настройки, синхронизация, календарь, ИИ-чат и финансы',
       () async {
         expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
-        expect(db.schemaVersion, 4);
+        expect(db.schemaVersion, 5);
         final tables = await db
             .customSelect(
               "SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -66,6 +66,7 @@ void main() {
             )
             .get();
         expect(tables.map((r) => r.read<String>('name')), [
+          'accounts',
           'ai_agent_profiles',
           'ai_context_presets',
           'ai_conversations',
@@ -73,9 +74,14 @@ void main() {
           'ai_model_favorites',
           'ai_prompt_versions',
           'ai_tool_proposals',
+          'balance_checkpoints',
           'calendars',
+          'categories',
+          'debt_repayments',
+          'debts',
           'event_overrides',
           'events',
+          'goals',
           'local_settings',
           'people',
           'projects',
@@ -86,6 +92,7 @@ void main() {
           'task_completions',
           'task_tags',
           'tasks',
+          'transactions',
           'user_settings',
         ]);
       },
@@ -132,8 +139,8 @@ void main() {
       );
     });
 
-    test('в реестре AppDatabase есть шаги до v2, v3 и v4 (ИИ-чат)', () {
-      expect(AppDatabase.migrationSteps.keys, [2, 3, 4]);
+    test('в реестре AppDatabase есть шаги до v2…v5 (v5 — Финансы)', () {
+      expect(AppDatabase.migrationSteps.keys, [2, 3, 4, 5]);
     });
   });
 
@@ -214,6 +221,13 @@ void main() {
         ..execute('DROP TABLE ai_conversations')
         ..execute('DROP TABLE ai_messages')
         ..execute('DROP TABLE ai_tool_proposals')
+        ..execute('DROP TABLE accounts')
+        ..execute('DROP TABLE categories')
+        ..execute('DROP TABLE transactions')
+        ..execute('DROP TABLE balance_checkpoints')
+        ..execute('DROP TABLE debts')
+        ..execute('DROP TABLE debt_repayments')
+        ..execute('DROP TABLE goals')
         ..execute('PRAGMA user_version = 2')
         ..close();
 
@@ -244,6 +258,13 @@ void main() {
         'ai_conversations',
         'ai_messages',
         'ai_tool_proposals',
+        'accounts',
+        'categories',
+        'transactions',
+        'balance_checkpoints',
+        'debts',
+        'debt_repayments',
+        'goals',
       ]) {
         raw.execute('DROP TABLE $t');
       }
@@ -267,9 +288,62 @@ void main() {
       );
     });
 
+    test('миграция v4 -> v5 добавляет таблицы Финансов и индексы', () async {
+      final first = AppDatabase(NativeDatabase(file));
+      await first.customSelect('SELECT 1').get();
+      await first.close();
+      final raw = sqlite3.open(file.path);
+      for (final t in [
+        'accounts',
+        'categories',
+        'transactions',
+        'balance_checkpoints',
+        'debts',
+        'debt_repayments',
+        'goals',
+      ]) {
+        raw.execute('DROP TABLE $t');
+      }
+      raw
+        ..execute(
+          "INSERT INTO local_settings VALUES ('server_url', 'https://keep')",
+        )
+        ..execute('PRAGMA user_version = 4')
+        ..close();
+
+      final db = AppDatabase(NativeDatabase(file));
+      addTearDown(db.close);
+      expect(
+        await LocalSettingsRepository(db).read('server_url'),
+        'https://keep',
+      );
+      final names = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type IN ('table', 'index') "
+            "AND name IN ('accounts', 'categories', 'transactions', "
+            "'balance_checkpoints', 'debts', 'debt_repayments', 'goals', "
+            "'transactions_account_idx', 'transactions_to_account_idx', "
+            "'transactions_occurred_idx', 'balance_checkpoints_account_idx', "
+            "'debt_repayments_debt_idx')",
+          )
+          .get();
+      expect(names, hasLength(12));
+      // таблицы рабочие: можно вставить и прочитать строку со всеми колонками
+      await db.customStatement(
+        'INSERT INTO accounts (id, created_at, updated_at, name, kind, '
+        'opening_balance, opening_date, include_in_total, archived) '
+        "VALUES ('a', 'x', 'y', 'Карта', 'cash', -5, '2026-01-01', 1, 0)",
+      );
+      final row = await db.customSelect('SELECT * FROM accounts').getSingle();
+      expect(row.read<int>('opening_balance'), -5);
+      expect(row.data['credit_limit'] == null, isTrue);
+      final version = await db.customSelect('PRAGMA user_version').getSingle();
+      expect(version.read<int>('user_version'), 5);
+    });
+
     test('БД более новой схемы не открывается старым кодом', () async {
       sqlite3.open(file.path)
-        ..execute('PRAGMA user_version = 7')
+        ..execute('PRAGMA user_version = 9')
         ..close();
 
       final db = AppDatabase(NativeDatabase(file));

@@ -1,6 +1,7 @@
 import 'package:my_tasker/core/sync/sync_table.dart';
 import 'package:my_tasker/features/ai_chat/data/ai_sync_specs.dart';
 import 'package:my_tasker/features/calendar/data/calendar_sync_specs.dart';
+import 'package:my_tasker/features/finance/data/finance_sync_specs.dart';
 import 'package:my_tasker/features/tasks/data/task_sync_specs.dart';
 
 /// Настройки «ключ -> значение», общие для устройств (spec 4.1).
@@ -48,4 +49,6 @@ const List<SyncTableSpec> registeredSyncTables = [
   taskCompletionsSpec,
   // Этап 3 (ИИ-чат): `backend/src/tasker/ai/tables.py`, `AI_TABLES`.
   ...aiSyncSpecs,
+  // Этап 5 (Финансы): `backend/src/tasker/finance/tables.py`, `FINANCE_TABLES`.
+  ...financeSyncSpecs,
 ];
