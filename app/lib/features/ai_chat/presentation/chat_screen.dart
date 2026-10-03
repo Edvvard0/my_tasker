@@ -21,6 +21,7 @@ import 'package:my_tasker/features/ai_chat/domain/ai_errors.dart';
 import 'package:my_tasker/features/ai_chat/domain/ai_format.dart';
 import 'package:my_tasker/features/ai_chat/domain/ai_models.dart';
 import 'package:my_tasker/features/ai_chat/presentation/chat_sheets.dart';
+import 'package:my_tasker/features/ai_chat/presentation/finance_agent_guard.dart';
 import 'package:my_tasker/features/ai_chat/presentation/message_widgets.dart';
 
 /// Подсказки-примеры для пустого чата по теме (02, 5.2.2).
@@ -168,6 +169,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       await _pickModel(conv, persisted: persisted);
       return;
     }
+    if (!await _financeAllowed(conv) || !mounted) return;
     _input.clear();
     final accepted = await ref
         .read(chatSessionProvider(_id).notifier)
@@ -175,8 +177,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (!accepted && mounted && _input.text.isEmpty) _input.text = text;
   }
 
-  Future<void> _retry(Conversation conv) =>
-      ref.read(chatSessionProvider(_id).notifier).retry(conversation: conv);
+  /// Агент «Финансов» читает счета сам, через сервер: замок и «скрыть суммы»
+  /// действуют и на отправку в такой чат.
+  Future<bool> _financeAllowed(Conversation conv) {
+    final agents = ref.read(agentsProvider).value ?? const <AgentProfile>[];
+    final agent = agents.where((a) => a.id == conv.agentId).firstOrNull;
+    return ensureFinanceAgentAllowed(context, ref, conv: conv, agent: agent);
+  }
+
+  Future<void> _retry(Conversation conv) async {
+    if (!await _financeAllowed(conv) || !mounted) return;
+    await ref.read(chatSessionProvider(_id).notifier).retry(conversation: conv);
+  }
 
   Future<void> _menu(Conversation conv) async {
     final repo = ref.read(aiRepositoryProvider);

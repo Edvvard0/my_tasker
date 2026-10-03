@@ -106,6 +106,30 @@ void main() {
       expect(const PinHasher().iterations, defaultPinIterations);
     });
 
+    test('PinHasher(useIsolate: true): ключ из изолята равен прямому '
+        'PBKDF2 при любом числе итераций', () async {
+      const salt = [9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 1, 2, 3, 4, 5, 6];
+      for (final iterations in [1, 2, 50, 4096]) {
+        // Число итераций подставляется в изолят, как у записи замка.
+        final hasher = PinHasher(iterations: iterations);
+        expect(hasher.useIsolate, isTrue);
+        final isolated = await hasher.derive('135790', salt, iterations);
+        final direct = pbkdf2HmacSha256(
+          utf8.encode('135790'),
+          salt,
+          iterations,
+          pinKeyBytes,
+        );
+        expect(isolated, direct, reason: '$iterations итераций');
+        // Другой PIN и другая соль дают другой ключ.
+        expect(await hasher.derive('135791', salt, iterations), isNot(direct));
+        expect(
+          await hasher.derive('135790', [...salt, 1], iterations),
+          isNot(direct),
+        );
+      }
+    });
+
     test('сравнение за постоянное время и случайная соль', () {
       expect(constantTimeEquals([1, 2, 3], [1, 2, 3]), isTrue);
       expect(constantTimeEquals([1, 2, 3], [1, 2, 4]), isFalse);
@@ -224,17 +248,20 @@ void main() {
       expect(await store.readLock(), isNull);
     });
 
-    test('повреждённая запись равна отсутствию замка и удаляется', () async {
+    test('повреждённая запись — ошибка чтения, а не «замка нет»; запись '
+        'не удаляется до явного сброса', () async {
       FlutterSecureStorage.setMockInitialValues({
         SecureFinancePrivacyStore.lockKey: '{not json',
       });
       final store = SecureFinancePrivacyStore();
-      expect(await store.readLock(), isNull);
+      await expectLater(store.readLock(), throwsA(isA<CorruptLockRecord>()));
       const storage = FlutterSecureStorage();
       expect(
         await storage.read(key: SecureFinancePrivacyStore.lockKey),
-        isNull,
+        '{not json',
       );
+      await store.clearLock();
+      expect(await store.readLock(), isNull);
     });
 
     test('память: то же поведение для тестов', () async {
@@ -246,6 +273,14 @@ void main() {
       expect(await store.readHideAmounts(), isTrue);
       await store.clearLock();
       expect(await store.readLock(), isNull);
+      store
+        ..corrupt = true
+        ..readError = null;
+      await expectLater(store.readLock(), throwsA(isA<CorruptLockRecord>()));
+      await store.clearLock();
+      expect(store.corrupt, isFalse);
+      store.readError = StateError('x');
+      await expectLater(store.readLock(), throwsStateError);
     });
   });
 

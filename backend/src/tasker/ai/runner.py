@@ -406,7 +406,9 @@ class ChatRun:
         assert spec.handler is not None  # noqa: S101 - checked at registration
         try:
             content = clip_result(
-                await spec.handler(ToolContext(self.rt.sessionmaker, self.chat.zone), parsed)
+                await spec.handler(
+                    ToolContext(self.rt.sessionmaker, self.chat.zone, self.rt.clock), parsed
+                )
             )
         except Exception as exc:  # a failing tool costs the step, not the answer
             log.error("tool_failed", tool=name, error_type=type(exc).__name__)

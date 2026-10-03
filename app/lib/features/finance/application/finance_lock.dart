@@ -40,9 +40,11 @@ class FinanceLockState {
     this.pinLength = pinMinLength,
     this.failures = 0,
     this.pausedUntil,
+    this.problem,
   });
 
-  /// Запись замка прочитана из хранилища.
+  /// Запись замка прочитана из хранилища (или не прочиталась — тогда
+  /// заполнен [problem]).
   final bool loaded;
   final bool enabled;
 
@@ -54,10 +56,14 @@ class FinanceLockState {
   final int failures;
   final DateTime? pausedUntil;
 
+  /// Запись замка прочитать не удалось: хранилище недоступно или запись
+  /// повреждена. Пока это так, раздел закрыт (замок не «выключен»).
+  final LockProblem? problem;
+
   /// Содержимое «Финансов» показывать нельзя: замок ещё не прочитан (на
-  /// холодном старте — «закрыто, пока не доказано обратное») либо включён и
-  /// закрыт.
-  bool get closed => !loaded || (enabled && locked);
+  /// холодном старте — «закрыто, пока не доказано обратное»), не прочитался
+  /// ([problem]) либо включён и закрыт.
+  bool get closed => !loaded || problem != null || (enabled && locked);
 
   FinanceLockState copyWith({
     bool? loaded,
@@ -78,6 +84,7 @@ class FinanceLockState {
     pinLength: pinLength ?? this.pinLength,
     failures: failures ?? this.failures,
     pausedUntil: clearPause ? null : (pausedUntil ?? this.pausedUntil),
+    problem: problem,
   );
 }
 
@@ -109,15 +116,45 @@ class FinanceLockController extends Notifier<FinanceLockState> {
     LockRecord? record;
     try {
       record = await ref.read(financePrivacyStoreProvider).readLock();
+    } on CorruptLockRecord {
+      // Запись есть, но не разбирается: проверить PIN нельзя, а молча
+      // отключать замок нельзя. Раздел закрыт до явного сброса.
+      _failLoad(LockProblem.corrupted);
+      return;
     } on Object {
-      // Хранилище недоступно: считаем замок выключенным (без него не
-      // откроется и БД — приложение всё равно не работает).
-      record = null;
+      // Хранилище не ответило: это не «замка нет». Запись не трогаем,
+      // раздел закрыт, пока чтение не удастся («Повторить»).
+      _failLoad(LockProblem.storageUnavailable);
+      return;
     }
     if (!ref.mounted) return;
     _record = record;
     // Холодный старт: включённый замок всегда закрыт.
     state = _fromRecord(record, locked: true);
+  }
+
+  void _failLoad(LockProblem problem) {
+    if (!ref.mounted) return;
+    _record = null;
+    state = FinanceLockState(loaded: true, problem: problem);
+  }
+
+  /// Перечитывает запись замка после сбоя хранилища («Повторить»).
+  Future<void> retryLoad() {
+    if (state.problem == null) return ready;
+    state = const FinanceLockState();
+    return _loading = _load();
+  }
+
+  /// Сбрасывает замок, чья запись повреждена: удаляет запись, раздел
+  /// открывается без PIN (данные «Финансов» не затрагиваются, теряется
+  /// только PIN — новый можно задать в настройках приватности). Работает
+  /// только при [LockProblem.corrupted]; вызывать после подтверждения.
+  Future<void> resetCorruptedLock() async {
+    if (state.problem != LockProblem.corrupted) return;
+    await ref.read(financePrivacyStoreProvider).clearLock();
+    _record = null;
+    if (ref.mounted) state = _fromRecord(null, locked: false);
   }
 
   FinanceLockState _fromRecord(LockRecord? r, {required bool locked}) =>
@@ -151,6 +188,10 @@ class FinanceLockController extends Notifier<FinanceLockState> {
   /// Проверяет PIN с учётом пауз и счётчика попыток; сам замок не открывает.
   Future<PinCheck> _check(String pin) async {
     await ready;
+    // Запись замка не прочитана: PIN проверить нечем, раздел не открывается.
+    if (state.problem != null) {
+      return const PinRejected(attemptsLeft: attemptsBeforePause);
+    }
     final record = _record;
     if (record == null) return const PinAccepted();
     final now = _now;
@@ -231,6 +272,10 @@ class FinanceLockController extends Notifier<FinanceLockState> {
       throw ArgumentError.value(pin, 'pin', 'PIN — от 4 до 6 цифр');
     }
     await ready;
+    if (state.problem != null) {
+      // Не затираем запись, которую не удалось прочитать.
+      throw StateError('Замок не прочитан: сначала повторите чтение');
+    }
     final record = await _newRecord(pin, timing: timing, biometric: biometric);
     await _persist(record);
     if (!ref.mounted) return;
@@ -454,6 +499,31 @@ final financeAiAmountsConsentProvider =
     NotifierProvider<FinanceAiAmountsConsent, bool>(
       FinanceAiAmountsConsent.new,
     );
+
+/// Чаты, в которых пользователь согласился отправить сообщение агенту
+/// «Финансы» при включённом «скрыть суммы»: серверный агент сам читает счета,
+/// цели и долги инструментами, и результаты уходят облачной модели и в
+/// синхронизируемые сообщения чата. Живёт только в памяти и отзывается так же,
+/// как согласие на контекст: новым переключением режима или блокировкой.
+class FinanceAgentConsent extends Notifier<Set<String>> {
+  @override
+  Set<String> build() {
+    ref
+      ..listen(hideAmountsProvider.select((s) => s.hidden), (_, _) {
+        state = const {};
+      })
+      ..listen(financeLockProvider.select((s) => s.closed), (_, closed) {
+        if (closed) state = const {};
+      });
+    return const {};
+  }
+
+  /// Согласие для чата [conversationId] дано.
+  void grant(String conversationId) => state = {...state, conversationId};
+}
+
+final financeAgentConsentProvider =
+    NotifierProvider<FinanceAgentConsent, Set<String>>(FinanceAgentConsent.new);
 
 /// Что можно положить в контекст ИИ.
 @immutable

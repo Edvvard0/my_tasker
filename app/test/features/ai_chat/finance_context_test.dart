@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/core/calendar_time/wall_time.dart';
+import 'package:my_tasker/core/money/money.dart' show maxKopecks;
 import 'package:my_tasker/features/ai_chat/application/chat_context.dart';
 import 'package:my_tasker/features/ai_chat/data/ai_repository.dart';
 import 'package:my_tasker/features/ai_chat/data/context_sources.dart';
@@ -195,6 +196,20 @@ void main() {
     });
   });
 
+  group('вычисляемые итоги выше предела одной суммы', () {
+    test('общий баланс больше максимума не роняет контекст', () async {
+      await start();
+      final c = device.container;
+      // Каждый счёт в пределах, а их сумма — нет.
+      await addAccount(c, 'Большой А', opening: maxKopecks);
+      await addAccount(c, 'Большой Б', opening: maxKopecks);
+      final out = await lines();
+      final text = out.join('\n');
+      expect(text, contains('общий баланс ${maxKopecks * 2} коп.'));
+      expect(text, contains('- Большой А · дебетовая карта'));
+    });
+  });
+
   group('«скрыть суммы» включён: суммы не уходят без подтверждения', () {
     test(
       'по умолчанию — только структура, и текст об этом первой строкой',
@@ -324,6 +339,62 @@ void main() {
       c.read(financeLockProvider.notifier).lockNow();
       preview = await c.read(contextPreviewProvider(id).future);
       expect(preview.text, contains('245${_nb}120,10'));
+    });
+  });
+
+  group('превью пересобирается при любой правке данных Финансов', () {
+    Future<String> previewText(String id) async =>
+        (await device.container.read(contextPreviewProvider(id).future)).text;
+
+    /// Ждёт, пока потоки таблиц обновят превью, и возвращает новый текст.
+    Future<String> changedFrom(String id, String before) async {
+      for (var i = 0; i < 100; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        final now = await previewText(id);
+        if (now != before) return now;
+      }
+      return before;
+    }
+
+    test('сверка, погашение и переименование категории', () async {
+      await start();
+      final c = device.container;
+      final data = await _seedData(c);
+      const id = 'chat-live';
+      final notifier = c.read(chatContextProvider(id).notifier);
+      await notifier.ready;
+      notifier.toggle(
+        'finance',
+        ContextSourceRef(source: 'finance', filter: source.defaultFilter),
+      );
+      c.listen(contextPreviewProvider(id), (_, _) {});
+      var text = await previewText(id);
+      expect(text, isNot(contains('Еда дома')));
+
+      // Сверка (точки сверки): баланс счёта стал 123,45 ₽.
+      await financeRepo(c)
+          .reconcile(accountId: data.finance.tbank, actualBalance: 12345);
+      var next = await changedFrom(id, text);
+      expect(next, isNot(text), reason: 'сверка не обновила превью');
+      expect(next, contains('123,45'));
+      text = next;
+
+      // Погашение долга: остаток долга Насти изменился.
+      await addRepaymentTo(c, debt: data.debts.nastya, amount: 50000);
+      next = await changedFrom(id, text);
+      expect(next, isNot(text), reason: 'погашение не обновило превью');
+      text = next;
+
+      // Категории: название в разбивке по категориям.
+      final groceries = (await financeRepo(c)
+          .getCategory(data.finance.groceries))!;
+      await financeRepo(c).updateCategory(groceries.copyWith(name: 'Еда дома'));
+      next = await changedFrom(id, text);
+      expect(
+        next,
+        contains('Еда дома'),
+        reason: 'категория не обновила превью',
+      );
     });
   });
 

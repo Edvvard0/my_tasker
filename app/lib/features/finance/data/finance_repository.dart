@@ -181,9 +181,16 @@ class FinanceRepository {
     systemKey: c.systemKey,
   );
 
-  Future<void> _checkCategoryParent(FinanceCategory c) async {
+  /// [parentUnchanged] — у правки родитель тот же, что в сохранённой строке:
+  /// его живость не проверяем. Родителя могли удалить (подкатегория тогда
+  /// показывается категорией верхнего уровня), и без этого такую категорию
+  /// нельзя было бы даже переименовать.
+  Future<void> _checkCategoryParent(
+    FinanceCategory c, {
+    bool parentUnchanged = false,
+  }) async {
     ensureValid(categoryProblem(c));
-    if (c.parentId == null) return;
+    if (c.parentId == null || parentUnchanged) return;
     final parentRow = await _liveRow(categoriesTable, c.parentId!);
     final hasChildren = (await _store.visibleRows(
       categoriesTable,
@@ -221,7 +228,10 @@ class FinanceRepository {
           'Ключ предустановленной категории нельзя менять',
         );
       }
-      await _checkCategoryParent(clean);
+      await _checkCategoryParent(
+        clean,
+        parentUnchanged: current.parentId == clean.parentId,
+      );
       final fields = _changed(current.toFields(), clean.toFields())
         ..remove('system_key');
       if (fields.isEmpty) return;
@@ -351,7 +361,10 @@ class FinanceRepository {
   /// Правка операции. Связанная группа `kind`, `to_account_id`,
   /// `category_id`, `work_payment_id`, `debt_id`, `source` уходит целиком,
   /// чтобы слияние с другого устройства не собрало недопустимую
-  /// комбинацию (перевод с категорией и т. п.).
+  /// комбинацию (перевод с категорией и т. п.). У перевода (был им или
+  /// становится) в группу входит и `account_id`: иначе правки «откуда» на
+  /// одном устройстве и «куда» на другом слились бы в перевод на тот же
+  /// счёт (`account_id == to_account_id`).
   Future<void> updateTransaction(FinanceTransaction next) async {
     final clean = _cleanTransaction(next);
     ensureValid(transactionProblem(clean));
@@ -362,13 +375,17 @@ class FinanceRepository {
       final before = current.toFields();
       final after = clean.toFields();
       final fields = _changed(before, after);
-      const shape = [
+      final transfer =
+          before['kind'] == TransactionKind.transfer.wire ||
+          after['kind'] == TransactionKind.transfer.wire;
+      final shape = [
         'kind',
         'to_account_id',
         'category_id',
         'work_payment_id',
         'debt_id',
         'source',
+        if (transfer) 'account_id',
       ];
       if (shape.any(fields.containsKey)) {
         for (final k in shape) {

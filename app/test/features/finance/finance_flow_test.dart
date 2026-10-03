@@ -98,9 +98,9 @@ void main() {
     await settleDb(tester);
     expect(find.byKey(const Key('trash-list')), findsOneWidget);
     // Операция, категория, сверка и два счёта — с названиями из реестра.
-    expect(find.text('Расход 1${_nb}249,90$_nb₽ · Пятёрочка'), findsOneWidget);
+    expect(find.text('Расход · Пятёрочка'), findsOneWidget);
     expect(find.text('Кафе и рестораны'), findsOneWidget);
-    expect(find.textContaining('Сверка 2026-09-30'), findsOneWidget);
+    expect(find.text('Сверка 30.09.2026'), findsOneWidget);
     expect(find.text('Наличные'), findsOneWidget);
     expect(find.text('ВТБ Мир'), findsOneWidget);
     expect(find.textContaining('Операция · удалено'), findsOneWidget);

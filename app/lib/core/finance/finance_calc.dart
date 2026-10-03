@@ -46,8 +46,22 @@ String? dedupKey(Row tx) {
 }
 
 /// Доля цели в сотых долях процента, вниз; `0` при `have <= 0`.
-int progressBasisPoints(int have, int target) =>
-    target <= 0 || have <= 0 ? 0 : have * 10000 ~/ target;
+///
+/// `have * 10000` переполняет int64 уже при `have` порядка 10^15, поэтому
+/// умножение — в [BigInt] (в Python-эталоне целые произвольной длины). Если
+/// точный результат не помещается в int64 (цель в 1 копейку при огромном
+/// `have`), возвращается максимум int64: больше представить нечем.
+int progressBasisPoints(int have, int target) {
+  if (target <= 0 || have <= 0) return 0;
+  if (have <= _safeMultiplicand) return have * 10000 ~/ target;
+  final bp = BigInt.from(have) * BigInt.from(10000) ~/ BigInt.from(target);
+  return bp.isValidInt ? bp.toInt() : _maxInt64;
+}
+
+const int _maxInt64 = 0x7fffffffffffffff;
+
+/// Наибольшее `have`, для которого `have * 10000` ещё не переполняет int64.
+const int _safeMultiplicand = _maxInt64 ~/ 10000;
 
 // ---------------------------------------------------------------- balances
 

@@ -7,12 +7,14 @@ proposal the user approves; the client creates the entity).
 """
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from tasker.clock import Clock, SystemClock
 
 MAX_TOOL_RESULT_CHARS = 20_000
 _CUT = "…[truncated]"
@@ -26,6 +28,7 @@ class ToolArgumentError(ValueError):
 class ToolContext:
     sessionmaker: async_sessionmaker[AsyncSession]
     timezone: ZoneInfo
+    clock: Clock = field(default_factory=SystemClock)  # tests substitute a controllable one
 
 
 ToolHandler = Callable[[ToolContext, BaseModel], Awaitable[str]]

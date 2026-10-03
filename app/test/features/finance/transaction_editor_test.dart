@@ -521,6 +521,94 @@ void main() {
     });
   });
 
+  group('операция, привязанная к долгу', () {
+    Future<(ProviderContainer, FinanceDemo, FinanceTransaction)> openLinked(
+      WidgetTester tester,
+    ) async {
+      late FinanceDemo demo;
+      late String debt;
+      final c = await pumpFinance(
+        tester,
+        seedWith: (c) async {
+          demo = await seedFinanceDemo(c);
+          debt = await addDebt(c, who: 'Тимур', amount: 500000);
+          await addRepaymentTo(
+            c,
+            debt: debt,
+            amount: 200000,
+            account: demo.tbank,
+            note: 'вернул часть',
+          );
+        },
+      );
+      final tx = (await _txs(tester, c)).firstWhere((t) => t.debtId == debt);
+      unawaited(
+        showTransactionEditor(
+          tester.element(find.byType(Scaffold).first),
+          transactionId: tx.id,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await settleDb(tester);
+      return (c, demo, tx);
+    }
+
+    testWidgets('вид и сумма недоступны, подсказка; остальное правится, '
+        'debt_id цел', (tester) async {
+      final (c, demo, tx) = await openLinked(tester);
+      expect(tx.kind, TransactionKind.income);
+      expect(find.byKey(const Key('tx-debt-linked-hint')), findsOneWidget);
+      expect(
+        find.text('Сумма и вид меняются через погашение долга'),
+        findsOneWidget,
+      );
+      // Сумма — только чтение, чипов «+100» нет.
+      final field = tester.widget<TextField>(
+        find.descendant(
+          of: find.byKey(const Key('tx-amount')),
+          matching: find.byType(TextField),
+        ),
+      );
+      expect(field.readOnly, isTrue);
+      expect(find.byKey(const Key('tx-chip-100')), findsNothing);
+      // Вид не переключается: «Перевод» ничего не делает.
+      await tester.tap(find.byKey(const Key('tx-kind-transfer')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('tx-from')), findsNothing);
+      expect(find.byKey(const Key('tx-account')), findsOneWidget);
+
+      await enter(tester, 'tx-comment', 'уточнил');
+      await tapKey(tester, 'tx-account');
+      await tapKey(tester, 'pick-account-${demo.cash}');
+      await tapKey(tester, 'tx-save');
+      await settleDb(tester);
+      expect(find.byKey(const Key('tx-amount')), findsNothing);
+      final saved = (await _txs(tester, c)).firstWhere((t) => t.id == tx.id);
+      expect(saved.debtId, tx.debtId);
+      expect(saved.kind, TransactionKind.income);
+      expect(saved.amount, 200000);
+      expect(saved.comment, 'уточнил');
+      expect(saved.accountId, demo.cash);
+    });
+
+    testWidgets('обычная операция: вид и сумма редактируются, подсказки нет', (
+      tester,
+    ) async {
+      final (_, _) = await _open(tester, transaction: (d) => d.shop);
+      expect(find.byKey(const Key('tx-debt-linked-hint')), findsNothing);
+      final field = tester.widget<TextField>(
+        find.descendant(
+          of: find.byKey(const Key('tx-amount')),
+          matching: find.byType(TextField),
+        ),
+      );
+      expect(field.readOnly, isFalse);
+      await tester.tap(find.byKey(const Key('tx-kind-transfer')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('tx-from')), findsOneWidget);
+    });
+  });
+
   testWidgets('десктоп: форма в панели справа, сохранение работает', (
     tester,
   ) async {

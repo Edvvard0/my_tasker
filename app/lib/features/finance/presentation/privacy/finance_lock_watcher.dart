@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_tasker/features/finance/application/finance_lock.dart';
 
@@ -77,4 +77,40 @@ class _FinanceLockWatcherState extends ConsumerState<FinanceLockWatcher>
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+/// Закрывает всё, что висит поверх навигатора, в момент блокировки
+/// «Финансов» (замок сменился «открыт» -> «закрыт»: «заблокировать сейчас»,
+/// таймер, сворачивание): листы и панели редакторов, диалоги, выпадающие
+/// выборы и снекбары. Иначе открытый редактор операции (с введённой суммой,
+/// счётом, комментарием) пережил бы блокировку; несохранённый черновик при
+/// этом пропадает.
+///
+/// Закрываются только окна поверх страниц — `PopupRoute` без `Page`.
+/// Страницы самого роутера не трогаются. Стоит выше роутера, поэтому
+/// работает и когда оболочки (`AppShell`) нет в дереве.
+class FinanceLockDismisser extends ConsumerWidget {
+  const FinanceLockDismisser({
+    required this.navigatorKey,
+    required this.child,
+    super.key,
+  });
+
+  /// Корневой навигатор приложения: на нём открываются листы и диалоги.
+  final GlobalKey<NavigatorState> navigatorKey;
+  final Widget child;
+
+  /// Окно поверх страниц: его можно закрыть, не ломая стек роутера.
+  static bool _isOverlay(Route<dynamic> route) =>
+      route is PopupRoute && route.settings is! Page<dynamic>;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(financeLockProvider.select((s) => s.closed), (was, closed) {
+      if (was != false || !closed) return;
+      navigatorKey.currentState?.popUntil((route) => !_isOverlay(route));
+      ScaffoldMessenger.maybeOf(context)?.clearSnackBars();
+    });
+    return child;
+  }
 }

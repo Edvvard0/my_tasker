@@ -22,6 +22,7 @@ class FormTextField extends StatefulWidget {
     this.focusNode,
     this.maxLength,
     this.textAlign = TextAlign.start,
+    this.readOnly = false,
     super.key,
   });
 
@@ -39,6 +40,9 @@ class FormTextField extends StatefulWidget {
   final FocusNode? focusNode;
   final int? maxLength;
   final TextAlign textAlign;
+
+  /// Значение видно и копируется, но не меняется.
+  final bool readOnly;
 
   @override
   State<FormTextField> createState() => _FormTextFieldState();
@@ -70,6 +74,7 @@ class _FormTextFieldState extends State<FormTextField> {
             decoration: widget.decoration,
             style: widget.style,
             textAlign: widget.textAlign,
+            readOnly: widget.readOnly,
             keyboardType: widget.keyboardType,
             minLines: widget.minLines,
             maxLines: widget.maxLines,

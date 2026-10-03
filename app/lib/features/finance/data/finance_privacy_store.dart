@@ -7,6 +7,9 @@ import 'package:my_tasker/features/finance/domain/finance_lock_models.dart';
 /// Лежит там же, где ключ БД и токены, — в защищённом хранилище ОС (Android
 /// Keystore, Windows DPAPI). В БД и в синхронизацию это не попадает.
 abstract interface class FinancePrivacyStore {
+  /// Запись замка или `null`, если замка нет. Бросает [CorruptLockRecord],
+  /// если запись есть, но повреждена; любое другое исключение — хранилище
+  /// недоступно (запись при этом не удаляется).
   Future<LockRecord?> readLock();
 
   Future<void> writeLock(LockRecord record);
@@ -33,9 +36,10 @@ class SecureFinancePrivacyStore implements FinancePrivacyStore {
     final raw = await _storage.read(key: lockKey);
     if (raw == null) return null;
     final record = LockRecord.tryParse(raw);
-    // Повреждённая запись равна отсутствию замка (как у токенов сессии):
-    // проверить PIN по ней всё равно нельзя.
-    if (record == null) await _storage.delete(key: lockKey);
+    // Повреждённая запись — не «замка нет»: иначе порча хранилища отключала
+    // бы замок. Запись не трогаем; замок остаётся закрытым, пока
+    // пользователь явно не сбросит его (`clearLock`).
+    if (record == null) throw const CorruptLockRecord();
     return record;
   }
 
@@ -57,14 +61,30 @@ class SecureFinancePrivacyStore implements FinancePrivacyStore {
 
 /// Хранилище в памяти (тесты).
 class MemoryFinancePrivacyStore implements FinancePrivacyStore {
-  MemoryFinancePrivacyStore({this.record, this.hidden = false});
+  MemoryFinancePrivacyStore({
+    this.record,
+    this.hidden = false,
+    this.corrupt = false,
+  });
 
   LockRecord? record;
   bool hidden;
   int lockWrites = 0;
+  int lockClears = 0;
+
+  /// В хранилище лежит неразбираемая запись замка.
+  bool corrupt;
+
+  /// Чтение записи замка падает с этой ошибкой (хранилище недоступно).
+  Object? readError;
 
   @override
-  Future<LockRecord?> readLock() async => record;
+  Future<LockRecord?> readLock() {
+    final error = readError;
+    if (error != null) return Future<LockRecord?>.error(error);
+    if (corrupt) return Future<LockRecord?>.error(const CorruptLockRecord());
+    return Future.value(record);
+  }
 
   @override
   Future<void> writeLock(LockRecord value) async {
@@ -73,7 +93,11 @@ class MemoryFinancePrivacyStore implements FinancePrivacyStore {
   }
 
   @override
-  Future<void> clearLock() async => record = null;
+  Future<void> clearLock() async {
+    lockClears++;
+    record = null;
+    corrupt = false;
+  }
 
   @override
   Future<bool> readHideAmounts() async => hidden;

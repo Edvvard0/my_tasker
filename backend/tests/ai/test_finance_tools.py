@@ -1,6 +1,7 @@
 """The Finance read tools on seeded data: balances, summary, goals (Excel case), debts."""
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -10,6 +11,7 @@ import tasker.ai.builtin  # noqa: F401 - registers the tools
 from tasker.ai.agents import FINANCE_TOOLS, builtin_tools
 from tasker.ai.tools import TOOLS, ToolArgumentError, ToolContext
 from tasker.ids import uuid7
+from tasker.money import format_amount
 from tests.api_support import DeviceClient, Env
 from tests.finance_support import (
     ExcelSeed,
@@ -26,11 +28,13 @@ from tests.finance_support import (
 from tests.work_support import person_fields
 
 
-async def call(env: Env, name: str, args: dict[str, Any]) -> dict[str, Any]:
+async def call(
+    env: Env, name: str, args: dict[str, Any], zone: str = "Europe/Moscow"
+) -> dict[str, Any]:
     spec = TOOLS.get(name)
     assert spec is not None
     assert spec.handler is not None
-    ctx = ToolContext(env.sessionmaker, ZoneInfo("Europe/Moscow"))
+    ctx = ToolContext(env.sessionmaker, ZoneInfo(zone), env.clock)
     text = await spec.handler(ctx, spec.parse(args))
     assert len(text) <= 20_000
     result: dict[str, Any] = json.loads(text)
@@ -288,6 +292,66 @@ async def test_get_debts(env: Env) -> None:
     dated = [d["due_date"] for d in (await call(env, "get_debts", {}))["debts"]]
     assert dated[0] == "2020-01-01"
     assert dated[1] == "2100-01-01"
+
+
+async def test_get_debts_overdue_uses_the_moscow_date_not_the_chat_timezone(env: Env) -> None:
+    phone = await env.login()
+    await phone.push_ok(
+        [
+            phone.op(
+                "debts",
+                uuid7(),
+                fields=debt_fields(phone, counterparty="Срок", due_date="2026-10-05"),
+            )
+        ]
+    )
+
+    async def overdue(zone: str) -> bool:
+        result = await call(env, "get_debts", {}, zone=zone)
+        return bool(result["debts"][0]["overdue"])
+
+    # 2026-10-05 21:30Z is already 2026-10-06 00:30 in Moscow; New York is still on the 5th
+    env.clock.current = datetime(2026, 10, 5, 21, 30, tzinfo=UTC)
+    assert await overdue("America/New_York") is True
+    assert await overdue("Europe/Moscow") is True
+    # 20:30Z is 23:30 on the 5th in Moscow: the due day itself, not overdue; Tokyo is on the 6th
+    env.clock.current = datetime(2026, 10, 5, 20, 30, tzinfo=UTC)
+    assert await overdue("Asia/Tokyo") is False
+    assert await overdue("America/New_York") is False
+
+
+async def test_derived_totals_above_the_row_limit_do_not_crash_the_tools(env: Env) -> None:
+    phone = await env.login()
+    big = 90_000_000_000_000  # valid for a row (max 99 999 999 999 999 kopecks); the sum is not
+    await phone.push_ok(
+        [
+            phone.op(
+                "accounts",
+                uuid7(),
+                fields=account_fields(phone, name=name, opening_balance=big),
+            )
+            for name in ("Первый", "Второй")
+        ]
+        + [
+            phone.op(
+                "goals",
+                uuid7(),
+                fields=goal_fields(phone, formula=[term("all_accounts")], target_amount=big),
+            )
+        ]
+    )
+    accounts = await call(env, "get_accounts", {})
+    assert accounts["total_kopecks"] == 2 * big
+    assert accounts["total_text"] == f"{2 * big} коп."
+    assert {a["balance_text"] for a in accounts["accounts"]} == {format_amount(big)}
+    goal = (await call(env, "get_goals", {}))["goals"][0]
+    assert goal["have_kopecks"] == 2 * big
+    assert goal["have_text"] == f"{2 * big} коп."
+    assert goal["surplus_kopecks"] == big
+    assert goal["surplus_text"] == format_amount(big)
+    assert goal["missing_kopecks"] == -big
+    assert goal["terms"][0]["value_kopecks"] == 2 * big
+    assert goal["terms"][0]["value_text"] == f"{2 * big} коп."
 
 
 async def test_a_large_ledger_is_clipped_to_the_result_limit(env: Env) -> None:

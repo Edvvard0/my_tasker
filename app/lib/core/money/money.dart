@@ -84,6 +84,12 @@ int? tryParseAmount(String text) {
   }
 }
 
+/// То же, но без исключения для вычисляемых величин (суммы по счетам,
+/// итоги, остатки): они могут перейти [maxKopecks], хотя каждое слагаемое
+/// допустимо. Выше предела — сырые копейки: `100000000000000 коп.`.
+String formatAmountSafe(int kopecks) =>
+    kopecks.abs() > maxKopecks ? '$kopecks коп.' : formatAmount(kopecks);
+
 /// Форматирует копейки: `123456` -> `1 234,56 ₽` (разделители U+00A0),
 /// копейки пишутся только если они не нулевые, минус — ASCII `-`.
 String formatAmount(int kopecks) {

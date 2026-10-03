@@ -777,7 +777,7 @@ void main() {
       await goTo(tester, '/settings/trash');
       await settleDb(tester);
       expect(find.byKey(const Key('trash-list')), findsOneWidget);
-      expect(find.text('Мне должны: Настя, ${_rub(2600)}'), findsOneWidget);
+      expect(find.text('Мне должны: Настя'), findsOneWidget);
       expect(find.textContaining('Долг · удалено'), findsOneWidget);
       expect(find.textContaining('Погашение долга · удалено'), findsOneWidget);
       // погашения удалённого долга отдельной строкой не показываются

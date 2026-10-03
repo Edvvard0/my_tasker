@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -55,6 +57,31 @@ void main() {
       expect(state.locked, isFalse);
     });
 
+    test('изолят: запись замка и проверка PIN идут через PinHasher(useIsolate: '
+        'true) и дают тот же хеш, что прямой PBKDF2', () async {
+      final store = MemoryFinancePrivacyStore();
+      final c = ProviderContainer(
+        overrides: [
+          financePrivacyStoreProvider.overrideWithValue(store),
+          // Уменьшенное число итераций, но настоящий путь через изолят.
+          pinHasherProvider.overrideWithValue(const PinHasher(iterations: 40)),
+        ],
+      );
+      addTearDown(c.dispose);
+      final lock = await _loaded(c);
+      await lock.enable(testPin);
+      final record = store.record!;
+      expect(record.iterations, 40);
+      expect(
+        record.hash,
+        pbkdf2HmacSha256(utf8.encode(testPin), record.salt, 40, pinKeyBytes),
+      );
+      lock.lockNow();
+      expect(await lock.unlock(testPinOther), isA<PinRejected>());
+      expect(await lock.unlock(testPin), isA<PinAccepted>());
+      expect(c.read(financeLockProvider).closed, isFalse);
+    });
+
     test('соль у каждой записи своя: одинаковый PIN — разные хеши', () async {
       final a = MemoryFinancePrivacyStore();
       final b = MemoryFinancePrivacyStore();
@@ -100,16 +127,96 @@ void main() {
       );
     });
 
-    test('хранилище недоступно — замок считается выключенным', () async {
-      final c = ProviderContainer(
-        overrides: [
-          financePrivacyStoreProvider.overrideWithValue(_BrokenStore()),
-        ],
+    test('хранилище недоступно: замок НЕ выключен, раздел закрыт, запись '
+        'не тронута', () async {
+      final store = MemoryFinancePrivacyStore(record: lockRecordFor(testPin))
+        ..readError = StateError('keystore');
+      final c = _container(store: store);
+      final lock = await _loaded(c);
+      final state = c.read(financeLockProvider);
+      expect(state.loaded, isTrue);
+      expect(state.problem, LockProblem.storageUnavailable);
+      expect(state.closed, isTrue);
+      expect(c.read(amountsMaskedProvider), isTrue);
+      expect(c.read(financeAiAccessProvider).unlocked, isFalse);
+      // Запись не удалялась и не переписывалась.
+      expect(store.lockClears, 0);
+      expect(store.lockWrites, 0);
+      expect(store.record, isNotNull);
+
+      // Ни PIN, ни биометрия, ни «включить» раздел не открывают.
+      expect(await lock.unlock(testPin), isA<PinRejected>());
+      expect(c.read(financeLockProvider).closed, isTrue);
+      await expectLater(lock.enable(testPin), throwsStateError);
+      expect(store.lockWrites, 0);
+      // Сброс разрешён только для повреждённой записи.
+      await lock.resetCorruptedLock();
+      expect(store.lockClears, 0);
+      expect(c.read(financeLockProvider).closed, isTrue);
+    });
+
+    test('«Повторить»: хранилище ожило — прежний замок на месте', () async {
+      final store = MemoryFinancePrivacyStore(record: lockRecordFor(testPin))
+        ..readError = StateError('keystore');
+      final c = _container(store: store);
+      final lock = await _loaded(c);
+      expect(c.read(financeLockProvider).problem, isNotNull);
+
+      // Всё ещё недоступно.
+      await lock.retryLoad();
+      expect(
+        c.read(financeLockProvider).problem,
+        LockProblem.storageUnavailable,
       );
-      addTearDown(c.dispose);
-      await c.read(financeLockProvider.notifier).ready;
-      expect(c.read(financeLockProvider).loaded, isTrue);
+
+      store.readError = null;
+      await lock.retryLoad();
+      final state = c.read(financeLockProvider);
+      expect(state.problem, isNull);
+      expect(state.enabled, isTrue);
+      expect(state.locked, isTrue);
+      expect(state.closed, isTrue);
+      expect(await lock.unlock(testPin), isA<PinAccepted>());
+      expect(c.read(financeLockProvider).closed, isFalse);
+    });
+
+    test('«Повторить»: замка нет — раздел открывается', () async {
+      final store = MemoryFinancePrivacyStore()..readError = StateError('x');
+      final c = _container(store: store);
+      final lock = await _loaded(c);
+      expect(c.read(financeLockProvider).closed, isTrue);
+      store.readError = null;
+      await lock.retryLoad();
+      expect(c.read(financeLockProvider).closed, isFalse);
       expect(c.read(financeLockProvider).enabled, isFalse);
+      // Без сбоя повтор ничего не делает.
+      await lock.retryLoad();
+      expect(c.read(financeLockProvider).closed, isFalse);
+    });
+
+    test('повреждённая запись: замок закрыт, запись не удалена, пока нет '
+        'явного сброса', () async {
+      final store = MemoryFinancePrivacyStore(corrupt: true);
+      final c = _container(store: store);
+      final lock = await _loaded(c);
+      expect(c.read(financeLockProvider).problem, LockProblem.corrupted);
+      expect(c.read(financeLockProvider).closed, isTrue);
+      expect(store.corrupt, isTrue);
+      expect(store.lockClears, 0);
+      expect(await lock.unlock(testPin), isA<PinRejected>());
+      expect(c.read(financeLockProvider).closed, isTrue);
+      await expectLater(lock.enable(testPin), throwsStateError);
+
+      await lock.resetCorruptedLock();
+      expect(store.corrupt, isFalse);
+      expect(store.lockClears, 1);
+      final state = c.read(financeLockProvider);
+      expect(state.problem, isNull);
+      expect(state.enabled, isFalse);
+      expect(state.closed, isFalse);
+      // После сброса новый PIN задаётся как обычно.
+      await lock.enable(testPin);
+      expect(store.record, isNotNull);
     });
   });
 

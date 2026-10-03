@@ -225,4 +225,58 @@ void main() {
       expect(feed.months['2026-10']!.expense, 2500);
     },
   );
+
+  test('перевод: правки «откуда» и «куда» с двух устройств не сливаются в '
+      'перевод на тот же счёт', () async {
+    await phone.finance.createAccount(account(1, 'Карта'));
+    await phone.finance.createAccount(account(2, 'Наличные', opening: 0));
+    await phone.finance.createAccount(account(3, 'Копилка', opening: 0));
+    await phone.finance.createTransaction(
+      tx(12, from: 1, to: 2, amount: 5000, kind: TransactionKind.transfer),
+    );
+    await syncBoth();
+    clock.advance(const Duration(minutes: 5));
+
+    // Телефон: «откуда» -> счёт 3. Компьютер: «куда» -> счёт 3.
+    await phone.finance.updateTransaction(
+      (await phone.finance.getTransaction(uuid(12)))!
+          .copyWith(accountId: uuid(3)),
+    );
+    // Группа операции уходит с `account_id`, даже когда менялся только он.
+    final phoneOp = (await phone.device.store.outbox()).last;
+    expect(phoneOp.fields!.keys, contains('account_id'));
+    expect(phoneOp.fields!.keys, contains('to_account_id'));
+    await pc.finance.updateTransaction(
+      (await pc.finance.getTransaction(uuid(12)))!
+          .copyWith(toAccountId: uuid(3)),
+    );
+    final pcOp = (await pc.device.store.outbox()).last;
+    expect(pcOp.fields!.keys, contains('account_id'));
+    expect(pcOp.fields!.keys, contains('to_account_id'));
+    await syncBoth();
+
+    for (final device in [phone, pc]) {
+      final t = (await device.finance.getTransaction(uuid(12)))!;
+      expect(t.kind, TransactionKind.transfer);
+      expect(t.accountId, isNot(t.toAccountId), reason: 'один и тот же счёт');
+    }
+    final a = (await phone.finance.getTransaction(uuid(12)))!;
+    final b = (await pc.finance.getTransaction(uuid(12)))!;
+    expect(b.accountId, a.accountId);
+    expect(b.toAccountId, a.toAccountId);
+  });
+
+  test('не перевод: правка счёта шлёт только account_id', () async {
+    await phone.finance.createAccount(account(1, 'Карта'));
+    await phone.finance.createAccount(account(2, 'Наличные', opening: 0));
+    await phone.finance.createTransaction(tx(10, from: 1));
+    await syncBoth();
+    await phone.finance.updateTransaction(
+      (await phone.finance.getTransaction(uuid(10)))!
+          .copyWith(accountId: uuid(2)),
+    );
+    expect((await phone.device.store.outbox()).last.fields!.keys, [
+      'account_id',
+    ]);
+  });
 }

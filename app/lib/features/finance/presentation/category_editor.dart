@@ -92,9 +92,14 @@ class _CategoryEditorState extends ConsumerState<CategoryEditor> {
   }
 
   Future<void> _load() async {
-    final category = await ref
-        .read(financeRepositoryProvider)
-        .getCategory(widget.categoryId!);
+    final repo = ref.read(financeRepositoryProvider);
+    final category = await repo.getCategory(widget.categoryId!);
+    // Родителя могли удалить: тогда категория уже показывается в списке
+    // верхнего уровня, и редактор начинает с «верхнего уровня».
+    final parentId = category?.parentId;
+    final parentLive =
+        parentId == null ||
+        (await repo.categories()).any((c) => c.id == parentId);
     if (!mounted) return;
     setState(() {
       _loading = false;
@@ -105,7 +110,7 @@ class _CategoryEditorState extends ConsumerState<CategoryEditor> {
       _original = category;
       _name.text = category.name;
       _kind = category.kind;
-      _parentId = category.parentId;
+      _parentId = parentLive ? category.parentId : null;
       _icon = category.icon;
       _color = category.color;
     });

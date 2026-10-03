@@ -11,6 +11,7 @@ class SegmentedPill<T> extends StatelessWidget {
     required this.selected,
     required this.onChanged,
     this.keyPrefix = 'segment',
+    this.enabled = true,
     super.key,
   });
 
@@ -23,57 +24,63 @@ class SegmentedPill<T> extends StatelessWidget {
   /// `toString()` значения.
   final String keyPrefix;
 
+  /// Выключенная пилюля показывает выбор, но не переключается.
+  final bool enabled;
+
   static String _name(Object? value) => value is Enum ? value.name : '$value';
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.s1),
-      decoration: BoxDecoration(
-        color: c.surface3,
-        borderRadius: AppRadii.borderFull,
-      ),
-      child: Row(
-        children: [
-          for (final entry in options.entries)
-            Expanded(
-              child: Semantics(
-                button: true,
-                selected: entry.key == selected,
-                label: entry.value,
-                excludeSemantics: true,
-                child: InkWell(
-                  key: Key('$keyPrefix-${_name(entry.key)}'),
-                  borderRadius: AppRadii.borderFull,
-                  onTap: () => onChanged(entry.key),
-                  child: Container(
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: entry.key == selected
-                          ? c.surface1
-                          : Colors.transparent,
-                      borderRadius: AppRadii.borderFull,
-                    ),
-                    child: Text(
-                      entry.value,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.text.label.copyWith(
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.s1),
+        decoration: BoxDecoration(
+          color: c.surface3,
+          borderRadius: AppRadii.borderFull,
+        ),
+        child: Row(
+          children: [
+            for (final entry in options.entries)
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  selected: entry.key == selected,
+                  label: entry.value,
+                  excludeSemantics: true,
+                  child: InkWell(
+                    key: Key('$keyPrefix-${_name(entry.key)}'),
+                    borderRadius: AppRadii.borderFull,
+                    onTap: enabled ? () => onChanged(entry.key) : null,
+                    child: Container(
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
                         color: entry.key == selected
-                            ? c.textPrimary
-                            : c.textSecondary,
-                        fontWeight: entry.key == selected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
+                            ? c.surface1
+                            : Colors.transparent,
+                        borderRadius: AppRadii.borderFull,
+                      ),
+                      child: Text(
+                        entry.value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.text.label.copyWith(
+                          color: entry.key == selected
+                              ? c.textPrimary
+                              : c.textSecondary,
+                          fontWeight: entry.key == selected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

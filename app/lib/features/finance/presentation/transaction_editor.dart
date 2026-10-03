@@ -84,6 +84,9 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
 
   bool get _isNew => widget.transactionId == null;
 
+  /// Операция привязана к долгу: вид и сумма меняются через погашение.
+  bool get _debtLinked => _original?.debtId != null;
+
   @override
   void initState() {
     super.initState();
@@ -407,6 +410,7 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
                         for (final k in TransactionKind.values) k: k.label,
                       },
                       selected: _draft.kind,
+                      enabled: !_debtLinked,
                       onChanged: (k) => _update(
                         _draft.withKind(
                           k,
@@ -426,16 +430,24 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
                           key: const Key('tx-amount'),
                           controller: _amount,
                           autofocus: _isNew,
+                          readOnly: _debtLinked,
                           onChanged: (v) =>
                               _update(_draft.copyWith(amountText: v)),
                         ),
                         const SizedBox(height: AppSpacing.s2),
-                        AmountChips(
-                          controller: _amount,
-                          keyPrefix: 'tx-chip',
-                          onChanged: (v) =>
-                              _update(_draft.copyWith(amountText: v)),
-                        ),
+                        if (_debtLinked)
+                          Text(
+                            'Сумма и вид меняются через погашение долга',
+                            key: const Key('tx-debt-linked-hint'),
+                            style: t.bodyS.copyWith(color: c.textSecondary),
+                          )
+                        else
+                          AmountChips(
+                            controller: _amount,
+                            keyPrefix: 'tx-chip',
+                            onChanged: (v) =>
+                                _update(_draft.copyWith(amountText: v)),
+                          ),
                       ],
                     ),
                   ),

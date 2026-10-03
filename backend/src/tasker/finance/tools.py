@@ -5,7 +5,6 @@
 
 import json
 import uuid
-from datetime import datetime
 from typing import Annotated, Any, Literal
 
 import sqlalchemy as sa
@@ -23,7 +22,7 @@ from tasker.finance.tables import (
     goals,
     transactions,
 )
-from tasker.money import format_amount
+from tasker.money import MAX_KOPECKS, format_amount
 from tasker.work import tools as work_tools
 from tasker.work.reference import in_period, moscow_date
 
@@ -31,10 +30,17 @@ MAX_PERIOD_DAYS = 366
 Day = Annotated[str, StringConstraints(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")]
 
 
+def _amount_text(kopecks: int) -> str:
+    """Text of a derived amount. Sums of valid rows may exceed the per-row limit, and a tool must
+    not crash on them: the client fallback (``abs(kopecks) > max`` -> ``"<N> коп."``) applies.
+    """
+    return f"{kopecks} коп." if abs(kopecks) > MAX_KOPECKS else format_amount(kopecks)
+
+
 def _money(name: str, value: int | None) -> dict[str, Any]:
     return {
         f"{name}_kopecks": value,
-        f"{name}_text": None if value is None else format_amount(value),
+        f"{name}_text": None if value is None else _amount_text(value),
     }
 
 
@@ -327,7 +333,7 @@ class GetDebtsArgs(BaseModel):
 async def get_debts(ctx: ToolContext, args: BaseModel) -> str:
     assert isinstance(args, GetDebtsArgs)  # noqa: S101 - the registry pairs handler and model
     data = await load(ctx, with_work=True)
-    today = datetime.now(ctx.timezone).date().isoformat()
+    today = moscow_date(format_utc(ctx.clock.now()))  # spec 9: the Moscow date of the server
     summary = reference.debts_summary(data.debts, data.repayments, today)
     by_id = {d["id"]: d for d in data.debts}
     found = []

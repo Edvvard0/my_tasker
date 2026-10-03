@@ -335,10 +335,15 @@ final contextPreviewProvider = FutureProvider.autoDispose
         ..watch(eventsProvider)
         // Финансы: замок, «скрыть суммы», согласие на суммы и сами данные.
         ..watch(financeAiAccessProvider)
+        // Все семь таблиц Финансов: баланс зависит от сверок, долг — от
+        // погашений, цель — от счетов, операций, сверок, долгов и их погашений.
         ..watch(accountRowsProvider)
+        ..watch(categoryRowsProvider)
         ..watch(transactionRowsProvider)
-        ..watch(goalRowsProvider)
-        ..watch(debtRowsProvider);
+        ..watch(checkpointRowsProvider)
+        ..watch(debtRowsProvider)
+        ..watch(repaymentRowsProvider)
+        ..watch(goalRowsProvider);
       return ref
           .read(contextBuilderProvider)
           .build(selection.sources, ref.read(contextEnvProvider)());

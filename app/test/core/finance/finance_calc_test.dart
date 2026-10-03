@@ -429,4 +429,51 @@ void main() {
       );
     });
   });
+
+  group('progressBasisPoints: большие значения (эталон — целые Python)', () {
+    // Ожидаемое получено `have * 10000 // target` в Python (целые
+    // произвольной длины); `null` — результат не помещается в int64. Числа
+    // строками: литералы больше 2^53 не годятся для JS-анализатора.
+    const vectors = <({String have, String target, String? bp})>[
+      (have: '1000000000000000', target: '3', bp: '3333333333333333333'),
+      (have: '922337203685477', target: '7', bp: '1317624576693538571'),
+      // Первое `have`, при котором `have * 10000` переполняет int64.
+      (have: '922337203685478', target: '7', bp: '1317624576693540000'),
+      (have: '99999999999999', target: '99999999999999', bp: '10000'),
+      (have: '199999999999998', target: '99999999999999', bp: '20000'),
+      (have: '9223372036854775807', target: '99999999999999', bp: '922337203'),
+      (have: '9223372036854775807', target: '9223372036854775807', bp: '10000'),
+      (have: '9223372036854775807', target: '1000000000000000000', bp: '92233'),
+      (have: '1000000000000000000', target: '1000000000000000001', bp: '9999'),
+      (have: '1', target: '3', bp: '3333'),
+      (have: '5', target: '0', bp: '0'),
+      (have: '0', target: '5', bp: '0'),
+      (have: '-5', target: '5', bp: '0'),
+      (have: '1000000000000000', target: '1', bp: null),
+    ];
+
+    for (final v in vectors) {
+      test('${v.have} / ${v.target}', () {
+        final actual = progressBasisPoints(
+          int.parse(v.have),
+          int.parse(v.target),
+        );
+        // Не помещается в int64 — насыщение максимумом, а не переполнение.
+        expect(actual, int.parse(v.bp ?? '9223372036854775807'));
+      });
+    }
+
+    test('результат не отрицателен и не убывает с ростом `have`', () {
+      var previous = 0;
+      for (
+        var have = 900000000000000;
+        have < 950000000000000;
+        have += 5e12.toInt()
+      ) {
+        final bp = progressBasisPoints(have, 12345);
+        expect(bp, greaterThanOrEqualTo(previous));
+        previous = bp;
+      }
+    });
+  });
 }

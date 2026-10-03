@@ -146,7 +146,13 @@ class TransactionDraft {
 
   /// Операция из черновика. [base] — существующая (остальные поля —
   /// источник, статус, внешние ссылки — сохраняются).
+  ///
+  /// Операция, привязанная к долгу (`debt_id`: погашение или выдача), не
+  /// меняет вид и сумму через форму: они согласованы с долгом и меняются
+  /// только через погашение. Остальное (счёт, категория, мерчант,
+  /// комментарий, дата) правится как обычно, `debt_id` сохраняется.
   FinanceTransaction toTransaction(String id, {FinanceTransaction? base}) {
+    final linked = base != null && base.debtId != null;
     final source =
         base ??
         FinanceTransaction(
@@ -156,22 +162,24 @@ class TransactionDraft {
           amount: 1,
           occurredAt: occurredAt,
         );
+    final resultKind = linked ? base.kind : kind;
+    final transfer = resultKind == TransactionKind.transfer;
     return FinanceTransaction(
       id: id,
-      kind: kind,
+      kind: resultKind,
       accountId: accountId!,
-      toAccountId: isTransfer ? toAccountId : null,
-      amount: amountKopecks!,
+      toAccountId: transfer ? toAccountId : null,
+      amount: linked ? base.amount : amountKopecks!,
       occurredAt: occurredAt,
-      categoryId: isTransfer ? null : categoryId,
+      categoryId: transfer ? null : categoryId,
       merchant: merchant.trim().isEmpty ? null : merchant,
       comment: comment.trim().isEmpty ? null : comment,
       source: source.source,
       status: source.status,
       externalId: source.externalId,
       dedupHash: source.dedupHash,
-      workPaymentId: isTransfer ? null : source.workPaymentId,
-      debtId: isTransfer ? null : source.debtId,
+      workPaymentId: transfer ? null : source.workPaymentId,
+      debtId: transfer ? null : source.debtId,
     );
   }
 

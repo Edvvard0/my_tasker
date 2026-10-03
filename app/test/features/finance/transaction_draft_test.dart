@@ -174,7 +174,6 @@ void main() {
         source: TransactionSource.notification,
         status: TransactionStatus.needsReview,
         externalId: 'ext',
-        debtId: 'debt',
       );
       final draft = TransactionDraft.fromTransaction(base);
       expect(draft.amountText, '1');
@@ -186,7 +185,40 @@ void main() {
       expect(t.source, TransactionSource.notification);
       expect(t.status, TransactionStatus.needsReview);
       expect(t.externalId, 'ext');
+    });
+
+    test('операция с debt_id: вид и сумма не меняются, debt_id и остальное '
+        'правятся/сохраняются', () {
+      final base = FinanceTransaction(
+        id: 'id1',
+        kind: TransactionKind.income,
+        accountId: 'a1',
+        amount: 100000,
+        occurredAt: _now,
+        merchant: 'Тимур',
+        debtId: 'debt',
+      );
+      // Попытка превратить в перевод на другой счёт с другой суммой.
+      final hostile = TransactionDraft.fromTransaction(base)
+          .withKind(TransactionKind.transfer)
+          .copyWith(amountText: '5', toAccountId: 'a2', comment: 'заметка');
+      expect(hostile.kind, TransactionKind.transfer);
+      final t = hostile.toTransaction('id1', base: base);
+      expect(t.kind, TransactionKind.income);
+      expect(t.amount, 100000);
       expect(t.debtId, 'debt');
+      expect(t.toAccountId, isNull);
+      // Счёт, дата и комментарий — редактируются.
+      expect(t.comment, 'заметка');
+
+      final moved = TransactionDraft.fromTransaction(base)
+          .withAccount('a3')
+          .copyWith(merchant: 'Тимур Р.')
+          .toTransaction('id1', base: base);
+      expect(moved.accountId, 'a3');
+      expect(moved.merchant, 'Тимур Р.');
+      expect(moved.debtId, 'debt');
+      expect(moved.kind, TransactionKind.income);
     });
 
     test('fromTransaction: копейки в тексте суммы', () {

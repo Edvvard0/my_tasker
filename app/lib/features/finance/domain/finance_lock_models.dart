@@ -150,6 +150,24 @@ class LockRecord {
   });
 }
 
+/// Запись замка есть, но не разбирается (данные повреждены). Это не «замка
+/// нет»: молча отключить замок из-за повреждения нельзя.
+class CorruptLockRecord implements Exception {
+  const CorruptLockRecord();
+
+  @override
+  String toString() => 'CorruptLockRecord';
+}
+
+/// Почему замок «Финансов» не прочитан и раздел остаётся закрытым.
+enum LockProblem {
+  /// Защищённое хранилище не отвечает: запись не тронута, можно повторить.
+  storageUnavailable,
+
+  /// Запись замка повреждена: проверить PIN по ней нельзя.
+  corrupted,
+}
+
 /// Итог проверки PIN.
 @immutable
 sealed class PinCheck {

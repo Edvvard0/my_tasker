@@ -107,7 +107,7 @@ void main() {
     }
   });
 
-  test('заголовки строк в корзине', () {
+  test('заголовки строк в корзине: без сумм', () {
     expect(accountsSpec.titleOf({'name': 'Карта'}), 'Карта');
     expect(
       transactionsSpec.titleOf({
@@ -115,7 +115,7 @@ void main() {
         'amount': 150000,
         'merchant': ' Магнит ',
       }),
-      'Расход 1 500 ₽ · Магнит',
+      'Расход · Магнит',
     );
     expect(
       transactionsSpec.titleOf({
@@ -123,7 +123,7 @@ void main() {
         'amount': 100,
         'merchant': null,
       }),
-      'Доход 1 ₽',
+      'Доход',
     );
     expect(
       transactionsSpec.titleOf({
@@ -131,34 +131,39 @@ void main() {
         'amount': 5,
         'merchant': '',
       }),
-      'Перевод 0,05 ₽',
+      'Перевод',
     );
     expect(
       transactionsSpec.titleOf({'kind': 'expense', 'amount': 100000000000000}),
-      'Расход 100000000000000 коп.',
+      'Расход',
     );
+    // 2026-10-05T22:00Z — это уже 6 октября по Москве.
     expect(
-      transactionsSpec.titleOf({'kind': 'expense', 'amount': 'x'}),
-      'Расход ',
+      balanceCheckpointsSpec.titleOf({
+        'checked_at': '2026-10-05T22:00:00Z',
+        'actual_balance': 90000,
+      }),
+      'Сверка 06.10.2026',
     );
     expect(
       balanceCheckpointsSpec.titleOf({
         'checked_at': '2026-10-05T09:00:00Z',
         'actual_balance': 90000,
       }),
-      'Сверка 2026-10-05: 900 ₽',
+      'Сверка 05.10.2026',
     );
     expect(
       balanceCheckpointsSpec.titleOf({'checked_at': 'x', 'actual_balance': 1}),
-      'Сверка x: 0,01 ₽',
+      'Сверка',
     );
+    expect(balanceCheckpointsSpec.titleOf({'actual_balance': 1}), 'Сверка');
     expect(
       debtsSpec.titleOf({
         'direction': 'owed_to_me',
         'counterparty': 'Рома',
         'amount': 750000,
       }),
-      'Мне должны: Рома, 7 500 ₽',
+      'Мне должны: Рома',
     );
     expect(
       debtsSpec.titleOf({
@@ -166,13 +171,33 @@ void main() {
         'counterparty': null,
         'amount': 100,
       }),
-      'Я должен: без имени, 1 ₽',
+      'Я должен: без имени',
     );
     expect(
-      debtRepaymentsSpec.titleOf({'amount': 60000, 'repaid_on': '2026-10-01'}),
-      'Погашение 600 ₽ от 2026-10-01',
+      debtRepaymentsSpec.titleOf({'amount': 60000, 'repaid_on': '2026-09-28'}),
+      'Погашение от 2026-09-28',
     );
     expect(goalsSpec.titleOf({'name': 'Отпуск'}), 'Отпуск');
     expect(categoriesSpec.titleOf({'name': 'Еда'}), 'Еда');
+  });
+
+  test('ни один заголовок не содержит суммы ни при каких данных', () {
+    final amountLike = RegExp(r'\d[\d\s  ]*(,\d+)?\s*(₽|коп)');
+    final rows = <Map<String, Object?>>[
+      {'kind': 'expense', 'amount': 123456, 'merchant': 'X'},
+      {'checked_at': '2026-10-05T09:00:00Z', 'actual_balance': 123456},
+      {'direction': 'i_owe', 'counterparty': 'Y', 'amount': 123456},
+      {'repaid_on': '2026-10-01', 'amount': 123456},
+      {'name': 'Z', 'target_amount': 123456, 'opening_balance': 123456},
+    ];
+    for (final spec in financeSyncSpecs) {
+      for (final row in rows) {
+        expect(
+          spec.titleOf(row),
+          isNot(matches(amountLike)),
+          reason: spec.name,
+        );
+      }
+    }
   });
 }

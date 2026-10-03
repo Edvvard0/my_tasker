@@ -372,5 +372,27 @@ void main() {
       }
       expect(offenders, isEmpty, reason: offenders.join('\n'));
     });
+
+    test(
+      'заголовки корзины (finance_sync_specs.dart) не форматируют деньги',
+      () {
+        // Корзина и журнал конфликтов не охраняются замком «Финансов», поэтому
+        // подписи строк не должны содержать суммы вообще.
+        final file = File('lib/features/finance/data/finance_sync_specs.dart');
+        expect(file.existsSync(), isTrue);
+        final raw = RegExp(
+          r'\b(moneyText|transactionAmountText|axisAmountText|formatAmount|'
+          r'_money|maxKopecks)\b|core/money/',
+        );
+        final offenders = <String>[];
+        final lines = file.readAsLinesSync();
+        for (var i = 0; i < lines.length; i++) {
+          final line = lines[i];
+          if (line.trimLeft().startsWith('//')) continue;
+          if (raw.hasMatch(line)) offenders.add('${i + 1}: $line');
+        }
+        expect(offenders, isEmpty, reason: offenders.join('\n'));
+      },
+    );
   });
 }

@@ -13,6 +13,9 @@ import 'package:my_tasker/core/widgets/empty_state.dart';
 import 'package:my_tasker/core/widgets/notice_card.dart';
 import 'package:my_tasker/core/widgets/screen_scaffold.dart';
 import 'package:my_tasker/core/widgets/status_pill.dart';
+import 'package:my_tasker/features/finance/application/finance_lock.dart';
+import 'package:my_tasker/features/finance/data/finance_sync_specs.dart';
+import 'package:my_tasker/features/finance/presentation/privacy/finance_gate.dart';
 
 /// Корзина: удалённые не более 30 суток назад строки всех синхронизируемых
 /// таблиц (только «корневые»: потомки удалённого родителя скрыты).
@@ -20,6 +23,20 @@ final StreamProvider<List<TrashItem>> trashProvider =
     StreamProvider.autoDispose<List<TrashItem>>(
       (ref) => ref.watch(syncStoreProvider).watchTrash(),
     );
+
+/// Строка принадлежит таблице «Финансов».
+bool _isFinanceTable(String table) =>
+    financeSyncSpecs.any((spec) => spec.name == table);
+
+/// Нейтральный заголовок финансовой записи, пока суммы и данные счетов
+/// скрыты («скрыть суммы» включено или замок закрыт): экран корзины не
+/// охраняется замком «Финансов», а подпись записи — это счёт, продавец,
+/// контрагент.
+const String maskedFinanceTitle = 'Финансовая запись';
+
+/// Заголовок записи корзины с учётом маски.
+String _titleOf(TrashItem item, {required bool masked}) =>
+    masked && _isFinanceTable(item.table) ? maskedFinanceTitle : item.title;
 
 /// «Настройки › Корзина»: список с «удалится через N дней» и «Восстановить».
 class TrashScreen extends ConsumerWidget {
@@ -31,10 +48,14 @@ class TrashScreen extends ConsumerWidget {
     TrashItem item,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    // Финансовую запись при закрытом замке сперва нужно открыть PIN-ом:
+    // иначе корзина стала бы обходным путём мимо замка.
+    if (_isFinanceTable(item.table) && !await ensureFinanceUnlocked(context)) {
+      return;
+    }
     await ref.read(syncStoreProvider).restore(item.table, item.id);
-    messenger.showSnackBar(
-      SnackBar(content: Text('«${item.title}» восстановлено')),
-    );
+    final title = _titleOf(item, masked: ref.read(amountsMaskedProvider));
+    messenger.showSnackBar(SnackBar(content: Text('«$title» восстановлено')));
   }
 
   @override
@@ -43,6 +64,7 @@ class TrashScreen extends ConsumerWidget {
     final offline =
         ref.watch(syncStatusProvider).indicator == SyncIndicatorKind.offline;
     final now = ref.watch(clockProvider)();
+    final masked = ref.watch(amountsMaskedProvider);
     final t = context.text;
     final c = context.colors;
 
@@ -86,6 +108,7 @@ class TrashScreen extends ConsumerWidget {
           for (final item in trash.requireValue) ...[
             _TrashTile(
               item: item,
+              title: _titleOf(item, masked: masked),
               now: now,
               onRestore: () => _restore(context, ref, item),
             ),
@@ -129,11 +152,13 @@ class TrashScreen extends ConsumerWidget {
 class _TrashTile extends StatelessWidget {
   const _TrashTile({
     required this.item,
+    required this.title,
     required this.now,
     required this.onRestore,
   });
 
   final TrashItem item;
+  final String title;
   final DateTime now;
   final VoidCallback onRestore;
 
@@ -167,7 +192,7 @@ class _TrashTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.title,
+                      title,
                       style: t.bodyStrong,
                       overflow: TextOverflow.ellipsis,
                     ),

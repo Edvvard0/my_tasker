@@ -95,6 +95,7 @@ class AmountField extends StatelessWidget {
     this.onChanged,
     this.allowNegative = false,
     this.autofocus = false,
+    this.readOnly = false,
     this.hint = '0',
     this.errorText,
     super.key,
@@ -104,6 +105,9 @@ class AmountField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final bool allowNegative;
   final bool autofocus;
+
+  /// Сумму нельзя менять (например, операция привязана к погашению долга).
+  final bool readOnly;
   final String hint;
   final String? errorText;
 
@@ -114,6 +118,7 @@ class AmountField extends StatelessWidget {
     return FormTextField(
       controller: controller,
       autofocus: autofocus,
+      readOnly: readOnly,
       textAlign: TextAlign.end,
       style: t.kpi.copyWith(fontSize: 26, height: 1.2),
       keyboardType: TextInputType.numberWithOptions(

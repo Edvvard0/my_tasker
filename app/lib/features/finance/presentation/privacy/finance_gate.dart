@@ -7,6 +7,7 @@ import 'package:my_tasker/core/config/clock.dart';
 import 'package:my_tasker/core/theme/app_radii.dart';
 import 'package:my_tasker/core/theme/app_spacing.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
+import 'package:my_tasker/core/widgets/confirm_dialog.dart';
 import 'package:my_tasker/core/widgets/screen_scaffold.dart';
 import 'package:my_tasker/features/finance/application/finance_lock.dart';
 import 'package:my_tasker/features/finance/domain/finance_lock_models.dart';
@@ -168,6 +169,12 @@ class _UnlockPanelState extends ConsumerState<UnlockPanel> {
   @override
   Widget build(BuildContext context) {
     final lock = ref.watch(financeLockProvider);
+    if (lock.problem != null) {
+      return LockProblemPanel(
+        problem: lock.problem!,
+        onResolved: widget.onUnlocked,
+      );
+    }
     final remaining = _remaining(lock);
     // Тикер включается/выключается после кадра: setState в build нельзя.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -183,6 +190,90 @@ class _UnlockPanelState extends ConsumerState<UnlockPanel> {
       messageIsError: remaining != null,
       onSubmit: _submit,
       onBiometric: lock.biometric && _bioAvailable ? _biometric : null,
+    );
+  }
+}
+
+/// Замок «Финансов» не прочитан: раздел остаётся закрытым (замок не
+/// «выключен»). Хранилище недоступно — «Повторить»; запись повреждена —
+/// «Сбросить замок» с подтверждением.
+class LockProblemPanel extends ConsumerWidget {
+  const LockProblemPanel({required this.problem, this.onResolved, super.key});
+
+  final LockProblem problem;
+
+  /// Вызывается, когда раздел снова открыт (окно закрывается).
+  final VoidCallback? onResolved;
+
+  // Контейнер берётся до `await`: после снятия замка панель уходит из
+  // дерева, а `ref` вместе с ней.
+  Future<void> _retry(BuildContext context) async {
+    final container = ProviderScope.containerOf(context);
+    await container.read(financeLockProvider.notifier).retryLoad();
+    if (!container.read(financeLockProvider).closed) onResolved?.call();
+  }
+
+  Future<void> _reset(BuildContext context) async {
+    final container = ProviderScope.containerOf(context);
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Сбросить замок?',
+      message:
+          'Запись замка повреждена, PIN проверить нельзя. После сброса '
+          'раздел «Финансы» откроется без PIN. Данные не теряются — '
+          'счета, операции, долги и цели остаются на месте, сбрасывается '
+          'только PIN. Новый PIN можно задать в настройках приватности.',
+      confirmLabel: 'Сбросить',
+      danger: true,
+    );
+    if (!ok) return;
+    await container.read(financeLockProvider.notifier).resetCorruptedLock();
+    if (!container.read(financeLockProvider).closed) onResolved?.call();
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final t = context.text;
+    final unavailable = problem == LockProblem.storageUnavailable;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 360),
+      child: Column(
+        key: Key(unavailable ? 'lock-problem-storage' : 'lock-problem-corrupt'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            unavailable ? 'Хранилище недоступно' : 'Замок повреждён',
+            style: t.bodyStrong,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.s2),
+          Text(
+            unavailable
+                ? 'Не удалось прочитать защищённое хранилище устройства, '
+                      'поэтому раздел «Финансы» остаётся закрытым. Замок не '
+                      'снят и не удалён — попробуйте ещё раз.'
+                : 'Запись замка повреждена, PIN проверить нельзя, поэтому '
+                      'раздел «Финансы» остаётся закрытым. Данные не '
+                      'потеряны: при сбросе удаляется только PIN.',
+            style: t.bodyS.copyWith(color: c.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.s4),
+          if (unavailable)
+            FilledButton(
+              key: const Key('lock-retry'),
+              onPressed: () => _retry(context),
+              child: const Text('Повторить'),
+            )
+          else
+            FilledButton(
+              key: const Key('lock-reset'),
+              onPressed: () => _reset(context),
+              child: const Text('Сбросить замок'),
+            ),
+        ],
+      ),
     );
   }
 }

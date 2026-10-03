@@ -1,4 +1,4 @@
-import 'package:my_tasker/core/money/money.dart';
+import 'package:my_tasker/core/finance/finance_time.dart';
 import 'package:my_tasker/core/sync/sync_table.dart';
 
 /// Синхронизируемые таблицы Этапа 5 «Финансы» (spec
@@ -149,10 +149,10 @@ const List<SyncTableSpec> financeSyncSpecs = [
 
 String _name(Map<String, Object?> row) => '${row['name']}';
 
-String _money(Object? kopecks) {
-  if (kopecks is! int) return '';
-  return kopecks.abs() > maxKopecks ? '$kopecks коп.' : formatAmount(kopecks);
-}
+// Заголовки строк видны в корзине и в журнале конфликтов — вне замка
+// «Финансов» и режима «скрыть суммы», поэтому суммы в них не попадают
+// никогда (тест `hide_amounts_test` следит, чтобы здесь не появилось
+// форматирование денег).
 
 String _transactionTitle(Map<String, Object?> row) {
   final kind = switch (row['kind']) {
@@ -161,24 +161,30 @@ String _transactionTitle(Map<String, Object?> row) {
     _ => 'Расход',
   };
   final merchant = row['merchant'];
-  final tail = merchant is String && merchant.trim().isNotEmpty
-      ? ' · ${merchant.trim()}'
-      : '';
-  return '$kind ${_money(row['amount'])}$tail';
+  return merchant is String && merchant.trim().isNotEmpty
+      ? '$kind · ${merchant.trim()}'
+      : kind;
 }
 
+/// «Сверка 06.10.2026»: день — московский, как везде в Финансах.
 String _checkpointTitle(Map<String, Object?> row) {
-  final at = '${row['checked_at']}';
-  final day = at.length >= 10 ? at.substring(0, 10) : at;
-  return 'Сверка $day: ${_money(row['actual_balance'])}';
+  final at = row['checked_at'];
+  if (at is! String) return 'Сверка';
+  try {
+    final day = moscowDate(at); // YYYY-MM-DD
+    return 'Сверка ${day.substring(8)}.${day.substring(5, 7)}.'
+        '${day.substring(0, 4)}';
+  } on FormatException {
+    return 'Сверка';
+  }
 }
 
 String _debtTitle(Map<String, Object?> row) {
   final who = row['counterparty'];
   final name = who is String && who.trim().isNotEmpty ? who : 'без имени';
   final what = row['direction'] == 'i_owe' ? 'Я должен' : 'Мне должны';
-  return '$what: $name, ${_money(row['amount'])}';
+  return '$what: $name';
 }
 
 String _repaymentTitle(Map<String, Object?> row) =>
-    'Погашение ${_money(row['amount'])} от ${row['repaid_on']}';
+    'Погашение от ${row['repaid_on']}';

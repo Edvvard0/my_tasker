@@ -130,7 +130,8 @@ class FinanceContextSource extends ContextSource {
       for (final c in categories) c['id']! as String: c['name']! as String,
     };
     final showAmounts = access.amounts;
-    String money(int kopecks) => formatAmount(kopecks);
+    // Итоги и балансы — вычисляемые: могут выйти за предел одной суммы.
+    String money(int kopecks) => formatAmountSafe(kopecks);
 
     final out = <String>[
       if (!showAmounts) financeAmountsWithheldLine,

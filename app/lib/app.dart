@@ -11,6 +11,7 @@ import 'package:my_tasker/features/calendar/reminders/reminder_service.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_taps.dart';
 import 'package:my_tasker/features/finance/application/finance_lock.dart';
 import 'package:my_tasker/features/finance/presentation/finance_money.dart';
+import 'package:my_tasker/features/finance/presentation/privacy/finance_lock_watcher.dart';
 import 'package:my_tasker/features/recovery/presentation/recovery_screen.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 import 'package:my_tasker/features/shell/splash_screen.dart';
@@ -70,7 +71,11 @@ class MyTaskerApp extends ConsumerWidget {
           child: Consumer(
             builder: (_, ref, child) => AmountsVisibility(
               hidden: ref.watch(amountsMaskedProvider),
-              child: child!,
+              // Блокировка «Финансов» закрывает открытые листы и диалоги.
+              child: FinanceLockDismisser(
+                navigatorKey: rootNavigatorKey,
+                child: child!,
+              ),
             ),
             child: body,
           ),

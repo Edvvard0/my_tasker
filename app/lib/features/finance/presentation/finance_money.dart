@@ -32,8 +32,10 @@ class AmountsVisibility extends InheritedWidget {
 
 /// Единая точка показа сумм Финансов: все экраны, листы, диалоги и подписи
 /// форматируют деньги только через неё (сырой `moneyText` — внутри неё и
-/// для текста полей ввода). Тест `finance_money_central_test` следит, чтобы
-/// обходных вызовов не появилось.
+/// для текста полей ввода). Тест «единая точка форматирования сумм» в
+/// `test/features/finance/privacy/hide_amounts_test.dart` следит, чтобы
+/// обходных вызовов не появилось (и чтобы заголовки корзины в
+/// `finance_sync_specs.dart` не содержали сумм).
 extension FinanceMoneyContext on BuildContext {
   bool get amountsHidden => AmountsVisibility.of(this);
 

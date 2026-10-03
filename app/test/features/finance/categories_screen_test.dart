@@ -269,6 +269,28 @@ void main() {
       expect(edited.parentId, isNull);
     });
 
+    testWidgets('родителя удалили: подкатегорию можно переименовать, редактор '
+        'начинает с верхнего уровня', (tester) async {
+      final c = await _open(tester);
+      final all = await _cats(tester, c);
+      final taxi = _id(all, 'Такси', CategoryKind.expense);
+      final transport = _id(all, 'Транспорт', CategoryKind.expense);
+      expect(all.firstWhere((x) => x.id == taxi).parentId, transport);
+      await tester.runAsync(() => financeRepo(c).deleteCategory(transport));
+      await settleDb(tester);
+
+      await tapKey(tester, 'cat-row-$taxi');
+      expect(fieldText(tester, 'cat-name'), 'Такси');
+      await enter(tester, 'cat-name', 'Такси и каршеринг');
+      await tapKey(tester, 'cat-save');
+      await settleDb(tester);
+      expect(find.byKey(const Key('cat-error')), findsNothing);
+      final edited = (await _cats(tester, c)).firstWhere((x) => x.id == taxi);
+      expect(edited.name, 'Такси и каршеринг');
+      // Сохранение из «верхнего уровня»: мёртвая ссылка не тянется дальше.
+      expect(edited.parentId, isNull);
+    });
+
     testWidgets('у категории с подкатегориями выбора родителя нет', (
       tester,
     ) async {

@@ -241,6 +241,42 @@ void main() {
       );
     });
 
+    test('родителя удалили: подкатегория переименовывается, parent_id не '
+        'трогается; новый мёртвый родитель по-прежнему нельзя', () async {
+      await repo.createCategory(_category(1, 'Еда'));
+      await repo.createCategory(_category(2, 'Кафе', parent: 1));
+      await repo.createCategory(_category(3, 'Прочее'));
+      await repo.deleteCategory(uuid(1));
+      await d.device.sync();
+      final bef = (await ops()).length;
+
+      await repo.updateCategory(
+        ((await repo.getCategory(uuid(2)))!).copyWith(name: 'Кафе и бары'),
+      );
+      expect(await ops(), hasLength(bef + 1));
+      expect((await ops()).last.fields, {'name': 'Кафе и бары'});
+      expect(((await repo.getCategory(uuid(2)))!).parentId, uuid(1));
+
+      // Смена родителя на удалённого или несуществующего — по-прежнему ошибка.
+      await expectLater(
+        repo.updateCategory(
+          ((await repo.getCategory(uuid(3)))!).copyWith(parentId: uuid(1)),
+        ),
+        throwsA(isA<ValidationError>()),
+      );
+      await expectLater(
+        repo.updateCategory(
+          ((await repo.getCategory(uuid(2)))!).copyWith(parentId: uuid(99)),
+        ),
+        throwsA(isA<ValidationError>()),
+      );
+      // А сделать её категорией верхнего уровня можно.
+      await repo.updateCategory(
+        ((await repo.getCategory(uuid(2)))!).copyWith(parentId: null),
+      );
+      expect(((await repo.getCategory(uuid(2)))!).parentId, isNull);
+    });
+
     test('правка: только изменившиеся колонки; ключ неизменяем', () async {
       await repo.createCategory(_category(1, 'Еда'));
       await d.device.sync();
@@ -424,7 +460,8 @@ void main() {
       );
       expect((await ops()).last.fields, {'amount': 2500, 'merchant': 'Лента'});
       await d.device.sync();
-      // расход -> перевод: kind, куда, категория и остальная группа вместе
+      // расход -> перевод: kind, куда, категория и остальная группа вместе,
+      // и `account_id` (у перевода «откуда» входит в группу)
       await repo.updateTransaction(
         ((await repo.getTransaction(uuid(10)))!).copyWith(
           kind: TransactionKind.transfer,
@@ -440,6 +477,7 @@ void main() {
         'work_payment_id',
         'debt_id',
         'source',
+        'account_id',
       });
       expect(fields['kind'], 'transfer');
       expect(fields['to_account_id'], uuid(2));
