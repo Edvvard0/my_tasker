@@ -19,6 +19,8 @@ import 'package:my_tasker/features/devices/presentation/devices_screen.dart';
 import 'package:my_tasker/features/finance/finance_screen.dart';
 import 'package:my_tasker/features/finance/presentation/account_screen.dart';
 import 'package:my_tasker/features/finance/presentation/categories_screen.dart';
+import 'package:my_tasker/features/finance/presentation/debt_screen.dart';
+import 'package:my_tasker/features/finance/presentation/debts_screen.dart';
 import 'package:my_tasker/features/finance/presentation/reconcile_screen.dart';
 import 'package:my_tasker/features/finance/presentation/transactions_screen.dart';
 import 'package:my_tasker/features/local_ai/presentation/local_benchmark_screen.dart';
@@ -137,6 +139,17 @@ GoRouter createRouter({
                 GoRoute(
                   path: 'categories',
                   builder: (_, _) => const CategoriesScreen(),
+                ),
+                GoRoute(
+                  path: 'debts',
+                  builder: (_, _) => const DebtsScreen(),
+                  routes: [
+                    GoRoute(
+                      path: ':id',
+                      builder: (_, state) =>
+                          DebtScreen(debtId: state.pathParameters['id']!),
+                    ),
+                  ],
                 ),
                 GoRoute(
                   path: 'accounts/:id',

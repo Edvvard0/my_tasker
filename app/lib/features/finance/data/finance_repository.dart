@@ -8,11 +8,12 @@ import 'package:my_tasker/core/sync/outbox_logic.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/core/sync/sync_store.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_validation.dart';
+import 'package:my_tasker/features/finance/domain/debt_views.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/domain/finance_validation.dart';
 import 'package:my_tasker/features/finance/domain/finance_views.dart';
 
-/// Счета, категории, операции и точки сверки: локальные записи через
+/// Счета, категории, операции, точки сверки, долги и погашения: локальные записи через
 /// [SyncStore] (строка + HLC + outbox в одной транзакции) и расчёты по
 /// видимым строкам (spec Этапа 5, разделы 2 и 4).
 ///
@@ -20,7 +21,9 @@ import 'package:my_tasker/features/finance/domain/finance_views.dart';
 /// операция-перевод видна только когда живы **оба** счёта. Удаление счёта —
 /// одна операция `delete` счёта: операции обеих сторон перевода и точки
 /// сверки уходят в корзину каскадом на сервере и скрываются локально
-/// видимостью, отдельных операций клиент не пишет.
+/// видимостью, отдельных операций клиент не пишет. Так же удаление долга:
+/// одна операция `delete` долга, погашения уходят каскадом, а операции с
+/// `debt_id` остаются (spec 2).
 class FinanceRepository {
   FinanceRepository(
     this._store, {
@@ -37,6 +40,8 @@ class FinanceRepository {
   static const String categoriesTable = 'categories';
   static const String transactionsTable = 'transactions';
   static const String checkpointsTable = 'balance_checkpoints';
+  static const String debtsTable = 'debts';
+  static const String repaymentsTable = 'debt_repayments';
 
   /// Идентификатор новой строки (UUIDv7).
   String newId() => _newId();
@@ -459,6 +464,305 @@ class FinanceRepository {
     final lines = await adjustmentsOf(accountId);
     return lines.singleWhere((l) => l.checkpointId == id);
   }
+
+  // ---- долги и погашения -----------------------------------------------------
+
+  Future<Debt?> getDebt(String id) async {
+    final row = await _store.getRow(debtsTable, id);
+    return row == null ? null : Debt.fromRow(row);
+  }
+
+  /// Видимые долги в порядке создания.
+  Future<List<Debt>> debts() async => [
+    for (final r in await _store.visibleRows(
+      debtsTable,
+      orderBy: 't.created_at, t.id',
+    ))
+      Debt.fromRow(r),
+  ];
+
+  Stream<List<Debt>> watchDebts() => _store
+      .watchVisibleRows(debtsTable, orderBy: 't.created_at, t.id')
+      .map((rows) => [for (final r in rows) Debt.fromRow(r)]);
+
+  Future<DebtRepayment?> getRepayment(String id) async {
+    final row = await _store.getRow(repaymentsTable, id);
+    return row == null ? null : DebtRepayment.fromRow(row);
+  }
+
+  /// Видимые погашения (родитель-долг жив) по дате и id; [debtId] — только
+  /// этого долга.
+  Future<List<DebtRepayment>> repayments({String? debtId}) async => [
+    for (final r in await _store.visibleRows(
+      repaymentsTable,
+      where: debtId == null ? null : 't.debt_id = ?',
+      args: [?debtId],
+      orderBy: 't.repaid_on, t.id',
+    ))
+      DebtRepayment.fromRow(r),
+  ];
+
+  Stream<List<DebtRepayment>> watchRepayments({String? debtId}) => _store
+      .watchVisibleRows(
+        repaymentsTable,
+        where: debtId == null ? null : 't.debt_id = ?',
+        args: [?debtId],
+        orderBy: 't.repaid_on, t.id',
+      )
+      .map((rows) => [for (final r in rows) DebtRepayment.fromRow(r)]);
+
+  /// Московская дата «сегодня» по часам репозитория.
+  String get moscowToday => moscowDateOfSeconds(
+    _nowUtc.millisecondsSinceEpoch ~/ Duration.millisecondsPerSecond,
+  );
+
+  /// Состояния всех видимых долгов и остатки по направлениям (spec 6.1);
+  /// просрочка — по московской дате [today] (по умолчанию «сегодня»).
+  Future<DebtsOverview> debtsOverview({String? today}) async =>
+      DebtsOverview.compute(
+        await _store.visibleRows(debtsTable, orderBy: 't.created_at, t.id'),
+        await _store.visibleRows(repaymentsTable),
+        today: today ?? moscowToday,
+      );
+
+  /// Состояние долга или `null`, если его нет среди видимых.
+  Future<DebtState?> debtState(String id, {String? today}) async =>
+      (await debtsOverview(today: today)).byId(id);
+
+  Debt _cleanDebt(Debt d) => Debt(
+    id: d.id,
+    direction: d.direction,
+    personId: d.personId,
+    counterparty: _blankToNull(d.counterparty),
+    amount: d.amount,
+    debtDate: d.debtDate,
+    dueDate: d.dueDate,
+    comment: _blankToNull(d.comment),
+  );
+
+  /// Момент операции по дате [day]: сегодня (по Москве) — текущий момент,
+  /// иначе полдень этого дня по Москве.
+  DateTime _momentOfDay(String day) {
+    final nowSeconds =
+        _nowUtc.millisecondsSinceEpoch ~/ Duration.millisecondsPerSecond;
+    final seconds = moscowDateOfSeconds(nowSeconds) == day
+        ? nowSeconds
+        : openingSeconds(day) + 12 * 3600;
+    return DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
+  }
+
+  /// Операция счёта, которой двигаются деньги долга: подтверждённая, вручную,
+  /// с `debt_id`. [income] — деньги пришли на счёт.
+  Future<void> _createDebtTransaction({
+    required String id,
+    required String accountId,
+    required Debt debt,
+    required int amount,
+    required String day,
+    required bool income,
+    String? comment,
+  }) async {
+    final tx = _cleanTransaction(
+      FinanceTransaction(
+        id: id,
+        kind: income ? TransactionKind.income : TransactionKind.expense,
+        accountId: accountId,
+        amount: amount,
+        occurredAt: _momentOfDay(day),
+        merchant: debt.counterparty,
+        comment: comment,
+        debtId: debt.id,
+      ),
+    );
+    ensureValid(transactionProblem(tx));
+    await _checkTransactionLinks(tx);
+    await _store.create(transactionsTable, tx.id, tx.toFields());
+  }
+
+  /// Создаёт долг; `debt.id` задаёт вызывающий. С [loanAccountId] в той же
+  /// транзакции записывается операция займа на этот счёт (`debt_id` =
+  /// долг): «мне должны» — расход (я выдал), «я должен» — доход (я
+  /// получил). Такая операция двигает баланс счёта, но не «доход/расход»
+  /// месяца (spec 5.1). Возвращает id долга.
+  Future<String> createDebt(Debt debt, {String? loanAccountId}) async {
+    final clean = _cleanDebt(debt);
+    ensureValid(debtProblem(clean));
+    await _store.transaction(() async {
+      await _store.create(debtsTable, clean.id, clean.toFields());
+      if (loanAccountId != null) {
+        await _createDebtTransaction(
+          id: _newId(),
+          accountId: loanAccountId,
+          debt: clean,
+          amount: clean.amount,
+          day: clean.debtDate,
+          income: clean.direction == DebtDirection.iOwe,
+        );
+      }
+    });
+    return clean.id;
+  }
+
+  /// Правка долга: уходят только изменившиеся колонки. Уже записанные
+  /// операции займа и погашений не меняются.
+  Future<void> updateDebt(Debt next) async {
+    final clean = _cleanDebt(next);
+    ensureValid(debtProblem(clean));
+    await _store.transaction(() async {
+      final current = await getDebt(clean.id);
+      if (current == null) throw StateError('Долга ${clean.id} нет');
+      final fields = _changed(current.toFields(), clean.toFields());
+      if (fields.isEmpty) return;
+      await _store.update(debtsTable, clean.id, fields);
+    });
+  }
+
+  /// Удаляет долг: одна операция `delete`; погашения уходят в корзину
+  /// каскадом на сервере и скрываются локально видимостью. Операции с
+  /// `debt_id` остаются (spec 2).
+  Future<void> deleteDebt(String id) => _store.softDelete(debtsTable, id);
+
+  Future<void> restoreDebt(String id) => _store.restore(debtsTable, id);
+
+  DebtRepayment _cleanRepayment(DebtRepayment r) => DebtRepayment(
+    id: r.id,
+    debtId: r.debtId,
+    amount: r.amount,
+    repaidOn: r.repaidOn,
+    transactionId: r.transactionId,
+    note: _blankToNull(r.note),
+  );
+
+  Future<void> _checkRepaymentLinks(DebtRepayment r) async {
+    if (await _liveRow(debtsTable, r.debtId) == null) {
+      throw const ValidationError('Долг не найден');
+    }
+    final id = r.transactionId;
+    if (id == null) return;
+    final tx = await _store.getRow(transactionsTable, id);
+    ensureValid(
+      repaymentTransactionProblem(
+        r,
+        transactionFound: tx != null,
+        transactionDebtId: tx?['debt_id'] as String?,
+      ),
+    );
+  }
+
+  /// Создаёт погашение; `debt_id` неизменяем. Если указан `transaction_id`,
+  /// операция должна двигать этот же долг, иначе ошибка
+  /// `repayment_transaction_mismatch`. Погашение больше остатка допустимо:
+  /// получится переплата (`overpaid`), сервер её не отклоняет (spec 8).
+  Future<String> createRepayment(DebtRepayment repayment) async {
+    final clean = _cleanRepayment(repayment);
+    await _store.transaction(() => _insertRepayment(clean));
+    return clean.id;
+  }
+
+  Future<void> _insertRepayment(DebtRepayment clean) async {
+    ensureValid(repaymentProblem(clean));
+    await _checkRepaymentLinks(clean);
+    await _store.create(repaymentsTable, clean.id, clean.toFields());
+  }
+
+  /// Погашение долга [debtId] на [amount] за [repaidOn]. С [accountId] в той
+  /// же транзакции создаётся подтверждённая операция счёта с `debt_id` —
+  /// «мне вернули» это доход, «я вернул» расход — и погашение ссылается на
+  /// неё (`transaction_id`). Без [accountId] — «списать без движения денег»
+  /// («простил», «зачли»). Возвращает id погашения.
+  Future<String> addRepayment({
+    required String debtId,
+    required int amount,
+    required String repaidOn,
+    String? accountId,
+    String? note,
+  }) async {
+    final id = _newId();
+    await _store.transaction(() async {
+      if (await _liveRow(debtsTable, debtId) == null) {
+        throw const ValidationError('Долг не найден');
+      }
+      final debt = (await getDebt(debtId))!;
+      final draft = DebtRepayment(
+        id: id,
+        debtId: debtId,
+        amount: amount,
+        repaidOn: repaidOn,
+        note: note,
+      );
+      ensureValid(repaymentProblem(_cleanRepayment(draft)));
+      String? transactionId;
+      if (accountId != null) {
+        transactionId = _newId();
+        await _createDebtTransaction(
+          id: transactionId,
+          accountId: accountId,
+          debt: debt,
+          amount: amount,
+          day: repaidOn,
+          income: debt.direction == DebtDirection.owedToMe,
+          comment: _blankToNull(note),
+        );
+      }
+      await _insertRepayment(
+        _cleanRepayment(
+          DebtRepayment(
+            id: id,
+            debtId: debtId,
+            amount: amount,
+            repaidOn: repaidOn,
+            transactionId: transactionId,
+            note: note,
+          ),
+        ),
+      );
+    });
+    return id;
+  }
+
+  /// Правка погашения (сумма, дата, заметка). Привязанная живая операция
+  /// счёта меняется вместе с ним (сумма и день), чтобы баланс и остаток
+  /// долга не разошлись; `debt_id` и `transaction_id` не меняются.
+  Future<void> updateRepayment(DebtRepayment next) async {
+    final clean = _cleanRepayment(next);
+    ensureValid(repaymentProblem(clean));
+    await _store.transaction(() async {
+      final row = await _store.getRow(repaymentsTable, clean.id);
+      if (row == null) throw StateError('Погашения ${clean.id} нет');
+      final current = DebtRepayment.fromRow(row);
+      if (current.debtId != clean.debtId) {
+        throw const ValidationError('Долг погашения нельзя менять');
+      }
+      final target = clean.copyWith(transactionId: current.transactionId);
+      await _checkRepaymentLinks(target);
+      final fields = _changed(current.toFields(), target.toFields());
+      if (fields.isNotEmpty) {
+        await _store.update(repaymentsTable, clean.id, fields);
+      }
+      final txId = current.transactionId;
+      if (txId == null) return;
+      final txRow = await _liveRow(transactionsTable, txId);
+      if (txRow == null) return;
+      final tx = FinanceTransaction.fromRow(txRow);
+      final dayChanged = tx.moscowDay != target.repaidOn;
+      final moved = tx.copyWith(
+        amount: target.amount,
+        occurredAt: dayChanged ? _momentOfDay(target.repaidOn) : tx.occurredAt,
+      );
+      final txFields = _changed(tx.toFields(), moved.toFields());
+      if (txFields.isEmpty) return;
+      ensureValid(transactionProblem(moved));
+      await _store.update(transactionsTable, txId, txFields);
+    });
+  }
+
+  /// Удаляет погашение в корзину. Операция счёта, которой двигались деньги,
+  /// остаётся: деньги реально двигались (удалить её можно отдельно).
+  Future<void> deleteRepayment(String id) =>
+      _store.softDelete(repaymentsTable, id);
+
+  Future<void> restoreRepayment(String id) =>
+      _store.restore(repaymentsTable, id);
 
   // ---- расчёты ---------------------------------------------------------------
 

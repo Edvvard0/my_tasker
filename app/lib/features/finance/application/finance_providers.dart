@@ -1,13 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderFamily;
 import 'package:my_tasker/core/finance/finance_calc.dart' as calc;
+import 'package:my_tasker/core/finance/finance_time.dart';
 import 'package:my_tasker/core/sync/outbox_logic.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
+import 'package:my_tasker/features/calendar/application/calendar_providers.dart'
+    show nowProvider;
 import 'package:my_tasker/features/finance/data/finance_repository.dart';
+import 'package:my_tasker/features/finance/domain/debt_views.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/domain/finance_views.dart';
 
-/// Провайдеры Финансов (срез 5a). Все строки — **видимые** (spec Этапа 5,
+/// Провайдеры Финансов (срезы 5a и 5b: долги и погашения). Все строки — **видимые** (spec Этапа 5,
 /// раздел 2): живые и с живыми родителями; операция-перевод видна, только
 /// когда живы оба счёта. Расчёты ведут доменные функции `core/finance`.
 
@@ -33,6 +37,16 @@ final StreamProvider<List<Json>> transactionRowsProvider = _rows(
 final StreamProvider<List<Json>> checkpointRowsProvider = _rows(
   FinanceRepository.checkpointsTable,
   orderBy: 't.checked_at, t.id',
+);
+final StreamProvider<List<Json>> debtRowsProvider = _rows(
+  FinanceRepository.debtsTable,
+  orderBy: 't.created_at, t.id',
+);
+
+/// Погашения видимых долгов (родитель-долг жив).
+final StreamProvider<List<Json>> repaymentRowsProvider = _rows(
+  FinanceRepository.repaymentsTable,
+  orderBy: 't.repaid_on, t.id',
 );
 
 AsyncValue<List<T>> _typed<T>(
@@ -250,3 +264,58 @@ final FutureProvider<int> financeBootstrapProvider = FutureProvider<int>((ref) {
   ref.watch(syncStatusProvider.select((s) => s.run.lastSuccessAt));
   return ref.watch(financeRepositoryProvider).ensurePresetCategories();
 });
+
+/// Московская «сегодня» (`YYYY-MM-DD`) по часам приложения: от неё зависит
+/// просрочка долгов (spec 6.1).
+final Provider<String> moscowTodayProvider = Provider<String>(
+  (ref) => moscowDateOfSeconds(
+    ref.watch(nowProvider).millisecondsSinceEpoch ~/
+        Duration.millisecondsPerSecond,
+  ),
+);
+
+/// Состояния всех видимых долгов и остатки по направлениям
+/// (`debts_summary`, spec 6.1).
+final Provider<AsyncValue<DebtsOverview>> debtsOverviewProvider =
+    Provider<AsyncValue<DebtsOverview>>((ref) {
+      final debts = ref.watch(debtRowsProvider);
+      final repayments = ref.watch(repaymentRowsProvider);
+      for (final v in <AsyncValue<Object?>>[debts, repayments]) {
+        if (v.hasError && !v.hasValue) {
+          return AsyncValue.error(v.error!, v.stackTrace ?? StackTrace.empty);
+        }
+      }
+      if (!debts.hasValue || !repayments.hasValue) {
+        return const AsyncValue.loading();
+      }
+      return AsyncValue.data(
+        DebtsOverview.compute(
+          debts.requireValue,
+          repayments.requireValue,
+          today: ref.watch(moscowTodayProvider),
+        ),
+      );
+    });
+
+/// Карточка долга: состояние и история погашений; `null` в данных — долга
+/// нет среди видимых (удалён, в корзине).
+final ProviderFamily<AsyncValue<DebtDetail?>, String> debtDetailProvider =
+    Provider.family<AsyncValue<DebtDetail?>, String>((ref, debtId) {
+      final overview = ref.watch(debtsOverviewProvider);
+      final repayments = ref.watch(repaymentRowsProvider);
+      if (repayments.hasError && !repayments.hasValue) {
+        return AsyncValue.error(
+          repayments.error!,
+          repayments.stackTrace ?? StackTrace.empty,
+        );
+      }
+      if (!repayments.hasValue) return const AsyncValue.loading();
+      return overview.whenData((o) {
+        final state = o.byId(debtId);
+        if (state == null) return null;
+        return DebtDetail(
+          state: state,
+          repayments: repaymentsOfDebt(repayments.requireValue, debtId),
+        );
+      });
+    });

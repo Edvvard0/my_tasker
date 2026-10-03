@@ -91,6 +91,12 @@ class FinanceScreen extends ConsumerWidget {
           icon: const Icon(LucideIcons.search, size: 22),
         ),
         IconButton(
+          key: const Key('finance-open-debts'),
+          tooltip: 'Долги',
+          onPressed: () => context.go('/finance/debts'),
+          icon: const Icon(LucideIcons.handCoins, size: 22),
+        ),
+        IconButton(
           key: const Key('finance-open-categories'),
           tooltip: 'Категории',
           onPressed: () => context.go('/finance/categories'),

@@ -146,3 +146,59 @@ String? checkpointProblem(BalanceCheckpoint c) {
   if (balance != null) return balance;
   return _textProblem(c.note, 500, 'Заметка');
 }
+
+String? _positiveMoneyProblem(int value, String what) =>
+    value < 1 || value > maxKopecks
+    ? '$what — от 0,01 ₽ до ${formatAmount(maxKopecks)}'
+    : null;
+
+/// Код расхождения погашения и операции (spec 1.6, раздел 8).
+const String repaymentTransactionMismatchCode =
+    'repayment_transaction_mismatch';
+
+/// Долг (spec 1.5): контрагент текстом (человека из «Работы» пока нет),
+/// сумма, реальные даты, срок не раньше даты долга.
+String? debtProblem(Debt d) {
+  if (d.personId == null && isBlank(d.counterparty)) {
+    return 'Укажи, кто должен или кому должен ты';
+  }
+  final who = _textProblem(d.counterparty, 200, 'Контрагент');
+  if (who != null) return who;
+  final amount = _positiveMoneyProblem(d.amount, 'Сумма долга');
+  if (amount != null) return amount;
+  if (parseDate(d.debtDate) == null) return 'Дата долга — реальная дата';
+  final due = d.dueDate;
+  if (due != null) {
+    if (parseDate(due) == null) return 'Срок — реальная дата';
+    if (due.compareTo(d.debtDate) < 0) {
+      return 'Срок не может быть раньше даты долга';
+    }
+  }
+  return _textProblem(d.comment, 2000, 'Комментарий');
+}
+
+/// Погашение (spec 1.6).
+String? repaymentProblem(DebtRepayment r) {
+  final amount = _positiveMoneyProblem(r.amount, 'Сумма погашения');
+  if (amount != null) return amount;
+  if (parseDate(r.repaidOn) == null) return 'Дата погашения — реальная дата';
+  return _textProblem(r.note, 500, 'Заметка');
+}
+
+/// Связь погашения с операцией (spec 1.6): [transactionDebtId] — `debt_id`
+/// найденной операции ([transactionFound] — она существует). Операция
+/// должна двигать тело именно этого долга, иначе
+/// `repayment_transaction_mismatch`.
+String? repaymentTransactionProblem(
+  DebtRepayment r, {
+  required bool transactionFound,
+  String? transactionDebtId,
+}) {
+  if (r.transactionId == null) return null;
+  if (!transactionFound) return 'Операция погашения не найдена';
+  if (transactionDebtId != r.debtId) {
+    return 'Операция погашения относится к другому долгу '
+        '($repaymentTransactionMismatchCode)';
+  }
+  return null;
+}

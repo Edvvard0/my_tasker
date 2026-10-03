@@ -50,4 +50,6 @@ void refreshFinance(WidgetRef ref) => ref
   ..invalidate(accountRowsProvider)
   ..invalidate(categoryRowsProvider)
   ..invalidate(transactionRowsProvider)
-  ..invalidate(checkpointRowsProvider);
+  ..invalidate(checkpointRowsProvider)
+  ..invalidate(debtRowsProvider)
+  ..invalidate(repaymentRowsProvider);

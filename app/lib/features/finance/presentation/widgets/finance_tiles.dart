@@ -144,6 +144,7 @@ class TransactionTile extends StatelessWidget {
     final merchant = t.merchant;
     if (merchant != null && merchant.isNotEmpty) return merchant;
     if (t.isTransfer) return 'Перевод';
+    if (t.debtId != null) return 'Долг';
     return lookups.category(t.categoryId)?.name ?? t.kind.label;
   }
 
@@ -160,6 +161,9 @@ class TransactionTile extends StatelessWidget {
       final merchant = t.merchant;
       if (category != null && merchant != null && merchant.isNotEmpty) {
         parts.add(category.name);
+      }
+      if (t.debtId != null && merchant != null && merchant.isNotEmpty) {
+        parts.add('Долг');
       }
       if (showAccount) parts.add(lookups.accountName(t.accountId));
     }

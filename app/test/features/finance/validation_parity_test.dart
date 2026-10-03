@@ -4,7 +4,8 @@ import 'package:my_tasker/features/finance/domain/finance_validation.dart';
 
 /// Клиентские проверки — зеркало серверных
 /// (`backend/src/tasker/finance/schema.py`: `account_problem`,
-/// `category_problem`, `transaction_problem`, `checkpoint_problem` и колонки
+/// `category_problem`, `transaction_problem`, `checkpoint_problem`,
+/// `debt_problem`, `repayment_problem` и колонки
 /// `*_COLUMNS`; spec Этапа 5, 1 и 3.1).
 void main() {
   const maxK = 99999999999999;
@@ -344,6 +345,140 @@ void main() {
       expect(checkpointProblem(cp(actual: maxK + 1)), isNotNull);
       expect(checkpointProblem(cp(actual: -maxK - 1)), isNotNull);
       expect(checkpointProblem(cp(note: 'n' * 501)), isNotNull);
+    });
+  });
+
+  group('долг', () {
+    Debt debt({
+      String? who = 'Эмир',
+      String? person,
+      int amount = 750000,
+      String date = '2026-09-01',
+      String? due,
+      String? comment,
+      DebtDirection direction = DebtDirection.owedToMe,
+    }) => Debt(
+      id: 'd',
+      direction: direction,
+      personId: person,
+      counterparty: who,
+      amount: amount,
+      debtDate: date,
+      dueDate: due,
+      comment: comment,
+    );
+
+    test('нормальные долги (debt_problem, DEBT_COLUMNS)', () {
+      expect(debtProblem(debt()), isNull);
+      expect(debtProblem(debt(direction: DebtDirection.iOwe)), isNull);
+      expect(debtProblem(debt(who: 'x' * 200)), isNull);
+      expect(debtProblem(debt(amount: 1)), isNull);
+      expect(debtProblem(debt(amount: maxK)), isNull);
+      expect(
+        debtProblem(debt(due: '2026-09-01')),
+        isNull,
+        reason: 'срок = дата',
+      );
+      expect(debtProblem(debt(due: '2026-12-31', comment: 'c' * 2000)), isNull);
+      // человек вместо контрагента-текста допустим (сервер: person_id)
+      expect(debtProblem(debt(who: null, person: 'p')), isNull);
+      expect(debtProblem(debt(who: '  ', person: 'p')), isNull);
+    });
+
+    test('нужен person_id или непустой контрагент', () {
+      expect(debtProblem(debt(who: null)), isNotNull);
+      expect(debtProblem(debt(who: '')), isNotNull);
+      expect(debtProblem(debt(who: '   ')), isNotNull);
+    });
+
+    test('контрагент ≤ 200, комментарий ≤ 2000', () {
+      expect(debtProblem(debt(who: 'x' * 201)), isNotNull);
+      expect(debtProblem(debt(comment: 'c' * 2001)), isNotNull);
+    });
+
+    test('сумма: 1…максимум', () {
+      expect(debtProblem(debt(amount: 0)), isNotNull);
+      expect(debtProblem(debt(amount: -1)), isNotNull);
+      expect(debtProblem(debt(amount: maxK + 1)), isNotNull);
+    });
+
+    test('даты: формат, несуществующие, срок не раньше даты долга', () {
+      for (final bad in ['2026-02-30', '1.10.2026', '', '2026-13-01']) {
+        expect(debtProblem(debt(date: bad)), isNotNull, reason: bad);
+        expect(debtProblem(debt(due: bad.isEmpty ? 'x' : bad)), isNotNull);
+      }
+      expect(debtProblem(debt(due: '2026-08-31')), isNotNull);
+    });
+  });
+
+  group('погашение', () {
+    DebtRepayment repayment({
+      int amount = 100000,
+      String on = '2026-10-01',
+      String? transaction,
+      String? note,
+      String debtId = 'd',
+    }) => DebtRepayment(
+      id: 'r',
+      debtId: debtId,
+      amount: amount,
+      repaidOn: on,
+      transactionId: transaction,
+      note: note,
+    );
+
+    test('нормальное погашение (repayment_problem, REPAYMENT_COLUMNS)', () {
+      expect(repaymentProblem(repayment()), isNull);
+      expect(repaymentProblem(repayment(amount: 1)), isNull);
+      expect(
+        repaymentProblem(repayment(amount: maxK, note: 'n' * 500)),
+        isNull,
+      );
+    });
+
+    test('сумма 1…максимум, дата реальная, заметка ≤ 500', () {
+      expect(repaymentProblem(repayment(amount: 0)), isNotNull);
+      expect(repaymentProblem(repayment(amount: -5)), isNotNull);
+      expect(repaymentProblem(repayment(amount: maxK + 1)), isNotNull);
+      for (final bad in ['2026-02-30', '1.10.2026', '']) {
+        expect(repaymentProblem(repayment(on: bad)), isNotNull, reason: bad);
+      }
+      expect(repaymentProblem(repayment(note: 'n' * 501)), isNotNull);
+    });
+
+    test('операция должна двигать этот же долг (spec 1.6, раздел 8)', () {
+      // нет операции — нет проверки
+      expect(
+        repaymentTransactionProblem(repayment(), transactionFound: false),
+        isNull,
+      );
+      final linked = repayment(transaction: 't');
+      expect(
+        repaymentTransactionProblem(
+          linked,
+          transactionFound: true,
+          transactionDebtId: 'd',
+        ),
+        isNull,
+      );
+      for (final other in <String?>['x', null]) {
+        expect(
+          repaymentTransactionProblem(
+            linked,
+            transactionFound: true,
+            transactionDebtId: other,
+          ),
+          contains(repaymentTransactionMismatchCode),
+        );
+      }
+      expect(
+        repaymentTransactionMismatchCode,
+        'repayment_transaction_mismatch',
+      );
+      expect(
+        repaymentTransactionProblem(linked, transactionFound: false),
+        isNotNull,
+      );
     });
   });
 }

@@ -260,6 +260,109 @@ Future<FinanceDemo> seedFinanceDemo(ProviderContainer c) async {
   );
 }
 
+/// Демо-долги: «мне должны» — Эмир (просрочен), Bender, Настя (частично),
+/// Тимур (закрыт); «я должен» — Влад. «Сегодня» (демо-время) — 30 сентября
+/// 2026 по Москве.
+class DebtsDemo {
+  const DebtsDemo({
+    required this.emir,
+    required this.bender,
+    required this.nastya,
+    required this.vlad,
+    required this.timur,
+  });
+
+  final String emir;
+  final String bender;
+  final String nastya;
+  final String vlad;
+  final String timur;
+}
+
+/// Долг для тестов.
+Future<String> addDebt(
+  ProviderContainer c, {
+  required String who,
+  required int amount,
+  DebtDirection direction = DebtDirection.owedToMe,
+  String date = '2026-09-01',
+  String? due,
+  String? comment,
+  String? loanAccount,
+}) {
+  final repo = financeRepo(c);
+  return repo.createDebt(
+    Debt(
+      id: repo.newId(),
+      direction: direction,
+      counterparty: who,
+      amount: amount,
+      debtDate: date,
+      dueDate: due,
+      comment: comment,
+    ),
+    loanAccountId: loanAccount,
+  );
+}
+
+/// Погашение для тестов (без операции счёта, если [account] не задан).
+Future<String> addRepaymentTo(
+  ProviderContainer c, {
+  required String debt,
+  required int amount,
+  String on = '2026-09-28',
+  String? account,
+  String? note,
+}) => financeRepo(c).addRepayment(
+  debtId: debt,
+  amount: amount,
+  repaidOn: on,
+  accountId: account,
+  note: note,
+);
+
+/// Наполняет БД демо-долгами (без счетов и операций).
+Future<DebtsDemo> seedDebtsDemo(ProviderContainer c) async {
+  final emir = await addDebt(
+    c,
+    who: 'Эмир',
+    amount: 750000,
+    date: '2026-08-27',
+    due: '2026-09-20',
+  );
+  final bender = await addDebt(
+    c,
+    who: 'Bender',
+    amount: 300000,
+    date: '2026-09-18',
+    due: '2026-10-15',
+  );
+  final nastya = await addDebt(
+    c,
+    who: 'Настя',
+    amount: 260000,
+    date: '2026-09-25',
+  );
+  await addRepaymentTo(c, debt: nastya, amount: 60000);
+  final vlad = await addDebt(
+    c,
+    who: 'Влад',
+    amount: 1500000,
+    direction: DebtDirection.iOwe,
+    date: '2026-09-10',
+    due: '2026-10-10',
+  );
+  final timur = await addDebt(c, who: 'Тимур', amount: 400000);
+  await addRepaymentTo(c, debt: timur, amount: 400000, on: '2026-09-15');
+  return DebtsDemo(
+    emir: emir,
+    bender: bender,
+    nastya: nastya,
+    vlad: vlad,
+    timur: timur,
+  );
+}
+
 /// Находит поле по ключу и вводит текст.
 Future<void> enter(WidgetTester tester, String key, String text) async {
   await tester.enterText(find.byKey(Key(key)), text);

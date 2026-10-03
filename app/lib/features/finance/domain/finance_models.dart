@@ -113,6 +113,20 @@ enum CheckpointSource {
       );
 }
 
+/// Направление долга (spec 1.5).
+enum DebtDirection {
+  owedToMe('Мне должны', 'owed_to_me'),
+  iOwe('Я должен', 'i_owe');
+
+  const DebtDirection(this.label, this.wire);
+
+  final String label;
+  final String wire;
+
+  static DebtDirection parse(Object? value) =>
+      value == 'i_owe' ? iOwe : owedToMe;
+}
+
 DateTime _instant(Object? value) => DateTime.fromMillisecondsSinceEpoch(
   instantSeconds(value! as String) * 1000,
   isUtc: true,
@@ -471,4 +485,150 @@ class BalanceAdjustment {
 
   /// `actual - expected`: положительная — в банке больше, чем «у нас».
   int get adjustment => actual - expected;
+}
+
+/// Долг (`debts`): статус не хранится, он вычисляется (spec 6.1).
+@immutable
+class Debt {
+  const Debt({
+    required this.id,
+    required this.direction,
+    required this.amount,
+    required this.debtDate,
+    this.personId,
+    this.counterparty,
+    this.dueDate,
+    this.comment,
+  });
+
+  factory Debt.fromRow(Json row) => Debt(
+    id: row['id']! as String,
+    direction: DebtDirection.parse(row['direction']),
+    personId: row['person_id'] as String?,
+    counterparty: row['counterparty'] as String?,
+    amount: row['amount']! as int,
+    debtDate: row['debt_date']! as String,
+    dueDate: row['due_date'] as String?,
+    comment: row['comment'] as String?,
+  );
+
+  final String id;
+  final DebtDirection direction;
+
+  /// Контрагент из «Людей» (мягкая ссылка); пока клиента «Работы» нет,
+  /// остаётся `null`.
+  final String? personId;
+
+  /// Контрагент текстом.
+  final String? counterparty;
+
+  /// Исходная сумма, копейки.
+  final int amount;
+
+  /// Дата долга `YYYY-MM-DD`.
+  final String debtDate;
+
+  /// Срок `YYYY-MM-DD`; не раньше [debtDate].
+  final String? dueDate;
+  final String? comment;
+
+  /// Имя для списков: контрагент или «Без имени».
+  String get who {
+    final name = counterparty?.trim();
+    return name == null || name.isEmpty ? 'Без имени' : name;
+  }
+
+  Json toFields() => {
+    'direction': direction.wire,
+    'person_id': personId,
+    'counterparty': counterparty,
+    'amount': amount,
+    'debt_date': debtDate,
+    'due_date': dueDate,
+    'comment': comment,
+  };
+
+  Json toRow() => {'id': id, ...toFields()};
+
+  Debt copyWith({
+    DebtDirection? direction,
+    Object? counterparty = _unset,
+    int? amount,
+    String? debtDate,
+    Object? dueDate = _unset,
+    Object? comment = _unset,
+  }) => Debt(
+    id: id,
+    direction: direction ?? this.direction,
+    personId: personId,
+    counterparty: identical(counterparty, _unset)
+        ? this.counterparty
+        : counterparty as String?,
+    amount: amount ?? this.amount,
+    debtDate: debtDate ?? this.debtDate,
+    dueDate: identical(dueDate, _unset) ? this.dueDate : dueDate as String?,
+    comment: identical(comment, _unset) ? this.comment : comment as String?,
+  );
+}
+
+/// Погашение долга (`debt_repayments`); `debt_id` неизменяем.
+@immutable
+class DebtRepayment {
+  const DebtRepayment({
+    required this.id,
+    required this.debtId,
+    required this.amount,
+    required this.repaidOn,
+    this.transactionId,
+    this.note,
+  });
+
+  factory DebtRepayment.fromRow(Json row) => DebtRepayment(
+    id: row['id']! as String,
+    debtId: row['debt_id']! as String,
+    amount: row['amount']! as int,
+    repaidOn: row['repaid_on']! as String,
+    transactionId: row['transaction_id'] as String?,
+    note: row['note'] as String?,
+  );
+
+  final String id;
+  final String debtId;
+
+  /// Копейки, больше нуля.
+  final int amount;
+
+  /// Дата погашения `YYYY-MM-DD`.
+  final String repaidOn;
+
+  /// Операция счёта, которой деньги реально двигались (её `debt_id` — этот
+  /// долг); `null` — «списать без движения денег».
+  final String? transactionId;
+  final String? note;
+
+  Json toFields() => {
+    'debt_id': debtId,
+    'amount': amount,
+    'repaid_on': repaidOn,
+    'transaction_id': transactionId,
+    'note': note,
+  };
+
+  Json toRow() => {'id': id, ...toFields()};
+
+  DebtRepayment copyWith({
+    int? amount,
+    String? repaidOn,
+    Object? transactionId = _unset,
+    Object? note = _unset,
+  }) => DebtRepayment(
+    id: id,
+    debtId: debtId,
+    amount: amount ?? this.amount,
+    repaidOn: repaidOn ?? this.repaidOn,
+    transactionId: identical(transactionId, _unset)
+        ? this.transactionId
+        : transactionId as String?,
+    note: identical(note, _unset) ? this.note : note as String?,
+  );
 }
