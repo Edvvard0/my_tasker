@@ -4,7 +4,7 @@ import 'package:my_tasker/core/widgets/confirm_dialog.dart';
 import 'package:my_tasker/features/finance/application/finance_providers.dart';
 import 'package:my_tasker/features/finance/data/finance_repository.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
-import 'package:my_tasker/features/finance/presentation/finance_format.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 
 void _toast(
   ScaffoldMessengerState messenger,
@@ -50,7 +50,7 @@ Future<bool> toggleArchiveAccount(
       context,
       title: 'Архивировать «${account.name}»?',
       message:
-          'На счёте ${moneyText(balance)}. Архив только скрывает счёт из '
+          'На счёте ${context.money(balance)}. Архив только скрывает счёт из '
           'списков. $totalNote',
       confirmLabel: 'Архивировать',
     );
@@ -85,7 +85,7 @@ Future<bool> deleteAccountWithConfirm(
       .length;
   final balanceNote = balance == 0
       ? ''
-      : ' На счёте ${moneyText(balance)}: эти деньги пропадут из балансов, '
+      : ' На счёте ${context.money(balance)}: эти деньги пропадут из балансов, '
             'пока счёт в корзине.';
   final ok = await showConfirmDialog(
     context,

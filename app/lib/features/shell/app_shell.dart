@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_tasker/core/layout/window_class.dart';
 import 'package:my_tasker/core/theme/app_spacing.dart';
+import 'package:my_tasker/features/finance/presentation/privacy/finance_lock_watcher.dart';
 import 'package:my_tasker/features/shell/app_section.dart';
 import 'package:my_tasker/features/shell/bottom_tab_bar.dart';
 import 'package:my_tasker/features/shell/quick_create_sheet.dart';
@@ -43,7 +44,11 @@ class AppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final windowClass = context.windowClass;
-    final content = navigationShell;
+    // Замок «Финансов» следит за уходом из раздела и сворачиванием.
+    final content = FinanceLockWatcher(
+      inFinance: _current == AppSection.finance,
+      child: navigationShell,
+    );
 
     if (windowClass.isCompact) {
       final mq = MediaQuery.of(context);

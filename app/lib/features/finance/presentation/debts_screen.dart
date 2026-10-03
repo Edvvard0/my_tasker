@@ -15,7 +15,7 @@ import 'package:my_tasker/features/finance/application/finance_providers.dart';
 import 'package:my_tasker/features/finance/domain/debt_views.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/presentation/debt_editor.dart';
-import 'package:my_tasker/features/finance/presentation/finance_format.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/debt_tiles.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/finance_states.dart';
 
@@ -181,7 +181,7 @@ class _DebtSectionState extends State<_DebtSection> {
                   ),
                 ),
                 Text(
-                  moneyText(total),
+                  context.money(total),
                   key: Key('debts-total-$name'),
                   style: t.numL.copyWith(fontWeight: FontWeight.w600),
                 ),

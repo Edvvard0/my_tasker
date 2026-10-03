@@ -11,13 +11,16 @@ import 'package:my_tasker/core/widgets/app_card.dart';
 import 'package:my_tasker/core/widgets/empty_state.dart';
 import 'package:my_tasker/core/widgets/notice_card.dart';
 import 'package:my_tasker/core/widgets/screen_scaffold.dart';
+import 'package:my_tasker/features/finance/application/finance_lock.dart';
 import 'package:my_tasker/features/finance/application/finance_providers.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/domain/finance_views.dart';
 import 'package:my_tasker/features/finance/presentation/account_editor.dart';
 import 'package:my_tasker/features/finance/presentation/finance_format.dart';
 import 'package:my_tasker/features/finance/presentation/finance_lookups.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 import 'package:my_tasker/features/finance/presentation/transaction_editor.dart';
+import 'package:my_tasker/features/finance/presentation/widgets/finance_nav.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/finance_states.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/finance_tiles.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/transaction_feed.dart';
@@ -39,6 +42,8 @@ class FinanceScreen extends ConsumerWidget {
     final balances = ref.watch(financeBalancesProvider);
     final lookups = ref.watch(financeLookupsProvider);
     final feed = ref.watch(transactionFeedProvider(const TransactionFilter()));
+    final hidden = ref.watch(hideAmountsProvider.select((s) => s.hidden));
+    final lockEnabled = ref.watch(financeLockProvider.select((s) => s.enabled));
 
     final failed = [
       accounts,
@@ -54,18 +59,26 @@ class FinanceScreen extends ConsumerWidget {
         !lookups.hasValue) {
       body = const SingleChildScrollView(child: ListSkeleton(rows: 4));
     } else if (accounts.requireValue.isEmpty) {
-      body = EmptyState(
-        key: const Key('finance-empty'),
-        icon: LucideIcons.wallet,
-        title: 'Счетов пока нет',
-        message:
-            'Добавь наличные или карту и записывай операции: баланс '
-            'посчитается сам.',
-        action: FilledButton(
-          key: const Key('finance-add-account'),
-          onPressed: () => unawaited(showAccountEditor(context)),
-          child: const Text('Добавить счёт'),
-        ),
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const FinanceNavStrip(),
+          Expanded(
+            child: EmptyState(
+              key: const Key('finance-empty'),
+              icon: LucideIcons.wallet,
+              title: 'Счетов пока нет',
+              message:
+                  'Добавь наличные или карту и записывай операции: баланс '
+                  'посчитается сам.',
+              action: FilledButton(
+                key: const Key('finance-add-account'),
+                onPressed: () => unawaited(showAccountEditor(context)),
+                child: const Text('Добавить счёт'),
+              ),
+            ),
+          ),
+        ],
       );
     } else {
       body = _Overview(
@@ -80,6 +93,7 @@ class FinanceScreen extends ConsumerWidget {
     return ScreenScaffold(
       title: 'Финансы',
       scrollable: false,
+      // В шапке не больше трёх иконок: поиск, «глаз», приватность.
       actions: [
         IconButton(
           key: const Key('finance-open-feed'),
@@ -91,16 +105,20 @@ class FinanceScreen extends ConsumerWidget {
           icon: const Icon(LucideIcons.search, size: 22),
         ),
         IconButton(
-          key: const Key('finance-open-debts'),
-          tooltip: 'Долги',
-          onPressed: () => context.go('/finance/debts'),
-          icon: const Icon(LucideIcons.handCoins, size: 22),
+          key: const Key('finance-toggle-hide'),
+          tooltip: hidden ? 'Показать суммы' : 'Скрыть суммы',
+          onPressed: () =>
+              unawaited(ref.read(hideAmountsProvider.notifier).toggle()),
+          icon: Icon(hidden ? LucideIcons.eyeOff : LucideIcons.eye, size: 22),
         ),
         IconButton(
-          key: const Key('finance-open-categories'),
-          tooltip: 'Категории',
-          onPressed: () => context.go('/finance/categories'),
-          icon: const Icon(LucideIcons.tags, size: 22),
+          key: const Key('finance-open-privacy'),
+          tooltip: 'Приватность и замок',
+          onPressed: () => context.go('/finance/privacy'),
+          icon: Icon(
+            lockEnabled ? LucideIcons.lock : LucideIcons.lockOpen,
+            size: 22,
+          ),
         ),
       ],
       child: Column(
@@ -155,6 +173,8 @@ class _OverviewState extends State<_Overview> {
       const _QuickActions(),
       if (compact) ...[
         const SizedBox(height: AppSpacing.s4),
+        const FinanceNavStrip(),
+        const SizedBox(height: AppSpacing.s4),
         AppCard(child: _accountsList()),
       ],
       const SizedBox(height: AppSpacing.s4),
@@ -180,7 +200,14 @@ class _OverviewState extends State<_Overview> {
               color: context.colors.surface1,
               borderRadius: const BorderRadius.all(Radius.circular(24)),
             ),
-            child: SingleChildScrollView(child: _accountsList()),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: SingleChildScrollView(child: _accountsList())),
+                const SizedBox(height: AppSpacing.s2),
+                const FinanceNavList(),
+              ],
+            ),
           ),
         ),
         const SizedBox(width: AppSpacing.s4),
@@ -239,28 +266,6 @@ class _AccountsList extends StatelessWidget {
                 child: Text(
                   'СЧЕТА',
                   style: t.overline.copyWith(color: c.textTertiary),
-                ),
-              ),
-              IconButton(
-                key: const Key('finance-open-goals'),
-                tooltip: 'Цели',
-                visualDensity: VisualDensity.compact,
-                onPressed: () => context.go('/finance/goals'),
-                icon: Icon(
-                  LucideIcons.target,
-                  size: 20,
-                  color: c.textSecondary,
-                ),
-              ),
-              IconButton(
-                key: const Key('finance-open-analytics'),
-                tooltip: 'Аналитика',
-                visualDensity: VisualDensity.compact,
-                onPressed: () => context.go('/finance/analytics'),
-                icon: Icon(
-                  LucideIcons.chartColumn,
-                  size: 20,
-                  color: c.textSecondary,
                 ),
               ),
               TextButton.icon(
@@ -336,7 +341,7 @@ class _TotalCard extends StatelessWidget {
     ];
     final breakdown = counted
         .take(4)
-        .map((a) => '${a.name} ${moneyText(balances.of(a.id))}')
+        .map((a) => '${a.name} ${context.money(balances.of(a.id))}')
         .join(' · ');
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.s5),
@@ -352,7 +357,7 @@ class _TotalCard extends StatelessWidget {
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
-              moneyText(balances.total),
+              context.money(balances.total),
               key: const Key('finance-total'),
               style: t.display,
             ),

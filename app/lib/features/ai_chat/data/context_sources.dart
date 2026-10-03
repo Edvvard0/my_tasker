@@ -3,10 +3,12 @@ import 'package:my_tasker/core/calendar_time/civil_date.dart';
 import 'package:my_tasker/core/calendar_time/wall_time.dart';
 import 'package:my_tasker/core/config/clock.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
+import 'package:my_tasker/features/ai_chat/data/finance_context_source.dart';
 import 'package:my_tasker/features/ai_chat/domain/context_builder.dart';
 import 'package:my_tasker/features/calendar/application/device_timezone.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_items.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_models.dart';
+import 'package:my_tasker/features/finance/application/finance_lock.dart';
 import 'package:my_tasker/features/tasks/domain/task_models.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -219,10 +221,16 @@ class EventsContextSource extends ContextSource {
 }
 
 /// Реестр источников контекста. Этапы 4–8 дописывают свои источники сюда
-/// (проекты, финансы, учёба, сон) — чат, конструктор и превью работают с
-/// ними без изменений.
+/// (проекты, финансы — готово, учёба, сон) — чат, конструктор и превью
+/// работают с ними без изменений.
 final contextSourcesProvider = Provider<List<ContextSource>>(
-  (ref) => const [TasksContextSource(), EventsContextSource()],
+  (ref) => [
+    const TasksContextSource(),
+    const EventsContextSource(),
+    // Финансы (Этап 5d): данные только при снятом замке, суммы — по режиму
+    // «скрыть суммы» и подтверждению в превью.
+    FinanceContextSource(access: () => ref.read(financeAiAccessProvider)),
+  ],
 );
 
 /// Окружение сборки контекста на текущий момент (каждый вызов — свежее).

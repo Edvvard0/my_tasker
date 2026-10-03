@@ -4,7 +4,7 @@ import 'package:my_tasker/core/widgets/confirm_dialog.dart';
 import 'package:my_tasker/features/finance/application/finance_providers.dart';
 import 'package:my_tasker/features/finance/data/finance_repository.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
-import 'package:my_tasker/features/finance/presentation/finance_format.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 
 void _toast(
   ScaffoldMessengerState messenger,
@@ -77,7 +77,7 @@ Future<bool> deleteRepaymentWithConfirm(
       : '';
   final ok = await showConfirmDialog(
     context,
-    title: 'Удалить погашение ${moneyText(repayment.amount)}?',
+    title: 'Удалить погашение ${context.money(repayment.amount)}?',
     message:
         'Погашение уйдёт в корзину, остаток долга вырастет.$linked '
         'Восстановить можно в течение 30 дней.',

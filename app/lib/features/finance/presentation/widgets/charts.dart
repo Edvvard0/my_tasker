@@ -8,6 +8,7 @@ import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/features/finance/domain/analytics_views.dart';
 import 'package:my_tasker/features/finance/domain/finance_views.dart';
 import 'package:my_tasker/features/finance/presentation/finance_format.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 
 /// Графики Финансов (02, 2.1.7 и 5.3): серые тона с одним синим акцентом,
 /// рисуются собственными `CustomPainter` (графической библиотеки в проекте
@@ -32,6 +33,10 @@ int niceCeiling(int value) {
   }
   return step * 10;
 }
+
+/// Подпись оси: сокращённая сумма или `••••` при скрытых суммах.
+String _axisText(int kopecks, {required bool hideAmounts}) =>
+    hideAmounts ? hiddenAxisText : axisAmountText(kopecks);
 
 TextPainter _label(String text, TextStyle style) => TextPainter(
   text: TextSpan(text: text, style: style),
@@ -123,12 +128,12 @@ class MonthBarsChart extends StatelessWidget {
   /// `YYYY-MM` текущего месяца.
   final String currentMonth;
 
-  String get _summary {
+  String _summary(BuildContext context) {
     if (months.isEmpty) return 'Нет данных по месяцам';
     final best = months.reduce((a, b) => a.income >= b.income ? a : b);
     return 'Доходы и расходы за ${months.length} мес.: '
         'максимум дохода в ${axisMonthText(best.month)} '
-        '${moneyText(best.income)}';
+        '${context.money(best.income)}';
   }
 
   @override
@@ -136,7 +141,7 @@ class MonthBarsChart extends StatelessWidget {
     final c = context.colors;
     final compact = context.windowClass.isCompact;
     return Semantics(
-      label: _summary,
+      label: _summary(context),
       image: true,
       child: SizedBox(
         key: const Key('chart-months'),
@@ -150,6 +155,7 @@ class MonthBarsChart extends StatelessWidget {
             labelStyle: context.text.caption.copyWith(color: c.textTertiary),
             accentStyle: context.text.caption.copyWith(color: c.accent),
             radius: compact ? 3 : 4,
+            hideAmounts: context.amountsHidden,
           ),
         ),
       ),
@@ -165,6 +171,7 @@ class _MonthBarsPainter extends CustomPainter {
     required this.labelStyle,
     required this.accentStyle,
     required this.radius,
+    required this.hideAmounts,
   });
 
   final List<MonthTotals> months;
@@ -173,6 +180,9 @@ class _MonthBarsPainter extends CustomPainter {
   final TextStyle labelStyle;
   final TextStyle accentStyle;
   final double radius;
+
+  /// Режим «скрыть суммы»: подписи оси — `••••`.
+  final bool hideAmounts;
 
   static const double _axisWidth = 40;
   static const double _bottom = 24;
@@ -204,7 +214,10 @@ class _MonthBarsPainter extends CustomPainter {
         Offset(plot.right, y),
         i == 0 ? base : grid,
       );
-      final label = _label(axisAmountText(top * i ~/ 2), labelStyle);
+      final label = _label(
+        _axisText(top * i ~/ 2, hideAmounts: hideAmounts),
+        labelStyle,
+      );
       label.paint(
         canvas,
         Offset(_axisWidth - 8 - label.width, y - label.height / 2),
@@ -275,7 +288,8 @@ class _MonthBarsPainter extends CustomPainter {
   bool shouldRepaint(_MonthBarsPainter old) =>
       old.months != months ||
       old.currentMonth != currentMonth ||
-      old.colors != colors;
+      old.colors != colors ||
+      old.hideAmounts != hideAmounts;
 }
 
 /// Динамика общего баланса: линия и серая area, последняя точка («сегодня»)
@@ -285,16 +299,16 @@ class BalanceLineChart extends StatelessWidget {
 
   final List<BalancePoint> points;
 
-  String get _summary => points.isEmpty
+  String _summary(BuildContext context) => points.isEmpty
       ? 'Нет данных о балансе'
-      : 'Общий баланс: сейчас ${moneyText(points.last.total)}, '
-            'в начале периода ${moneyText(points.first.total)}';
+      : 'Общий баланс: сейчас ${context.money(points.last.total)}, '
+            'в начале периода ${context.money(points.first.total)}';
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     return Semantics(
-      label: _summary,
+      label: _summary(context),
       image: true,
       child: SizedBox(
         key: const Key('chart-balance'),
@@ -305,6 +319,7 @@ class BalanceLineChart extends StatelessWidget {
             points: points,
             colors: c,
             labelStyle: context.text.caption.copyWith(color: c.textTertiary),
+            hideAmounts: context.amountsHidden,
           ),
         ),
       ),
@@ -317,11 +332,15 @@ class _LinePainter extends CustomPainter {
     required this.points,
     required this.colors,
     required this.labelStyle,
+    required this.hideAmounts,
   });
 
   final List<BalancePoint> points;
   final AppColors colors;
   final TextStyle labelStyle;
+
+  /// Режим «скрыть суммы»: подписи оси — `••••`.
+  final bool hideAmounts;
 
   static const double _axisWidth = 44;
   static const double _bottom = 24;
@@ -367,7 +386,10 @@ class _LinePainter extends CustomPainter {
                 ..strokeWidth = 1)
             : grid,
       );
-      final label = _label(axisAmountText(lo + span * i ~/ 2), labelStyle);
+      final label = _label(
+        _axisText(lo + span * i ~/ 2, hideAmounts: hideAmounts),
+        labelStyle,
+      );
       label.paint(
         canvas,
         Offset(_axisWidth - 8 - label.width, y - label.height / 2),
@@ -442,7 +464,9 @@ class _LinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_LinePainter old) =>
-      old.points != points || old.colors != colors;
+      old.points != points ||
+      old.colors != colors ||
+      old.hideAmounts != hideAmounts;
 }
 
 /// Горизонтальная полоса доли (категории, мерчанты, остатки): один серый

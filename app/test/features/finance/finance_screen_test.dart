@@ -178,9 +178,9 @@ void main() {
       expect(find.byKey(const Key('feed-search')), findsOneWidget);
     });
 
-    testWidgets('шапка: поиск и категории', (tester) async {
+    testWidgets('поиск в шапке и «Категории» в навигации', (tester) async {
       await _demo(tester);
-      await tester.tap(find.byKey(const Key('finance-open-categories')));
+      await tapKey(tester, 'finance-open-categories');
       await tester.pumpAndSettle();
       expect(find.text('Категории'), findsWidgets);
       await tester.tap(find.byTooltip('Назад'));

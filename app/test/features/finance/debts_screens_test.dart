@@ -172,7 +172,7 @@ void main() {
       'вход из «Финансы» и обратно; тап по строке открывает карточку',
       (tester) async {
         final (_, demo, _) = await _open(tester, location: '/finance');
-        await tester.tap(find.byKey(const Key('finance-open-debts')));
+        await tapKey(tester, 'finance-open-debts');
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('debts-list')), findsOneWidget);
         await tester.tap(find.byKey(Key('debt-row-${demo.bender}')));

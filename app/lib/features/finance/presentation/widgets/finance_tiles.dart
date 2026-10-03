@@ -6,6 +6,7 @@ import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/presentation/finance_format.dart';
 import 'package:my_tasker/features/finance/presentation/finance_lookups.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 
 /// Круг 40 с иконкой слева в строках (02, 4.10).
 class LeadingIcon extends StatelessWidget {
@@ -51,7 +52,7 @@ class AccountTile extends StatelessWidget {
       button: onTap != null,
       label:
           '${account.name}, ${accountSubtitle(account)}, '
-          '${moneyText(balance)}',
+          '${context.money(balance)}',
       excludeSemantics: true,
       child: InkWell(
         borderRadius: AppRadii.borderM,
@@ -94,7 +95,7 @@ class AccountTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    moneyText(balance),
+                    context.money(balance),
                     key: Key('account-balance-${account.id}'),
                     style: t.numM.copyWith(fontWeight: FontWeight.w600),
                   ),
@@ -179,7 +180,7 @@ class TransactionTile extends StatelessWidget {
     final category = lookups.category(tx.categoryId);
     return Semantics(
       button: true,
-      label: '$_title, ${transactionAmountText(tx)}, $_subtitle',
+      label: '$_title, ${context.transactionAmount(tx)}, $_subtitle',
       excludeSemantics: true,
       child: InkWell(
         key: Key('tx-row-${tx.id}'),
@@ -220,7 +221,7 @@ class TransactionTile extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.s2),
               Text(
-                transactionAmountText(tx),
+                context.transactionAmount(tx),
                 style: t.numM.copyWith(
                   fontWeight: FontWeight.w600,
                   color: tx.isTransfer ? c.textSecondary : c.textPrimary,

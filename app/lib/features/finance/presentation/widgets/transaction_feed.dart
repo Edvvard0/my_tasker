@@ -13,6 +13,7 @@ import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/domain/finance_views.dart';
 import 'package:my_tasker/features/finance/presentation/finance_format.dart';
 import 'package:my_tasker/features/finance/presentation/finance_lookups.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 import 'package:my_tasker/features/finance/presentation/transaction_actions.dart';
 import 'package:my_tasker/features/finance/presentation/transaction_editor.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/finance_tiles.dart';
@@ -102,7 +103,7 @@ class _MonthHeader extends SliverPersistentHeaderDelegate {
                 ),
               ),
               Text(
-                'Итого ${moneyText(totals.net, signed: true)}',
+                'Итого ${context.money(totals.net, signed: true)}',
                 key: Key('month-net-$month'),
                 style: t.numM.copyWith(fontWeight: FontWeight.w600),
               ),
@@ -110,8 +111,8 @@ class _MonthHeader extends SliverPersistentHeaderDelegate {
           ),
           const SizedBox(height: 2),
           Text(
-            'Доход ${moneyText(totals.income, signed: true)} · '
-            'Расход ${moneyText(-totals.expense)}',
+            'Доход ${context.money(totals.income, signed: true)} · '
+            'Расход ${context.money(-totals.expense)}',
             key: Key('month-sums-$month'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

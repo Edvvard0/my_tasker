@@ -21,13 +21,14 @@ import 'package:my_tasker/features/finance/data/finance_repository.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/presentation/finance_format.dart';
 import 'package:my_tasker/features/finance/presentation/finance_lookups.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/amount_field.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/finance_states.dart';
 
 /// Подпись корректировки сверки (spec 4.4): «В банке больше на 800 ₽».
-String adjustmentText(int adjustment) {
+String adjustmentText(int adjustment, {MoneyFormat money = moneyText}) {
   if (adjustment == 0) return 'Сходится: в банке столько же, сколько в учёте';
-  final amount = moneyText(adjustment.abs());
+  final amount = money(adjustment.abs());
   return adjustment > 0
       ? 'В банке больше на $amount'
       : 'В банке меньше на $amount';
@@ -180,7 +181,7 @@ class _ReconcileScreenState extends ConsumerState<ReconcileScreen> {
               ),
               const SizedBox(height: AppSpacing.s1),
               Text(
-                moneyText(balance),
+                context.money(balance),
                 key: const Key('reconcile-current'),
                 style: t.kpi,
               ),
@@ -244,10 +245,13 @@ class _ReconcileScreenState extends ConsumerState<ReconcileScreen> {
               key: const Key('reconcile-result'),
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(adjustmentText(result.adjustment), style: t.h3),
+                Text(
+                  adjustmentText(result.adjustment, money: context.money),
+                  style: t.h3,
+                ),
                 const SizedBox(height: AppSpacing.s1),
                 Text(
-                  'Баланс счёта теперь ${moneyText(result.actual)}. '
+                  'Баланс счёта теперь ${context.money(result.actual)}. '
                   'Отдельной операции сверка не создаёт.',
                   style: t.bodyS.copyWith(color: c.textSecondary),
                 ),
@@ -307,7 +311,10 @@ class _HistoryRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('В банке ${moneyText(line.actual)}', style: t.bodyStrong),
+                Text(
+                  'В банке ${context.money(line.actual)}',
+                  style: t.bodyStrong,
+                ),
                 Text(
                   [when, ?note].join(' · '),
                   maxLines: 1,
@@ -315,14 +322,14 @@ class _HistoryRow extends StatelessWidget {
                   style: t.bodyS.copyWith(color: c.textSecondary),
                 ),
                 Text(
-                  adjustmentText(line.adjustment),
+                  adjustmentText(line.adjustment, money: context.money),
                   style: t.bodyS.copyWith(color: c.textSecondary),
                 ),
               ],
             ),
           ),
           Text(
-            moneyText(line.adjustment, signed: true),
+            context.money(line.adjustment, signed: true),
             style: t.numM.copyWith(fontWeight: FontWeight.w600),
           ),
           IconButton(

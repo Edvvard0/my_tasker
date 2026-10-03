@@ -375,7 +375,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ),
                     child: InkWell(
                       key: const Key('context-caption'),
-                      onTap: () => showContextPreview(context, preview),
+                      onTap: () => showContextPreview(
+                        context,
+                        preview,
+                        conversationId: _id,
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           vertical: AppSpacing.s1,

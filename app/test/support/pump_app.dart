@@ -13,6 +13,7 @@ import 'package:my_tasker/core/network/api_providers.dart';
 import 'package:my_tasker/core/network/connection_checker.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/features/ai_chat/application/ai_providers.dart';
+import 'package:my_tasker/features/finance/data/finance_privacy_store.dart';
 import 'package:my_tasker/features/settings/data/server_connection_repository.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 
@@ -20,6 +21,7 @@ import 'ai_env.dart';
 import 'fake_server/fake_backend.dart';
 import 'fakes.dart';
 import 'in_memory_opener.dart';
+import 'privacy_env.dart';
 
 /// Телефон (Galaxy A55 ≈ 411 dp; берём типовые 390×844).
 const phoneSize = Size(390, 844);
@@ -42,7 +44,11 @@ const desktopSize = Size(1440, 900);
 /// разрешён); [serverUrl] — сохранить адрес сервера в БД до старта;
 /// [now] — зафиксировать «текущее время» (стабильные подписи «5 мин назад»);
 /// [opener] — свой способ открыть БД (например, «сломанную»);
-/// [defaultAiApi] — поддельный API ИИ по умолчанию (экраны ИИ не ходят в сеть).
+/// [clock] — управляемые часы вместо фиксированного [now] (замок по времени);
+/// [defaultAiApi] — поддельный API ИИ по умолчанию (экраны ИИ не ходят в сеть);
+/// [privacyStore] и [biometric] — замок и биометрия «Финансов» (по умолчанию
+/// замка нет, биометрии нет). Подменять эти провайдеры через [overrides]
+/// нельзя: они уже переопределены здесь.
 Future<ProviderContainer> pumpApp(
   WidgetTester tester, {
   Size size = phoneSize,
@@ -57,6 +63,9 @@ Future<ProviderContainer> pumpApp(
   DateTime? now,
   AppDatabaseOpener? opener,
   bool defaultAiApi = true,
+  MemoryFinancePrivacyStore? privacyStore,
+  FakeBiometric? biometric,
+  DateTime Function()? clock,
 }) async {
   tester.view
     ..physicalSize = size
@@ -85,9 +94,14 @@ Future<ProviderContainer> pumpApp(
       ),
       if (backend != null)
         plainAdapterFactoryProvider.overrideWithValue(() => backend),
-      if (now != null) clockProvider.overrideWithValue(() => now),
+      if (clock != null)
+        clockProvider.overrideWithValue(clock)
+      else if (now != null)
+        clockProvider.overrideWithValue(() => now),
       // Экраны ИИ не ходят в настоящую сеть: поддельный API по умолчанию.
       if (defaultAiApi) aiApiProvider.overrideWithValue(FakeAiApi()),
+      // Приватность Финансов: память вместо защищённого хранилища ОС.
+      ...privacyOverrides(store: privacyStore, biometric: biometric),
       ...overrides,
     ],
   );

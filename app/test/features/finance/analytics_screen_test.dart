@@ -402,7 +402,7 @@ void main() {
   group('Аналитика: навигация и раскладка', () {
     testWidgets('вход из «Финансы» и обратно', (tester) async {
       await pumpFinance(tester, seedWith: seedFinanceDemo);
-      await tester.tap(find.byKey(const Key('finance-open-analytics')));
+      await tapKey(tester, 'finance-open-analytics');
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('analytics-scroll')), findsOneWidget);
       await tester.tap(find.byTooltip('Назад'));

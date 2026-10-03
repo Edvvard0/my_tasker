@@ -17,6 +17,8 @@ import 'package:my_tasker/features/ai_chat/domain/ai_models.dart';
 import 'package:my_tasker/features/ai_chat/domain/ai_protocol.dart';
 import 'package:my_tasker/features/ai_chat/domain/context_builder.dart';
 import 'package:my_tasker/features/calendar/application/calendar_providers.dart';
+import 'package:my_tasker/features/finance/application/finance_lock.dart';
+import 'package:my_tasker/features/finance/application/finance_providers.dart';
 
 /// Выбранная модель (id из каталога, имя для показа).
 class ModelChoice {
@@ -330,7 +332,13 @@ final contextPreviewProvider = FutureProvider.autoDispose
       final selection = ref.watch(chatContextProvider(conversationId));
       ref
         ..watch(tasksProvider)
-        ..watch(eventsProvider);
+        ..watch(eventsProvider)
+        // Финансы: замок, «скрыть суммы», согласие на суммы и сами данные.
+        ..watch(financeAiAccessProvider)
+        ..watch(accountRowsProvider)
+        ..watch(transactionRowsProvider)
+        ..watch(goalRowsProvider)
+        ..watch(debtRowsProvider);
       return ref
           .read(contextBuilderProvider)
           .build(selection.sources, ref.read(contextEnvProvider)());
@@ -454,7 +462,11 @@ class ContextSheet extends ConsumerWidget {
                 ElevatedButton(
                   key: const Key('context-preview'),
                   onPressed: package.hasValue
-                      ? () => showContextPreview(context, package.requireValue)
+                      ? () => showContextPreview(
+                          context,
+                          package.requireValue,
+                          conversationId: conversationId,
+                        )
                       : null,
                   child: const Text('Превью'),
                 ),
@@ -646,21 +658,43 @@ class _PresetNameDialogState extends State<_PresetNameDialog> {
 }
 
 /// Превью: ровно тот текст, который уйдёт в запрос (`context.text`).
-Future<void> showContextPreview(BuildContext context, ContextPackage package) =>
-    showEditorSheet<void>(
-      context,
-      builder: (_) => ContextPreviewSheet(package: package),
-    );
+///
+/// С [conversationId] превью живое: при подтверждении сумм Финансов текст
+/// пересобирается прямо в окне.
+Future<void> showContextPreview(
+  BuildContext context,
+  ContextPackage package, {
+  String? conversationId,
+}) => showEditorSheet<void>(
+  context,
+  builder: (_) =>
+      ContextPreviewSheet(package: package, conversationId: conversationId),
+);
 
-class ContextPreviewSheet extends StatelessWidget {
-  const ContextPreviewSheet({required this.package, super.key});
+class ContextPreviewSheet extends ConsumerWidget {
+  const ContextPreviewSheet({
+    required this.package,
+    this.conversationId,
+    super.key,
+  });
 
   final ContextPackage package;
+  final String? conversationId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
     final t = context.text;
+    final live = conversationId == null
+        ? null
+        : ref.watch(contextPreviewProvider(conversationId!)).value;
+    final shown = live ?? package;
+    final hasFinance = shown.sections.any((s) => s.source == 'finance');
+    final hideOn = ref.watch(hideAmountsProvider.select((s) => s.hidden));
+    final unlocked = ref.watch(
+      financeAiAccessProvider.select((a) => a.unlocked),
+    );
+    final consent = ref.watch(financeAiAmountsConsentProvider);
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -668,10 +702,54 @@ class ContextPreviewSheet extends StatelessWidget {
           SheetHeader(
             title: 'Что уйдёт в облако',
             trailing: Text(
-              formatTokens(package.tokens),
+              formatTokens(shown.tokens),
               style: t.bodyS.copyWith(color: c.textSecondary),
             ),
           ),
+          if (hasFinance && hideOn && unlocked)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.s6,
+                0,
+                AppSpacing.s6,
+                AppSpacing.s3,
+              ),
+              child: Container(
+                key: const Key('preview-finance-notice'),
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.s3),
+                decoration: BoxDecoration(
+                  color: c.surface2,
+                  borderRadius: AppRadii.borderS,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      consent
+                          ? 'Суммы Финансов включены в контекст по вашему '
+                                'подтверждению: до смены режима «скрыть суммы» '
+                                'или блокировки раздела.'
+                          : 'Включён режим «скрыть суммы»: суммы Финансов в '
+                                'контекст не попадают, уходит только '
+                                'структура. Отправить суммы можно только '
+                                'явным подтверждением.',
+                      style: t.bodyS,
+                    ),
+                    const SizedBox(height: AppSpacing.s2),
+                    TextButton(
+                      key: const Key('preview-finance-toggle'),
+                      onPressed: () => ref
+                          .read(financeAiAmountsConsentProvider.notifier)
+                          .set(value: !consent),
+                      child: Text(
+                        consent ? 'Убрать суммы' : 'Отправить со суммами',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           Flexible(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
@@ -680,7 +758,7 @@ class ContextPreviewSheet extends StatelessWidget {
                 AppSpacing.s6,
                 AppSpacing.s6,
               ),
-              child: package.text.isEmpty
+              child: shown.text.isEmpty
                   ? Text(
                       'Контекст не выбран: в запрос уйдёт только переписка.',
                       key: const Key('preview-empty'),
@@ -694,7 +772,7 @@ class ContextPreviewSheet extends StatelessWidget {
                         borderRadius: AppRadii.borderS,
                       ),
                       child: SelectableText(
-                        package.text,
+                        shown.text,
                         key: const Key('preview-text'),
                         style: t.bodyS,
                       ),

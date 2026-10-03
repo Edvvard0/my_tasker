@@ -21,6 +21,7 @@ import 'package:my_tasker/features/finance/domain/transaction_draft.dart';
 import 'package:my_tasker/features/finance/presentation/account_editor.dart';
 import 'package:my_tasker/features/finance/presentation/finance_format.dart';
 import 'package:my_tasker/features/finance/presentation/finance_lookups.dart';
+import 'package:my_tasker/features/finance/presentation/privacy/finance_gate.dart';
 import 'package:my_tasker/features/finance/presentation/transaction_actions.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/amount_field.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/finance_pickers.dart';
@@ -29,19 +30,26 @@ import 'package:my_tasker/features/finance/presentation/widgets/segmented_pill.d
 /// Открывает редактор операции. [transactionId] — правка существующей;
 /// иначе создание с видом [kind] (по умолчанию расход) и счётом
 /// [accountId] (по умолчанию первый активный).
+///
+/// Если раздел закрыт замком (операцию создают из общего «+» в другом
+/// разделе), сначала просит PIN: без разблокировки редактор не открывается.
 Future<void> showTransactionEditor(
   BuildContext context, {
   String? transactionId,
   TransactionKind kind = TransactionKind.expense,
   String? accountId,
-}) => showEditorSheet<void>(
-  context,
-  builder: (_) => TransactionEditor(
-    transactionId: transactionId,
-    initialKind: kind,
-    initialAccountId: accountId,
-  ),
-);
+}) async {
+  if (!await ensureFinanceUnlocked(context)) return;
+  if (!context.mounted) return;
+  await showEditorSheet<void>(
+    context,
+    builder: (_) => TransactionEditor(
+      transactionId: transactionId,
+      initialKind: kind,
+      initialAccountId: accountId,
+    ),
+  );
+}
 
 /// Редактор операции (02, 4.4): сегмент «Расход / Доход / Перевод», поле
 /// суммы с автоформатом и чипами, счёт (у перевода «откуда → куда»),

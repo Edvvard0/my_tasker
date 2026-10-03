@@ -5,7 +5,7 @@ import 'package:my_tasker/core/theme/app_spacing.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/features/finance/domain/debt_views.dart';
 import 'package:my_tasker/features/finance/presentation/debt_format.dart';
-import 'package:my_tasker/features/finance/presentation/finance_format.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 
 /// Круг 40 с инициалом контрагента (02, 5.4.3: аватар-инициалы `surface/3`).
 class DebtAvatar extends StatelessWidget {
@@ -49,11 +49,11 @@ class DebtTile extends StatelessWidget {
     final t = context.text;
     final debt = state.debt;
     final amount = state.isClosed ? debt.amount : state.remaining;
-    final subtitle = debtSubtitle(state, today);
+    final subtitle = debtSubtitle(state, today, money: context.money);
     return Semantics(
       button: true,
       label:
-          '${debt.who}, ${debt.direction.label}, ${moneyText(amount)}, '
+          '${debt.who}, ${debt.direction.label}, ${context.money(amount)}, '
           '$subtitle${state.overdue ? ', просрочен' : ''}',
       excludeSemantics: true,
       child: InkWell(
@@ -117,7 +117,7 @@ class DebtTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    moneyText(amount),
+                    context.money(amount),
                     key: Key('debt-amount-${debt.id}'),
                     style: t.numM.copyWith(
                       fontWeight: FontWeight.w600,

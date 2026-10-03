@@ -7,6 +7,10 @@ import 'package:my_tasker/features/finance/domain/finance_models.dart';
 
 /// Подписи, иконки и форматы Финансов для интерфейса (02, 2.2.3, 7.3).
 
+/// Форматер сумм: [moneyText] либо `context.money` (учитывает «скрыть
+/// суммы»). Чистые функции подписей принимают его параметром.
+typedef MoneyFormat = String Function(int kopecks, {bool signed});
+
 /// Деньги: разряды и «₽» через неразрывные пробелы, настоящий минус «−»,
 /// у [signed] положительных — «+» (02, 2.2.3). Копейки — только ненулевые.
 String moneyText(int kopecks, {bool signed = false}) {

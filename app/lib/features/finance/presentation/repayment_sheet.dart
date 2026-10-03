@@ -20,6 +20,7 @@ import 'package:my_tasker/features/finance/presentation/debt_actions.dart';
 import 'package:my_tasker/features/finance/presentation/debt_format.dart';
 import 'package:my_tasker/features/finance/presentation/finance_format.dart';
 import 'package:my_tasker/features/finance/presentation/finance_lookups.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/amount_field.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/finance_pickers.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/segmented_pill.dart';
@@ -233,7 +234,7 @@ class _RepaymentSheetState extends ConsumerState<RepaymentSheet> {
           const SizedBox(width: AppSpacing.s3),
           Expanded(
             child: Text(
-              'Это больше остатка: получится переплата ${moneyText(over)}. '
+              'Это больше остатка: получится переплата ${context.money(over)}. '
               'Можно сохранить, если так и было.',
               style: context.text.bodyS,
             ),
@@ -337,7 +338,7 @@ class _RepaymentSheetState extends ConsumerState<RepaymentSheet> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.s4),
                     child: Text(
-                      '${debt.who} · остаток ${moneyText(available)}',
+                      '${debt.who} · остаток ${context.money(available)}',
                       key: const Key('repay-context'),
                       style: t.bodyS.copyWith(color: c.textSecondary),
                     ),
@@ -359,7 +360,7 @@ class _RepaymentSheetState extends ConsumerState<RepaymentSheet> {
                             FilterPill(
                               key: const Key('repay-close'),
                               label:
-                                  'Закрыть остаток · ${moneyText(available)}',
+                                  'Закрыть остаток · ${context.money(available)}',
                               selected: false,
                               icon: LucideIcons.circleCheck,
                               onTap: available == 0

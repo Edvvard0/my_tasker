@@ -9,6 +9,8 @@ import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_service.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_taps.dart';
+import 'package:my_tasker/features/finance/application/finance_lock.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 import 'package:my_tasker/features/recovery/presentation/recovery_screen.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 import 'package:my_tasker/features/shell/splash_screen.dart';
@@ -61,7 +63,18 @@ class MyTaskerApp extends ConsumerWidget {
         } else {
           body = child ?? const SizedBox.shrink();
         }
-        return Theme(data: AppTheme.dark(context.windowClass), child: body);
+        // Режим «скрыть суммы» и замок Финансов: выше навигатора, чтобы
+        // действовать и в листах, диалогах и снекбарах.
+        return Theme(
+          data: AppTheme.dark(context.windowClass),
+          child: Consumer(
+            builder: (_, ref, child) => AmountsVisibility(
+              hidden: ref.watch(amountsMaskedProvider),
+              child: child!,
+            ),
+            child: body,
+          ),
+        );
       },
     );
   }

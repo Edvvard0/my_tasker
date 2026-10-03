@@ -5,12 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_tasker/core/widgets/form_text_field.dart';
 import 'package:my_tasker/features/calendar/application/device_timezone.dart';
+import 'package:my_tasker/features/finance/data/finance_privacy_store.dart';
 import 'package:my_tasker/features/finance/data/finance_repository.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/domain/goal_models.dart';
 import 'package:my_tasker/features/finance/domain/goal_views.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/amount_field.dart';
 
+import 'privacy_env.dart';
 import 'pump_app.dart';
 import 'stage2_env.dart' show demoNow;
 
@@ -52,6 +54,9 @@ Future<ProviderContainer> pumpFinance(
   String location = '/finance',
   Future<void> Function(ProviderContainer container)? seedWith,
   List<Override> overrides = const [],
+  MemoryFinancePrivacyStore? privacyStore,
+  FakeBiometric? biometric,
+  DateTime Function()? clock,
 }) async {
   final container = await pumpApp(
     tester,
@@ -59,6 +64,9 @@ Future<ProviderContainer> pumpFinance(
     location: location,
     now: demoNow,
     settle: false,
+    privacyStore: privacyStore,
+    biometric: biometric,
+    clock: clock,
     overrides: [
       deviceTimeZoneSourceProvider.overrideWithValue(
         const FixedTimeZoneSource('Europe/Moscow'),

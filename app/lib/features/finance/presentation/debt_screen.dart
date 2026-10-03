@@ -19,8 +19,8 @@ import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/presentation/debt_actions.dart';
 import 'package:my_tasker/features/finance/presentation/debt_editor.dart';
 import 'package:my_tasker/features/finance/presentation/debt_format.dart';
-import 'package:my_tasker/features/finance/presentation/finance_format.dart';
 import 'package:my_tasker/features/finance/presentation/finance_lookups.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 import 'package:my_tasker/features/finance/presentation/repayment_sheet.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/debt_tiles.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/finance_states.dart';
@@ -176,15 +176,15 @@ class _DebtBody extends ConsumerWidget {
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  moneyText(state.remaining),
+                  context.money(state.remaining),
                   key: const Key('debt-remaining'),
                   style: t.display,
                 ),
               ),
               const SizedBox(height: AppSpacing.s2),
               Text(
-                'Вернули ${moneyText(state.repaid)} из '
-                '${moneyText(debt.amount)}',
+                'Вернули ${context.money(state.repaid)} из '
+                '${context.money(debt.amount)}',
                 key: const Key('debt-repaid-line'),
                 style: t.bodyS.copyWith(color: c.textSecondary),
               ),
@@ -194,7 +194,7 @@ class _DebtBody extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.s2),
                   child: Text(
-                    'Переплата ${moneyText(state.overpaid)}: погашений больше '
+                    'Переплата ${context.money(state.overpaid)}: погашений больше '
                     'суммы долга.',
                     key: const Key('debt-overpaid'),
                     style: t.bodyS.copyWith(color: c.textPrimary),
@@ -386,7 +386,7 @@ class _RepaymentTile extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.s2),
             Text(
-              moneyText(r.amount),
+              context.money(r.amount),
               key: Key('repayment-amount-${r.id}'),
               style: t.numM.copyWith(fontWeight: FontWeight.w600),
             ),

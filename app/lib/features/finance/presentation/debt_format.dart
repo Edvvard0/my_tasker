@@ -45,12 +45,16 @@ String debtInitial(Debt debt) {
 }
 
 /// Подпись под именем в списке: сколько вернули, срок.
-String debtSubtitle(DebtState s, String today) {
+String debtSubtitle(
+  DebtState s,
+  String today, {
+  MoneyFormat money = moneyText,
+}) {
   final parts = <String>[];
   if (s.isClosed) {
     parts.add('Закрыт');
   } else if (s.status == DebtStatus.partial) {
-    parts.add('Вернули ${moneyText(s.repaid)} из ${moneyText(s.debt.amount)}');
+    parts.add('Вернули ${money(s.repaid)} из ${money(s.debt.amount)}');
   } else {
     parts.add('с ${ymdText(s.debt.debtDate, today)}');
   }

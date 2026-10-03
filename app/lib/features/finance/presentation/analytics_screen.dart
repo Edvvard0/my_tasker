@@ -15,6 +15,7 @@ import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/domain/goal_views.dart';
 import 'package:my_tasker/features/finance/presentation/finance_format.dart';
 import 'package:my_tasker/features/finance/presentation/finance_lookups.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/charts.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/finance_pickers.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/finance_states.dart';
@@ -199,7 +200,7 @@ class _AnalyticsBodyState extends ConsumerState<_AnalyticsBody> {
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
-              moneyText(value, signed: signed),
+              context.money(value, signed: signed),
               key: Key(keyName),
               style: t.numL.copyWith(fontWeight: FontWeight.w700),
             ),
@@ -314,7 +315,7 @@ class _AnalyticsBodyState extends ConsumerState<_AnalyticsBody> {
                 ),
                 const SizedBox(width: AppSpacing.s2),
                 Text(
-                  moneyText(total),
+                  context.money(total),
                   style: t.numM.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(width: AppSpacing.s2),
@@ -474,7 +475,7 @@ class _AnalyticsBodyState extends ConsumerState<_AnalyticsBody> {
                       ),
                       const SizedBox(width: AppSpacing.s2),
                       Text(
-                        moneyText(merchants[i].total),
+                        context.money(merchants[i].total),
                         style: t.numM.copyWith(fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -539,7 +540,7 @@ class _AnalyticsBodyState extends ConsumerState<_AnalyticsBody> {
                   ),
                   const SizedBox(width: AppSpacing.s2),
                   Text(
-                    moneyText(balances.of(a.id)),
+                    context.money(balances.of(a.id)),
                     key: Key('analytics-balance-${a.id}'),
                     style: t.numM.copyWith(fontWeight: FontWeight.w600),
                   ),
@@ -557,7 +558,7 @@ class _AnalyticsBodyState extends ConsumerState<_AnalyticsBody> {
           children: [
             Expanded(child: Text('Общий баланс', style: t.bodyStrong)),
             Text(
-              moneyText(balances.total),
+              context.money(balances.total),
               key: const Key('analytics-total'),
               style: t.numL.copyWith(fontWeight: FontWeight.w700),
             ),

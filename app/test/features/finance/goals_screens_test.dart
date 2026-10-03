@@ -211,7 +211,7 @@ void main() {
 
     testWidgets('вход из «Финансы», карточка и обратно', (tester) async {
       final (_, d) = await _open(tester, location: '/finance');
-      await tester.tap(find.byKey(const Key('finance-open-goals')));
+      await tapKey(tester, 'finance-open-goals');
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('goals-list')), findsOneWidget);
       await tester.tap(find.byKey(Key('goal-row-${d.laptop}')));

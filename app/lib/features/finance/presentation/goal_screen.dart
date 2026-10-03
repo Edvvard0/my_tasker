@@ -14,8 +14,8 @@ import 'package:my_tasker/core/widgets/status_pill.dart';
 import 'package:my_tasker/features/finance/application/finance_providers.dart';
 import 'package:my_tasker/features/finance/domain/goal_models.dart';
 import 'package:my_tasker/features/finance/domain/goal_views.dart';
-import 'package:my_tasker/features/finance/presentation/finance_format.dart';
 import 'package:my_tasker/features/finance/presentation/finance_lookups.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 import 'package:my_tasker/features/finance/presentation/goal_actions.dart';
 import 'package:my_tasker/features/finance/presentation/goal_editor.dart';
 import 'package:my_tasker/features/finance/presentation/goal_format.dart';
@@ -155,7 +155,7 @@ class _GoalBody extends ConsumerWidget {
                   const SizedBox(width: AppSpacing.s2),
                   Expanded(
                     child: Text(
-                      'Цель ${moneyText(goal.targetAmount)}',
+                      'Цель ${context.money(goal.targetAmount)}',
                       key: const Key('goal-target-line'),
                       style: t.bodyS.copyWith(color: c.textSecondary),
                     ),
@@ -174,14 +174,14 @@ class _GoalBody extends ConsumerWidget {
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  moneyText(p.have),
+                  context.money(p.have),
                   key: const Key('goal-have'),
                   style: t.display,
                 ),
               ),
               const SizedBox(height: AppSpacing.s2),
               Text(
-                '${p.percentText} % от ${moneyText(goal.targetAmount)}',
+                '${p.percentText} % от ${context.money(goal.targetAmount)}',
                 key: const Key('goal-percent'),
                 style: t.bodyS.copyWith(color: c.textSecondary),
               ),
@@ -193,7 +193,9 @@ class _GoalBody extends ConsumerWidget {
                 style: t.overline.copyWith(color: c.textTertiary),
               ),
               Text(
-                p.reached ? goalMissingText(p) : moneyText(p.missing),
+                p.reached
+                    ? goalMissingText(p, money: context.money)
+                    : context.money(p.missing),
                 key: const Key('goal-missing'),
                 style: t.numL.copyWith(fontWeight: FontWeight.w700),
               ),
@@ -242,7 +244,7 @@ class _GoalBody extends ConsumerWidget {
                   children: [
                     Expanded(child: Text('Есть', style: t.bodyStrong)),
                     Text(
-                      moneyText(p.have),
+                      context.money(p.have),
                       key: const Key('goal-terms-total'),
                       style: t.numM.copyWith(fontWeight: FontWeight.w700),
                     ),
@@ -315,7 +317,7 @@ class _TermLine extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.s2),
           Text(
-            moneyText(value.value, signed: true),
+            context.money(value.value, signed: true),
             key: Key('goal-term-value-$index'),
             style: t.numM.copyWith(fontWeight: FontWeight.w600),
           ),

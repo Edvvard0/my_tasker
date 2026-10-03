@@ -16,10 +16,10 @@ const String goalReceivablesNote =
 
 /// «Не хватает 70 400 ₽» либо «Цель достигнута, +54 600 ₽» (без красного и
 /// зелёного: словом и знаком «+»).
-String goalMissingText(GoalProgress p) {
-  if (!p.reached) return 'Не хватает ${moneyText(p.missing)}';
+String goalMissingText(GoalProgress p, {MoneyFormat money = moneyText}) {
+  if (!p.reached) return 'Не хватает ${money(p.missing)}';
   return p.surplus > 0
-      ? 'Цель достигнута, ${moneyText(p.surplus, signed: true)}'
+      ? 'Цель достигнута, ${money(p.surplus, signed: true)}'
       : 'Цель достигнута';
 }
 

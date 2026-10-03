@@ -22,6 +22,7 @@ import 'package:my_tasker/features/finance/presentation/account_actions.dart';
 import 'package:my_tasker/features/finance/presentation/account_editor.dart';
 import 'package:my_tasker/features/finance/presentation/finance_format.dart';
 import 'package:my_tasker/features/finance/presentation/finance_lookups.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 import 'package:my_tasker/features/finance/presentation/reconcile_screen.dart';
 import 'package:my_tasker/features/finance/presentation/transaction_editor.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/finance_states.dart';
@@ -197,7 +198,7 @@ class _AccountBody extends ConsumerWidget {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    moneyText(balance),
+                    context.money(balance),
                     key: const Key('account-balance'),
                     style: compact ? t.kpi : t.display,
                   ),
@@ -210,7 +211,7 @@ class _AccountBody extends ConsumerWidget {
                   ),
                 if (account.creditLimit != null)
                   Text(
-                    'Кредитный лимит ${moneyText(account.creditLimit!)}',
+                    'Кредитный лимит ${context.money(account.creditLimit!)}',
                     key: const Key('account-limit'),
                     style: t.bodyS.copyWith(color: c.textSecondary),
                   ),
@@ -219,7 +220,7 @@ class _AccountBody extends ConsumerWidget {
                     padding: const EdgeInsets.only(top: AppSpacing.s1),
                     child: Text(
                       'Сверка ${shortDateText(utcToWall(zone, last.checkedAt), today)}: '
-                      '${adjustmentText(last.adjustment).toLowerCase()}',
+                      '${adjustmentText(last.adjustment, money: context.money).toLowerCase()}',
                       key: const Key('account-last-checkpoint'),
                       style: t.bodyS.copyWith(color: c.textSecondary),
                     ),

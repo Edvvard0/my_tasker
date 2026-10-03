@@ -24,6 +24,8 @@ import 'package:my_tasker/features/finance/presentation/debt_screen.dart';
 import 'package:my_tasker/features/finance/presentation/debts_screen.dart';
 import 'package:my_tasker/features/finance/presentation/goal_screen.dart';
 import 'package:my_tasker/features/finance/presentation/goals_screen.dart';
+import 'package:my_tasker/features/finance/presentation/privacy/finance_gate.dart';
+import 'package:my_tasker/features/finance/presentation/privacy/privacy_screen.dart';
 import 'package:my_tasker/features/finance/presentation/reconcile_screen.dart';
 import 'package:my_tasker/features/finance/presentation/transactions_screen.dart';
 import 'package:my_tasker/features/local_ai/presentation/local_benchmark_screen.dart';
@@ -133,51 +135,66 @@ GoRouter createRouter({
           routes: [
             GoRoute(
               path: '/finance',
-              builder: (_, _) => const FinanceScreen(),
+              builder: (_, _) => const FinanceGate(child: FinanceScreen()),
               routes: [
                 GoRoute(
                   path: 'transactions',
-                  builder: (_, _) => const TransactionsScreen(),
+                  builder: (_, _) =>
+                      const FinanceGate(child: TransactionsScreen()),
                 ),
                 GoRoute(
                   path: 'categories',
-                  builder: (_, _) => const CategoriesScreen(),
+                  builder: (_, _) =>
+                      const FinanceGate(child: CategoriesScreen()),
                 ),
                 GoRoute(
                   path: 'debts',
-                  builder: (_, _) => const DebtsScreen(),
+                  builder: (_, _) => const FinanceGate(child: DebtsScreen()),
                   routes: [
                     GoRoute(
                       path: ':id',
-                      builder: (_, state) =>
-                          DebtScreen(debtId: state.pathParameters['id']!),
+                      builder: (_, state) => FinanceGate(
+                        child: DebtScreen(debtId: state.pathParameters['id']!),
+                      ),
                     ),
                   ],
                 ),
                 GoRoute(
                   path: 'goals',
-                  builder: (_, _) => const GoalsScreen(),
+                  builder: (_, _) => const FinanceGate(child: GoalsScreen()),
                   routes: [
                     GoRoute(
                       path: ':id',
-                      builder: (_, state) =>
-                          GoalScreen(goalId: state.pathParameters['id']!),
+                      builder: (_, state) => FinanceGate(
+                        child: GoalScreen(goalId: state.pathParameters['id']!),
+                      ),
                     ),
                   ],
                 ),
                 GoRoute(
                   path: 'analytics',
-                  builder: (_, _) => const AnalyticsScreen(),
+                  builder: (_, _) =>
+                      const FinanceGate(child: AnalyticsScreen()),
+                ),
+                GoRoute(
+                  path: 'privacy',
+                  builder: (_, _) =>
+                      const FinanceGate(child: FinancePrivacyScreen()),
                 ),
                 GoRoute(
                   path: 'accounts/:id',
-                  builder: (_, state) =>
-                      AccountScreen(accountId: state.pathParameters['id']!),
+                  builder: (_, state) => FinanceGate(
+                    child: AccountScreen(
+                      accountId: state.pathParameters['id']!,
+                    ),
+                  ),
                   routes: [
                     GoRoute(
                       path: 'reconcile',
-                      builder: (_, state) => ReconcileScreen(
-                        accountId: state.pathParameters['id']!,
+                      builder: (_, state) => FinanceGate(
+                        child: ReconcileScreen(
+                          accountId: state.pathParameters['id']!,
+                        ),
                       ),
                     ),
                   ],

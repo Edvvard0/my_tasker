@@ -363,10 +363,10 @@ void main() {
       expect(estimateTokens('abcd'), 2);
     });
 
-    test('реестр по умолчанию: задачи и расписание', () {
+    test('реестр по умолчанию: задачи, расписание и (локально) финансы', () {
       final sources = device.container.read(contextSourcesProvider);
-      expect(sources.map((s) => s.id), ['tasks', 'events']);
-      expect(sources.every((s) => !s.sensitive), isTrue);
+      expect(sources.map((s) => s.id), ['tasks', 'events', 'finance']);
+      expect(sources.where((s) => s.sensitive).map((s) => s.id), ['finance']);
     });
   });
 

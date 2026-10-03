@@ -6,7 +6,7 @@ import 'package:my_tasker/core/theme/app_spacing.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/features/finance/application/finance_providers.dart';
 import 'package:my_tasker/features/finance/domain/goal_views.dart';
-import 'package:my_tasker/features/finance/presentation/finance_format.dart';
+import 'package:my_tasker/features/finance/presentation/finance_money.dart';
 import 'package:my_tasker/features/finance/presentation/goal_format.dart';
 
 /// Полоса прогресса цели (02, 5.3.2): 12 px, радиус full; заполнено — синий
@@ -128,7 +128,7 @@ class GoalTile extends StatelessWidget {
       button: true,
       label:
           '${goal.name}, ${p.percentText} процентов, '
-          '${goalMissingText(p)}',
+          '${goalMissingText(p, money: context.money)}',
       excludeSemantics: true,
       child: Material(
         color: c.surface1,
@@ -183,7 +183,7 @@ class GoalTile extends StatelessWidget {
                           style: t.overline.copyWith(color: c.textTertiary),
                         ),
                         Text(
-                          moneyText(p.have),
+                          context.money(p.have),
                           key: Key('goal-have-${goal.id}'),
                           style: t.numM.copyWith(fontWeight: FontWeight.w600),
                         ),
@@ -203,8 +203,8 @@ class GoalTile extends StatelessWidget {
                             alignment: Alignment.centerRight,
                             child: Text(
                               p.reached
-                                  ? goalMissingText(p)
-                                  : moneyText(p.missing),
+                                  ? goalMissingText(p, money: context.money)
+                                  : context.money(p.missing),
                               key: Key('goal-missing-${goal.id}'),
                               maxLines: 1,
                               style: t.numM.copyWith(
