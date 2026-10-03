@@ -143,3 +143,45 @@ Color? parseHexColor(String? hex) {
   if (hex == null || !RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(hex)) return null;
   return Color(0xFF000000 | int.parse(hex.substring(1), radix: 16));
 }
+
+/// Сумма на оси графика (02, 5.3.3): рубли без копеек, тысячи — «к», миллионы
+/// — «М», одна цифра после запятой, без «,0»: `12 500 ₽` -> «12,5к»,
+/// `205 000 ₽` -> «205к», `1 200 000 ₽` -> «1,2М». Только целые числа.
+String axisAmountText(int kopecks) {
+  final rubles = kopecks.abs() ~/ 100;
+  final String body;
+  if (rubles >= 1000000) {
+    body = '${_oneDecimal(rubles ~/ 100000)}М';
+  } else if (rubles >= 1000) {
+    body = '${_oneDecimal(rubles ~/ 100)}к';
+  } else {
+    body = '$rubles';
+  }
+  return kopecks < 0 && rubles > 0 ? '−$body' : body;
+}
+
+/// Десятые доли: `125` -> «12,5», `2050` -> «205».
+String _oneDecimal(int tenths) {
+  final fraction = tenths % 10;
+  return fraction == 0 ? '${tenths ~/ 10}' : '${tenths ~/ 10},$fraction';
+}
+
+/// Короткие названия месяцев для подписей осей.
+const List<String> axisMonthNames = [
+  'янв',
+  'фев',
+  'мар',
+  'апр',
+  'май',
+  'июн',
+  'июл',
+  'авг',
+  'сен',
+  'окт',
+  'ноя',
+  'дек',
+];
+
+/// «авг» для месяца `YYYY-MM` (подпись столбика).
+String axisMonthText(String month) =>
+    axisMonthNames[int.parse(month.substring(5, 7)) - 1];

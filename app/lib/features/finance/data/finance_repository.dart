@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_tasker/core/config/clock.dart';
 import 'package:my_tasker/core/finance/finance_calc.dart';
@@ -12,8 +14,10 @@ import 'package:my_tasker/features/finance/domain/debt_views.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/domain/finance_validation.dart';
 import 'package:my_tasker/features/finance/domain/finance_views.dart';
+import 'package:my_tasker/features/finance/domain/goal_models.dart';
+import 'package:my_tasker/features/finance/domain/goal_views.dart';
 
-/// Счета, категории, операции, точки сверки, долги и погашения: локальные записи через
+/// Счета, категории, операции, точки сверки, долги, погашения и цели: локальные записи через
 /// [SyncStore] (строка + HLC + outbox в одной транзакции) и расчёты по
 /// видимым строкам (spec Этапа 5, разделы 2 и 4).
 ///
@@ -42,6 +46,7 @@ class FinanceRepository {
   static const String checkpointsTable = 'balance_checkpoints';
   static const String debtsTable = 'debts';
   static const String repaymentsTable = 'debt_repayments';
+  static const String goalsTable = 'goals';
 
   /// Идентификатор новой строки (UUIDv7).
   String newId() => _newId();
@@ -763,6 +768,101 @@ class FinanceRepository {
 
   Future<void> restoreRepayment(String id) =>
       _store.restore(repaymentsTable, id);
+
+  // ---- цели ------------------------------------------------------------------
+
+  Future<Goal?> getGoal(String id) async {
+    final row = await _store.getRow(goalsTable, id);
+    return row == null ? null : Goal.fromRow(row);
+  }
+
+  /// Видимые цели в порядке создания; архивные — по [includeArchived].
+  Future<List<Goal>> goals({bool includeArchived = true}) async => [
+    for (final r in await _store.visibleRows(
+      goalsTable,
+      orderBy: 't.created_at, t.id',
+    ))
+      if (includeArchived || r['archived'] != true) Goal.fromRow(r),
+  ];
+
+  Stream<List<Goal>> watchGoals({bool includeArchived = true}) => _store
+      .watchVisibleRows(goalsTable, orderBy: 't.created_at, t.id')
+      .map(
+        (rows) => [
+          for (final r in rows)
+            if (includeArchived || r['archived'] != true) Goal.fromRow(r),
+        ],
+      );
+
+  Goal _cleanGoal(Goal g) => Goal(
+    id: g.id,
+    name: g.name.trim(),
+    targetAmount: g.targetAmount,
+    deadlineDate: g.deadlineDate,
+    formula: [
+      for (final t in g.formula)
+        if (t.kind == GoalTermKind.accounts)
+          t.copyWith(accountIds: t.accountIds?.toSet().toList())
+        else
+          t,
+    ],
+    archived: g.archived,
+  );
+
+  /// Создаёт цель; `goal.id` задаёт вызывающий ([newId]). Формула
+  /// проверяется как на сервере (spec 3.1) и сохраняется как есть,
+  /// включая слагаемое `receivables`.
+  Future<String> createGoal(Goal goal) async {
+    final clean = _cleanGoal(goal);
+    ensureValid(goalProblem(clean));
+    await _store.create(goalsTable, clean.id, clean.toFields());
+    return clean.id;
+  }
+
+  /// Правка цели: уходят только изменившиеся колонки.
+  Future<void> updateGoal(Goal next) async {
+    final clean = _cleanGoal(next);
+    ensureValid(goalProblem(clean));
+    await _store.transaction(() async {
+      final current = await getGoal(clean.id);
+      if (current == null) throw StateError('Цели ${clean.id} нет');
+      final before = current.toFields();
+      final after = clean.toFields();
+      final fields = _changed(before, after);
+      // Формула — список: сравниваем по содержимому, а не по ссылке.
+      if (jsonEncode(before['formula']) == jsonEncode(after['formula'])) {
+        fields.remove('formula');
+      }
+      if (fields.isEmpty) return;
+      await _store.update(goalsTable, clean.id, fields);
+    });
+  }
+
+  /// Архив убирает цель из основного списка; расчёты не меняются.
+  Future<void> archiveGoal(String id, {bool archived = true}) async {
+    final goal = await getGoal(id);
+    if (goal == null || goal.archived == archived) return;
+    await _store.update(goalsTable, id, {'archived': archived});
+  }
+
+  /// Удаляет цель в корзину (потомков нет, spec 2).
+  Future<void> deleteGoal(String id) => _store.softDelete(goalsTable, id);
+
+  Future<void> restoreGoal(String id) => _store.restore(goalsTable, id);
+
+  /// Цели с прогрессом по видимым строкам; [work] — данные Работы (пока
+  /// клиента Работы нет — пустые, `receivables` = 0).
+  Future<GoalsOverview> goalsOverview({
+    WorkData work = const WorkData.empty(),
+  }) async => GoalsOverview.compute(
+    goals: await _store.visibleRows(goalsTable, orderBy: 't.created_at, t.id'),
+    accounts: await _store.visibleRows(accountsTable),
+    transactions: await _store.visibleRows(transactionsTable),
+    checkpoints: await _store.visibleRows(checkpointsTable),
+    debts: await _store.visibleRows(debtsTable),
+    repayments: await _store.visibleRows(repaymentsTable),
+    work: work,
+  );
 
   // ---- расчёты ---------------------------------------------------------------
 

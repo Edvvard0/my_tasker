@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:my_tasker/core/calendar_time/civil_date.dart';
 import 'package:my_tasker/core/finance/finance_time.dart';
 import 'package:my_tasker/core/finance/preset_categories.dart';
 import 'package:my_tasker/core/money/money.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_validation.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
+import 'package:my_tasker/features/finance/domain/goal_models.dart';
 
 /// Клиентская проверка значений до записи в outbox: зеркало серверной
 /// (`backend/src/tasker/finance/schema.py`, spec Этапа 5, 1 и 3.1), но с
@@ -201,4 +204,89 @@ String? repaymentTransactionProblem(
         '($repaymentTransactionMismatchCode)';
   }
   return null;
+}
+
+/// Слагаемых в формуле цели: 1–30 (spec 3.1, `MAX_GOAL_TERMS`).
+const int maxGoalTerms = 30;
+
+/// Счетов или заказчиков в слагаемом: 1–50 (`MAX_TERM_IDS`).
+const int maxTermIds = 50;
+
+/// Размер формулы в JSON, байт (`json_column("formula", max_bytes=8192)`).
+const int maxFormulaBytes = 8192;
+
+final RegExp _uuidPattern = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+);
+
+/// Ключи слагаемого по виду (`_TERM_KEYS` сервера).
+const Map<String, Set<String>> goalTermKeys = {
+  'accounts': {'kind', 'sign', 'account_ids'},
+  'all_accounts': {'kind', 'sign'},
+  'debts_to_me': {'kind', 'sign'},
+  'my_debts': {'kind', 'sign'},
+  'receivables': {'kind', 'sign', 'client_ids'},
+};
+
+String? _idsProblem(String name, Object? value, {required bool nullable}) {
+  if (value == null) return nullable ? null : '$name обязателен';
+  if (value is! List || value.isEmpty || value.length > maxTermIds) {
+    return '$name — от 1 до $maxTermIds идентификаторов';
+  }
+  for (final item in value) {
+    if (item is! String || !_uuidPattern.hasMatch(item)) {
+      return '$name — только строчные uuid';
+    }
+  }
+  return null;
+}
+
+/// Формула «Есть» (`formula_problem` сервера, spec 3.1): список 1–30
+/// слагаемых; у каждого `kind` из пяти известных, `sign` — `+` или `-` и
+/// только «свои» ключи вида (`account_ids` у `accounts`, `client_ids` у
+/// `receivables`); `account_ids` — 1–50 строчных uuid, `client_ids` — `null`
+/// или 1–50 строчных uuid; размер JSON не больше 8 КБ.
+String? formulaProblem(Object? value) {
+  if (value is! List || value.isEmpty || value.length > maxGoalTerms) {
+    return 'В формуле — от 1 до $maxGoalTerms слагаемых';
+  }
+  for (final term in value) {
+    if (term is! Map || !goalTermKeys.containsKey(term['kind'])) {
+      return 'У слагаемого должен быть известный вид';
+    }
+    final kind = term['kind']! as String;
+    if (term.keys.any((k) => !goalTermKeys[kind]!.contains(k)) ||
+        (term['sign'] != '+' && term['sign'] != '-')) {
+      return 'У слагаемого — только свои поля и знак «+» или «−»';
+    }
+    final problem = switch (kind) {
+      'accounts' => _idsProblem(
+        'Список счетов',
+        term['account_ids'],
+        nullable: false,
+      ),
+      'receivables' => _idsProblem(
+        'Список заказчиков',
+        term['client_ids'],
+        nullable: true,
+      ),
+      _ => null,
+    };
+    if (problem != null) return problem;
+  }
+  if (utf8.encode(jsonEncode(value)).length > maxFormulaBytes) {
+    return 'Формула слишком большая (больше 8 КБ)';
+  }
+  return null;
+}
+
+/// Цель (spec 1.7): название, сумма цели, срок и формула «Есть».
+String? goalProblem(Goal g) {
+  final name = nameProblem(g.name, 200, what: 'Название цели');
+  if (name != null) return name;
+  final target = _positiveMoneyProblem(g.targetAmount, 'Сумма цели');
+  if (target != null) return target;
+  final due = g.deadlineDate;
+  if (due != null && parseDate(due) == null) return 'Срок — реальная дата';
+  return formulaProblem(formulaToJson(g.formula));
 }

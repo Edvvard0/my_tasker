@@ -18,9 +18,12 @@ import 'package:my_tasker/features/calendar/presentation/layers_screen.dart';
 import 'package:my_tasker/features/devices/presentation/devices_screen.dart';
 import 'package:my_tasker/features/finance/finance_screen.dart';
 import 'package:my_tasker/features/finance/presentation/account_screen.dart';
+import 'package:my_tasker/features/finance/presentation/analytics_screen.dart';
 import 'package:my_tasker/features/finance/presentation/categories_screen.dart';
 import 'package:my_tasker/features/finance/presentation/debt_screen.dart';
 import 'package:my_tasker/features/finance/presentation/debts_screen.dart';
+import 'package:my_tasker/features/finance/presentation/goal_screen.dart';
+import 'package:my_tasker/features/finance/presentation/goals_screen.dart';
 import 'package:my_tasker/features/finance/presentation/reconcile_screen.dart';
 import 'package:my_tasker/features/finance/presentation/transactions_screen.dart';
 import 'package:my_tasker/features/local_ai/presentation/local_benchmark_screen.dart';
@@ -150,6 +153,21 @@ GoRouter createRouter({
                           DebtScreen(debtId: state.pathParameters['id']!),
                     ),
                   ],
+                ),
+                GoRoute(
+                  path: 'goals',
+                  builder: (_, _) => const GoalsScreen(),
+                  routes: [
+                    GoRoute(
+                      path: ':id',
+                      builder: (_, state) =>
+                          GoalScreen(goalId: state.pathParameters['id']!),
+                    ),
+                  ],
+                ),
+                GoRoute(
+                  path: 'analytics',
+                  builder: (_, _) => const AnalyticsScreen(),
                 ),
                 GoRoute(
                   path: 'accounts/:id',

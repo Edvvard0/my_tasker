@@ -7,11 +7,13 @@ import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/features/calendar/application/calendar_providers.dart'
     show nowProvider;
 import 'package:my_tasker/features/finance/data/finance_repository.dart';
+import 'package:my_tasker/features/finance/domain/analytics_views.dart';
 import 'package:my_tasker/features/finance/domain/debt_views.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/domain/finance_views.dart';
+import 'package:my_tasker/features/finance/domain/goal_views.dart';
 
-/// Провайдеры Финансов (срезы 5a и 5b: долги и погашения). Все строки — **видимые** (spec Этапа 5,
+/// Провайдеры Финансов (срезы 5a–5c: счета, операции, долги, цели, аналитика). Все строки — **видимые** (spec Этапа 5,
 /// раздел 2): живые и с живыми родителями; операция-перевод видна, только
 /// когда живы оба счёта. Расчёты ведут доменные функции `core/finance`.
 
@@ -47,6 +49,12 @@ final StreamProvider<List<Json>> debtRowsProvider = _rows(
 final StreamProvider<List<Json>> repaymentRowsProvider = _rows(
   FinanceRepository.repaymentsTable,
   orderBy: 't.repaid_on, t.id',
+);
+
+/// Видимые цели в порядке создания (включая архивные).
+final StreamProvider<List<Json>> goalRowsProvider = _rows(
+  FinanceRepository.goalsTable,
+  orderBy: 't.created_at, t.id',
 );
 
 AsyncValue<List<T>> _typed<T>(
@@ -318,4 +326,92 @@ final ProviderFamily<AsyncValue<DebtDetail?>, String> debtDetailProvider =
           repayments: repaymentsOfDebt(repayments.requireValue, debtId),
         );
       });
+    });
+
+/// Данные Работы для слагаемого `receivables` формулы цели. Клиента «Работы»
+/// пока нет, поэтому пусто и ожидаемые поступления считаются как 0; когда
+/// Работа появится, провайдер отдаст её строки (spec 6.2).
+final Provider<WorkData> workDataProvider = Provider<WorkData>(
+  (ref) => const WorkData.empty(),
+);
+
+/// Цели с прогрессом (`goal_progress`, spec 6.2) по видимым строкам.
+final Provider<AsyncValue<GoalsOverview>> goalsOverviewProvider =
+    Provider<AsyncValue<GoalsOverview>>((ref) {
+      final inputs = <AsyncValue<List<Json>>>[
+        ref.watch(goalRowsProvider),
+        ref.watch(accountRowsProvider),
+        ref.watch(transactionRowsProvider),
+        ref.watch(checkpointRowsProvider),
+        ref.watch(debtRowsProvider),
+        ref.watch(repaymentRowsProvider),
+      ];
+      for (final v in inputs) {
+        if (v.hasError && !v.hasValue) {
+          return AsyncValue.error(v.error!, v.stackTrace ?? StackTrace.empty);
+        }
+      }
+      if (inputs.any((v) => !v.hasValue)) return const AsyncValue.loading();
+      return AsyncValue.data(
+        GoalsOverview.compute(
+          goals: inputs[0].requireValue,
+          accounts: inputs[1].requireValue,
+          transactions: inputs[2].requireValue,
+          checkpoints: inputs[3].requireValue,
+          debts: inputs[4].requireValue,
+          repayments: inputs[5].requireValue,
+          work: ref.watch(workDataProvider),
+        ),
+      );
+    });
+
+/// Карточка цели; `null` в данных — цели нет среди видимых.
+final ProviderFamily<AsyncValue<GoalState?>, String> goalDetailProvider =
+    Provider.family<AsyncValue<GoalState?>, String>(
+      (ref, goalId) => ref
+          .watch(goalsOverviewProvider)
+          .whenData((overview) => overview.byId(goalId)),
+    );
+
+/// Выбранный период аналитики (состояние экрана).
+class AnalyticsPresetNotifier extends Notifier<AnalyticsPreset> {
+  @override
+  AnalyticsPreset build() => AnalyticsPreset.quarter;
+
+  // Метод, а не сеттер: обработчик выбора сегмента в экране.
+  // ignore: use_setters_to_change_properties
+  void select(AnalyticsPreset preset) => state = preset;
+}
+
+final NotifierProvider<AnalyticsPresetNotifier, AnalyticsPreset>
+analyticsPresetProvider =
+    NotifierProvider<AnalyticsPresetNotifier, AnalyticsPreset>(
+      AnalyticsPresetNotifier.new,
+    );
+
+/// Аналитика за выбранный период (spec 5) по видимым строкам.
+final Provider<AsyncValue<AnalyticsReport>> analyticsReportProvider =
+    Provider<AsyncValue<AnalyticsReport>>((ref) {
+      final inputs = <AsyncValue<List<Json>>>[
+        ref.watch(accountRowsProvider),
+        ref.watch(categoryRowsProvider),
+        ref.watch(transactionRowsProvider),
+        ref.watch(checkpointRowsProvider),
+      ];
+      for (final v in inputs) {
+        if (v.hasError && !v.hasValue) {
+          return AsyncValue.error(v.error!, v.stackTrace ?? StackTrace.empty);
+        }
+      }
+      if (inputs.any((v) => !v.hasValue)) return const AsyncValue.loading();
+      return AsyncValue.data(
+        AnalyticsReport.compute(
+          preset: ref.watch(analyticsPresetProvider),
+          today: ref.watch(moscowTodayProvider),
+          accounts: inputs[0].requireValue,
+          categories: inputs[1].requireValue,
+          transactions: inputs[2].requireValue,
+          checkpoints: inputs[3].requireValue,
+        ),
+      );
     });

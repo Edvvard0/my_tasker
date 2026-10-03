@@ -241,6 +241,28 @@ class _AccountsList extends StatelessWidget {
                   style: t.overline.copyWith(color: c.textTertiary),
                 ),
               ),
+              IconButton(
+                key: const Key('finance-open-goals'),
+                tooltip: 'Цели',
+                visualDensity: VisualDensity.compact,
+                onPressed: () => context.go('/finance/goals'),
+                icon: Icon(
+                  LucideIcons.target,
+                  size: 20,
+                  color: c.textSecondary,
+                ),
+              ),
+              IconButton(
+                key: const Key('finance-open-analytics'),
+                tooltip: 'Аналитика',
+                visualDensity: VisualDensity.compact,
+                onPressed: () => context.go('/finance/analytics'),
+                icon: Icon(
+                  LucideIcons.chartColumn,
+                  size: 20,
+                  color: c.textSecondary,
+                ),
+              ),
               TextButton.icon(
                 key: const Key('finance-add-account'),
                 onPressed: () => unawaited(showAccountEditor(context)),

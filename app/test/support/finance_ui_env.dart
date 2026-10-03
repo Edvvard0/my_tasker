@@ -7,6 +7,8 @@ import 'package:my_tasker/core/widgets/form_text_field.dart';
 import 'package:my_tasker/features/calendar/application/device_timezone.dart';
 import 'package:my_tasker/features/finance/data/finance_repository.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
+import 'package:my_tasker/features/finance/domain/goal_models.dart';
+import 'package:my_tasker/features/finance/domain/goal_views.dart';
 import 'package:my_tasker/features/finance/presentation/widgets/amount_field.dart';
 
 import 'pump_app.dart';
@@ -362,6 +364,174 @@ Future<DebtsDemo> seedDebtsDemo(ProviderContainer c) async {
     timur: timur,
   );
 }
+
+/// Демо-цели поверх счетов и долгов из Excel заказчика (spec 6.3): счета
+/// 54 000 + 174 000 + 8 000 + кредитка 125 000, долги мне 7 500 + 2 600 +
+/// 3 000, мой долг 15 000.
+class GoalsDemo {
+  const GoalsDemo({
+    required this.cash,
+    required this.tbank,
+    required this.savings,
+    required this.credit,
+    required this.vacation,
+    required this.laptop,
+    required this.cushion,
+    required this.courses,
+  });
+
+  final String cash;
+  final String tbank;
+  final String savings;
+  final String credit;
+
+  /// «Отпуск»: 400 000 ₽ до 31 декабря, формула по умолчанию.
+  final String vacation;
+
+  /// «Ноутбук»: 150 000 ₽ до 15 ноября, счета «Накопительный» и «Наличные».
+  final String laptop;
+
+  /// «Подушка безопасности»: 300 000 ₽ без срока, «все счета» минус мои
+  /// долги — цель достигнута.
+  final String cushion;
+
+  /// «Курсы»: в архиве.
+  final String courses;
+}
+
+/// Цель для тестов.
+Future<String> addGoal(
+  ProviderContainer c, {
+  required String name,
+  required int target,
+  String? deadline,
+  List<GoalTerm>? formula,
+  bool archived = false,
+}) {
+  final repo = financeRepo(c);
+  return repo.createGoal(
+    Goal(
+      id: repo.newId(),
+      name: name,
+      targetAmount: target,
+      deadlineDate: deadline,
+      formula: formula ?? defaultGoalFormula(),
+      archived: archived,
+    ),
+  );
+}
+
+/// Счета и долги из Excel заказчика (без целей).
+Future<GoalsDemo> seedExcelAccounts(ProviderContainer c) async {
+  final cash = await addAccount(
+    c,
+    'Наличные',
+    kind: AccountKind.cash,
+    opening: 5400000,
+  );
+  final tbank = await addAccount(
+    c,
+    'Т-Банк Black',
+    bank: 'Т-Банк',
+    opening: 17400000,
+  );
+  final savings = await addAccount(
+    c,
+    'Накопительный',
+    kind: AccountKind.savings,
+    bank: 'Т-Банк',
+    opening: 800000,
+  );
+  final credit = await addAccount(
+    c,
+    'ВТБ Мир',
+    kind: AccountKind.creditCard,
+    bank: 'ВТБ',
+    opening: 12500000,
+    limit: 30000000,
+  );
+  await addDebt(c, who: 'Эмир', amount: 750000);
+  await addDebt(c, who: 'Bender', amount: 260000);
+  await addDebt(c, who: 'Настя', amount: 300000);
+  await addDebt(c, who: 'Влад', amount: 1500000, direction: DebtDirection.iOwe);
+  return GoalsDemo(
+    cash: cash,
+    tbank: tbank,
+    savings: savings,
+    credit: credit,
+    vacation: '',
+    laptop: '',
+    cushion: '',
+    courses: '',
+  );
+}
+
+/// Наполняет БД счетами, долгами и четырьмя целями ([GoalsDemo]).
+Future<GoalsDemo> seedGoalsDemo(ProviderContainer c) async {
+  final base = await seedExcelAccounts(c);
+  final vacation = await addGoal(
+    c,
+    name: 'Отпуск',
+    target: 40000000,
+    deadline: '2026-12-31',
+  );
+  final laptop = await addGoal(
+    c,
+    name: 'Ноутбук',
+    target: 15000000,
+    deadline: '2026-11-15',
+    formula: [
+      GoalTerm(
+        kind: GoalTermKind.accounts,
+        accountIds: [base.savings, base.cash],
+      ),
+    ],
+  );
+  final cushion = await addGoal(
+    c,
+    name: 'Подушка безопасности',
+    target: 30000000,
+    formula: [
+      const GoalTerm(kind: GoalTermKind.allAccounts),
+      GoalTerm.initial(GoalTermKind.myDebts),
+    ],
+  );
+  final courses = await addGoal(
+    c,
+    name: 'Курсы',
+    target: 5000000,
+    archived: true,
+  );
+  return GoalsDemo(
+    cash: base.cash,
+    tbank: base.tbank,
+    savings: base.savings,
+    credit: base.credit,
+    vacation: vacation,
+    laptop: laptop,
+    cushion: cushion,
+    courses: courses,
+  );
+}
+
+/// Данные Работы из Excel: Рома должен 20 000 + 60 500 ₽ по двум проектам
+/// (подставляются в `workDataProvider`, пока клиента Работы нет).
+WorkData excelWorkData() => const WorkData(
+  projects: [
+    {
+      'id': '01900000-0000-7000-8000-000000000701',
+      'status': 'active',
+      'client_id': '01900000-0000-7000-8000-000000000700',
+      'base_amount': 2000000,
+    },
+    {
+      'id': '01900000-0000-7000-8000-000000000702',
+      'status': 'active',
+      'client_id': '01900000-0000-7000-8000-000000000700',
+      'base_amount': 6050000,
+    },
+  ],
+);
 
 /// Находит поле по ключу и вводит текст.
 Future<void> enter(WidgetTester tester, String key, String text) async {
