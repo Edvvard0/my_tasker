@@ -1,0 +1,287 @@
+{
+  "description": "generate_bells(first_start, duration, breaks, count)",
+  "cases": [
+    {
+      "name": "classic_ninety_minutes",
+      "input": {
+        "first_start": "08:30",
+        "duration": 90,
+        "breaks": [
+          10,
+          10,
+          30,
+          10,
+          10
+        ],
+        "count": 6
+      },
+      "expected": [
+        {
+          "number": 1,
+          "start_time": "08:30",
+          "end_time": "10:00"
+        },
+        {
+          "number": 2,
+          "start_time": "10:10",
+          "end_time": "11:40"
+        },
+        {
+          "number": 3,
+          "start_time": "11:50",
+          "end_time": "13:20"
+        },
+        {
+          "number": 4,
+          "start_time": "13:50",
+          "end_time": "15:20"
+        },
+        {
+          "number": 5,
+          "start_time": "15:30",
+          "end_time": "17:00"
+        },
+        {
+          "number": 6,
+          "start_time": "17:10",
+          "end_time": "18:40"
+        }
+      ]
+    },
+    {
+      "name": "one_break_for_all",
+      "input": {
+        "first_start": "09:00",
+        "duration": 80,
+        "breaks": 10,
+        "count": 4
+      },
+      "expected": [
+        {
+          "number": 1,
+          "start_time": "09:00",
+          "end_time": "10:20"
+        },
+        {
+          "number": 2,
+          "start_time": "10:30",
+          "end_time": "11:50"
+        },
+        {
+          "number": 3,
+          "start_time": "12:00",
+          "end_time": "13:20"
+        },
+        {
+          "number": 4,
+          "start_time": "13:30",
+          "end_time": "14:50"
+        }
+      ]
+    },
+    {
+      "name": "zero_breaks",
+      "input": {
+        "first_start": "08:00",
+        "duration": 45,
+        "breaks": 0,
+        "count": 3
+      },
+      "expected": [
+        {
+          "number": 1,
+          "start_time": "08:00",
+          "end_time": "08:45"
+        },
+        {
+          "number": 2,
+          "start_time": "08:45",
+          "end_time": "09:30"
+        },
+        {
+          "number": 3,
+          "start_time": "09:30",
+          "end_time": "10:15"
+        }
+      ]
+    },
+    {
+      "name": "single_pair",
+      "input": {
+        "first_start": "08:30",
+        "duration": 90,
+        "breaks": [],
+        "count": 1
+      },
+      "expected": [
+        {
+          "number": 1,
+          "start_time": "08:30",
+          "end_time": "10:00"
+        }
+      ]
+    },
+    {
+      "name": "a_long_break_list_is_cut",
+      "input": {
+        "first_start": "08:30",
+        "duration": 90,
+        "breaks": [
+          10,
+          10,
+          10,
+          10,
+          10,
+          10,
+          10
+        ],
+        "count": 3
+      },
+      "expected": [
+        {
+          "number": 1,
+          "start_time": "08:30",
+          "end_time": "10:00"
+        },
+        {
+          "number": 2,
+          "start_time": "10:10",
+          "end_time": "11:40"
+        },
+        {
+          "number": 3,
+          "start_time": "11:50",
+          "end_time": "13:20"
+        }
+      ]
+    },
+    {
+      "name": "too_few_breaks",
+      "input": {
+        "first_start": "08:30",
+        "duration": 90,
+        "breaks": [
+          10
+        ],
+        "count": 3
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "break_too_long",
+      "input": {
+        "first_start": "08:30",
+        "duration": 90,
+        "breaks": [
+          241
+        ],
+        "count": 2
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "pair_too_long",
+      "input": {
+        "first_start": "08:30",
+        "duration": 301,
+        "breaks": 10,
+        "count": 2
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "pair_too_short",
+      "input": {
+        "first_start": "08:30",
+        "duration": 0,
+        "breaks": 10,
+        "count": 2
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "too_many_pairs",
+      "input": {
+        "first_start": "08:30",
+        "duration": 40,
+        "breaks": 5,
+        "count": 13
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "no_pairs",
+      "input": {
+        "first_start": "08:30",
+        "duration": 90,
+        "breaks": 10,
+        "count": 0
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "bad_time",
+      "input": {
+        "first_start": "8:30",
+        "duration": 90,
+        "breaks": 10,
+        "count": 2
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "ends_after_midnight",
+      "input": {
+        "first_start": "20:00",
+        "duration": 90,
+        "breaks": 10,
+        "count": 4
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "ends_exactly_at_2359",
+      "input": {
+        "first_start": "22:29",
+        "duration": 90,
+        "breaks": 0,
+        "count": 1
+      },
+      "expected": [
+        {
+          "number": 1,
+          "start_time": "22:29",
+          "end_time": "23:59"
+        }
+      ]
+    },
+    {
+      "name": "one_minute_past_2359",
+      "input": {
+        "first_start": "22:30",
+        "duration": 90,
+        "breaks": 0,
+        "count": 1
+      },
+      "expected": {
+        "error": true
+      }
+    }
+  ]
+}

@@ -43,6 +43,9 @@ async def test_bootstrap_seeds_six_agents_once(aienv: AiEnv) -> None:
         "get_finance_summary": "read",
         "get_goals": "read",
         "get_debts": "read",
+        "get_study_schedule": "read",
+        "get_study_absences": "read",
+        "get_study_debts": "read",
     }
     create = [t for t in first["tools"] if t["name"] == "create_task"][0]
     assert create["parameters"]["required"] == ["title"]
@@ -78,6 +81,15 @@ async def test_bootstrap_seeds_six_agents_once(aienv: AiEnv) -> None:
             "get_finance_summary",
             "get_goals",
             "get_debts",
+        ]
+        study = [p for p in profiles if p["seed_key"] == "study"][0]
+        assert study["enabled_tools"] == [
+            "get_tasks",
+            "get_events",
+            "create_task",
+            "get_study_schedule",
+            "get_study_absences",
+            "get_study_debts",
         ]
         assert general["system_prompt"] == agents.SEED_BY_KEY["general"].prompt
         version = [v for v in versions if v["profile_id"] == general["id"]][0]

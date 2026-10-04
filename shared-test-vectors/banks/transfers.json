@@ -1,0 +1,560 @@
+{
+  "description": "match_transfers(transactions, window_seconds): own-account transfer suggestions",
+  "cases": [
+    {
+      "name": "empty",
+      "input": {
+        "transactions": [],
+        "window_seconds": 600
+      },
+      "expected": []
+    },
+    {
+      "name": "basic_pair",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 500000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 500000,
+            "occurred_at": "2026-10-03T11:30:40Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": [
+        {
+          "expense_id": "o",
+          "income_id": "i",
+          "delta_seconds": 40
+        }
+      ]
+    },
+    {
+      "name": "order_of_input_does_not_matter",
+      "input": {
+        "transactions": [
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 500000,
+            "occurred_at": "2026-10-03T11:30:40Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 500000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": [
+        {
+          "expense_id": "o",
+          "income_id": "i",
+          "delta_seconds": 40
+        }
+      ]
+    },
+    {
+      "name": "income_first_in_time_still_pairs",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 500000,
+            "occurred_at": "2026-10-03T11:35:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 500000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": [
+        {
+          "expense_id": "o",
+          "income_id": "i",
+          "delta_seconds": 300
+        }
+      ]
+    },
+    {
+      "name": "window_edge_exactly_ten_minutes",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:40:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": [
+        {
+          "expense_id": "o",
+          "income_id": "i",
+          "delta_seconds": 600
+        }
+      ]
+    },
+    {
+      "name": "one_second_past_the_window",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:40:01Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": []
+    },
+    {
+      "name": "same_account_is_a_refund_not_a_transfer",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:31:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": []
+    },
+    {
+      "name": "different_amounts",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 101,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": []
+    },
+    {
+      "name": "two_incomes_the_closer_one_pairs",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i1",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:36:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i2",
+            "kind": "income",
+            "account_id": "a3",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:32:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": [
+        {
+          "expense_id": "o",
+          "income_id": "i2",
+          "delta_seconds": 120
+        }
+      ]
+    },
+    {
+      "name": "two_separate_pairs",
+      "input": {
+        "transactions": [
+          {
+            "id": "o1",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i1",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:31:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "o2",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T15:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i2",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 100,
+            "occurred_at": "2026-10-03T15:30:30Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": [
+        {
+          "expense_id": "o2",
+          "income_id": "i2",
+          "delta_seconds": 30
+        },
+        {
+          "expense_id": "o1",
+          "income_id": "i1",
+          "delta_seconds": 60
+        }
+      ]
+    },
+    {
+      "name": "dates_only_on_the_same_day_pair",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "currency": "RUB",
+            "date_only": true,
+            "debt_id": null
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 100,
+            "occurred_at": "2026-10-03T14:20:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": [
+        {
+          "expense_id": "o",
+          "income_id": "i",
+          "delta_seconds": 19200
+        }
+      ]
+    },
+    {
+      "name": "date_only_on_another_day_does_not_pair",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "currency": "RUB",
+            "date_only": true,
+            "debt_id": null
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 100,
+            "occurred_at": "2026-10-04T09:00:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": []
+    },
+    {
+      "name": "date_only_uses_the_moscow_day",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "currency": "RUB",
+            "date_only": true,
+            "debt_id": null
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 100,
+            "occurred_at": "2026-10-03T21:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": []
+    },
+    {
+      "name": "foreign_currency_is_skipped",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "USD",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": []
+    },
+    {
+      "name": "debt_movements_are_skipped",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": "d1"
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": []
+    },
+    {
+      "name": "existing_transfers_are_not_touched",
+      "input": {
+        "transactions": [
+          {
+            "id": "t",
+            "kind": "transfer",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 600
+      },
+      "expected": []
+    },
+    {
+      "name": "a_wider_window",
+      "input": {
+        "transactions": [
+          {
+            "id": "o",
+            "kind": "expense",
+            "account_id": "a1",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          },
+          {
+            "id": "i",
+            "kind": "income",
+            "account_id": "a2",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:50:00Z",
+            "currency": "RUB",
+            "date_only": false,
+            "debt_id": null
+          }
+        ],
+        "window_seconds": 3600
+      },
+      "expected": [
+        {
+          "expense_id": "o",
+          "income_id": "i",
+          "delta_seconds": 1200
+        }
+      ]
+    }
+  ]
+}

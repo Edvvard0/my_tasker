@@ -21,8 +21,9 @@
 https://{$SERVER_IP} {
 	tls internal
 
+	# Attachments are up to 25 MiB (stage 7); the api enforces its own, tighter limits per endpoint.
 	request_body {
-		max_size 10MB
+		max_size 26MB
 	}
 
 	import common_headers

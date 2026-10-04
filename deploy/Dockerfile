@@ -12,7 +12,8 @@ COPY src ./src
 RUN uv sync --locked --no-dev --no-editable
 
 FROM ${PYTHON_IMAGE} AS runtime
-RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin app
+RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin app \
+    && mkdir -p /data/files && chown app /data/files
 COPY --from=builder /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 USER app

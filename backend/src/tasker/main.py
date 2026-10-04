@@ -8,10 +8,12 @@ from tasker.ai import api as ai_api
 from tasker.ai.runtime import AiRuntime
 from tasker.api import health, version
 from tasker.auth import api as auth_api
+from tasker.banks import api as banks_api
 from tasker.clock import Clock, SystemClock
 from tasker.config import Settings
 from tasker.db import create_engine, create_sessionmaker
 from tasker.errors import install_error_handlers
+from tasker.files import api as files_api
 from tasker.logging import configure_logging
 from tasker.middleware import RequestIdMiddleware
 from tasker.runtime import build_runtime
@@ -68,4 +70,6 @@ def create_app(
     app.include_router(auth_api.router)
     app.include_router(sync_api.router)
     app.include_router(ai_api.router)
+    app.include_router(banks_api.router)
+    app.include_router(files_api.router)
     return app

@@ -1,0 +1,170 @@
+{
+  "description": "dedup_tail(kind, amount, occurred_at, merchant, ordinal) and the hash of account_id|tail",
+  "cases": [
+    {
+      "name": "expense_plain",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "kind": "expense",
+        "amount": 123456,
+        "occurred_at": "2026-10-03T11:30:00Z",
+        "merchant": "Пятёрочка",
+        "ordinal": 0
+      },
+      "expected": {
+        "tail": "expense|123456|2026-10-03T11:30|пятерочка",
+        "hash": "27d9e12dbd47902efbf9cdad6968fee5"
+      }
+    },
+    {
+      "name": "seconds_are_dropped",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "kind": "expense",
+        "amount": 123456,
+        "occurred_at": "2026-10-03T11:30:59Z",
+        "merchant": "Пятёрочка",
+        "ordinal": 0
+      },
+      "expected": {
+        "tail": "expense|123456|2026-10-03T11:30|пятерочка",
+        "hash": "27d9e12dbd47902efbf9cdad6968fee5"
+      }
+    },
+    {
+      "name": "next_minute_differs",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "kind": "expense",
+        "amount": 123456,
+        "occurred_at": "2026-10-03T11:31:00Z",
+        "merchant": "Пятёрочка",
+        "ordinal": 0
+      },
+      "expected": {
+        "tail": "expense|123456|2026-10-03T11:31|пятерочка",
+        "hash": "863ad6cc27878d7fd50a2b9b670e1112"
+      }
+    },
+    {
+      "name": "merchant_variants_collapse",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "kind": "expense",
+        "amount": 123456,
+        "occurred_at": "2026-10-03T11:30:00Z",
+        "merchant": "ПЯТЁРОЧКА 1234 Москва",
+        "ordinal": 0
+      },
+      "expected": {
+        "tail": "expense|123456|2026-10-03T11:30|пятерочка",
+        "hash": "27d9e12dbd47902efbf9cdad6968fee5"
+      }
+    },
+    {
+      "name": "income_kind_differs",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "kind": "income",
+        "amount": 123456,
+        "occurred_at": "2026-10-03T11:30:00Z",
+        "merchant": "Пятёрочка",
+        "ordinal": 0
+      },
+      "expected": {
+        "tail": "income|123456|2026-10-03T11:30|пятерочка",
+        "hash": "33ba5352a11cb14a2502cb26c6b94658"
+      }
+    },
+    {
+      "name": "amount_differs",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "kind": "expense",
+        "amount": 123457,
+        "occurred_at": "2026-10-03T11:30:00Z",
+        "merchant": "Пятёрочка",
+        "ordinal": 0
+      },
+      "expected": {
+        "tail": "expense|123457|2026-10-03T11:30|пятерочка",
+        "hash": "8473a35e4495ceca45845debdb22aa8e"
+      }
+    },
+    {
+      "name": "second_identical_one",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "kind": "expense",
+        "amount": 123456,
+        "occurred_at": "2026-10-03T11:30:00Z",
+        "merchant": "Пятёрочка",
+        "ordinal": 1
+      },
+      "expected": {
+        "tail": "expense|123456|2026-10-03T11:30|пятерочка|1",
+        "hash": "88ee6d4236a99dd273b08315838373db"
+      }
+    },
+    {
+      "name": "third_identical_one",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "kind": "expense",
+        "amount": 123456,
+        "occurred_at": "2026-10-03T11:30:00Z",
+        "merchant": "Пятёрочка",
+        "ordinal": 2
+      },
+      "expected": {
+        "tail": "expense|123456|2026-10-03T11:30|пятерочка|2",
+        "hash": "4e37f299a248a1b5cdd4654b9b181f1c"
+      }
+    },
+    {
+      "name": "no_merchant",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "kind": "income",
+        "amount": 5000000,
+        "occurred_at": "2026-10-01T09:00:00Z",
+        "merchant": null,
+        "ordinal": 0
+      },
+      "expected": {
+        "tail": "income|5000000|2026-10-01T09:00|",
+        "hash": "738348292f39611fc986eaa0a5271c2f"
+      }
+    },
+    {
+      "name": "date_only_noon_moscow",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "kind": "expense",
+        "amount": 49900,
+        "occurred_at": "2026-10-02T09:00:00Z",
+        "merchant": "Кофе Дом",
+        "ordinal": 0
+      },
+      "expected": {
+        "tail": "expense|49900|2026-10-02T09:00|кофе дом",
+        "hash": "25cc2cafe133bb91b410a301b9069c2a"
+      }
+    },
+    {
+      "name": "fractions_of_second_dropped",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "kind": "expense",
+        "amount": 100,
+        "occurred_at": "2026-10-02T09:00:00.987Z",
+        "merchant": "Кофе",
+        "ordinal": 0
+      },
+      "expected": {
+        "tail": "expense|100|2026-10-02T09:00|кофе",
+        "hash": "28670f052fd54db14e8e13f3cb8cf6b2"
+      }
+    }
+  ]
+}

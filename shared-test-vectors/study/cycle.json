@@ -1,0 +1,191 @@
+{
+  "description": "week_number(date, semester): the cycle week of every date of input.dates",
+  "cases": [
+    {
+      "name": "two_week_cycle_from_the_anchor",
+      "input": {
+        "semester": {
+          "id": "sem1",
+          "start_date": "2026-09-01",
+          "end_date": "2026-12-31",
+          "week1_start": "2026-08-31",
+          "cycle_length": 2,
+          "week_shifts": null,
+          "archived": false
+        },
+        "dates": [
+          "2026-08-31",
+          "2026-09-06",
+          "2026-09-07",
+          "2026-09-13",
+          "2026-09-14"
+        ]
+      },
+      "expected": [
+        1,
+        1,
+        2,
+        2,
+        1
+      ]
+    },
+    {
+      "name": "anchor_in_the_middle_of_a_week",
+      "input": {
+        "semester": {
+          "id": "sem1",
+          "start_date": "2026-09-01",
+          "end_date": "2026-12-31",
+          "week1_start": "2026-09-03",
+          "cycle_length": 2,
+          "week_shifts": null,
+          "archived": false
+        },
+        "dates": [
+          "2026-08-31",
+          "2026-09-07"
+        ]
+      },
+      "expected": [
+        1,
+        2
+      ]
+    },
+    {
+      "name": "dates_before_the_anchor",
+      "input": {
+        "semester": {
+          "id": "sem1",
+          "start_date": "2026-09-01",
+          "end_date": "2026-12-31",
+          "week1_start": "2026-09-14",
+          "cycle_length": 2,
+          "week_shifts": null,
+          "archived": false
+        },
+        "dates": [
+          "2026-09-07",
+          "2026-08-31",
+          "2026-08-24"
+        ]
+      },
+      "expected": [
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "name": "one_week_cycle",
+      "input": {
+        "semester": {
+          "id": "sem1",
+          "start_date": "2026-09-01",
+          "end_date": "2026-12-31",
+          "week1_start": "2026-08-31",
+          "cycle_length": 1,
+          "week_shifts": null,
+          "archived": false
+        },
+        "dates": [
+          "2026-09-01",
+          "2026-09-08"
+        ]
+      },
+      "expected": [
+        1,
+        1
+      ]
+    },
+    {
+      "name": "three_week_cycle",
+      "input": {
+        "semester": {
+          "id": "sem1",
+          "start_date": "2026-09-01",
+          "end_date": "2026-12-31",
+          "week1_start": "2026-08-31",
+          "cycle_length": 3,
+          "week_shifts": null,
+          "archived": false
+        },
+        "dates": [
+          "2026-09-01",
+          "2026-09-08",
+          "2026-09-15",
+          "2026-09-22"
+        ]
+      },
+      "expected": [
+        1,
+        2,
+        3,
+        1
+      ]
+    },
+    {
+      "name": "shift_applies_from_its_monday",
+      "input": {
+        "semester": {
+          "id": "sem1",
+          "start_date": "2026-09-01",
+          "end_date": "2026-12-31",
+          "week1_start": "2026-08-31",
+          "cycle_length": 2,
+          "week_shifts": [
+            {
+              "from": "2026-10-07",
+              "weeks": 1
+            }
+          ],
+          "archived": false
+        },
+        "dates": [
+          "2026-10-04",
+          "2026-10-05",
+          "2026-10-11",
+          "2026-10-12"
+        ]
+      },
+      "expected": [
+        1,
+        1,
+        1,
+        2
+      ]
+    },
+    {
+      "name": "negative_and_double_shifts",
+      "input": {
+        "semester": {
+          "id": "sem1",
+          "start_date": "2026-09-01",
+          "end_date": "2026-12-31",
+          "week1_start": "2026-08-31",
+          "cycle_length": 2,
+          "week_shifts": [
+            {
+              "from": "2026-10-05",
+              "weeks": 2
+            },
+            {
+              "from": "2026-11-02",
+              "weeks": -1
+            }
+          ],
+          "archived": false
+        },
+        "dates": [
+          "2026-10-05",
+          "2026-11-01",
+          "2026-11-02"
+        ]
+      },
+      "expected": [
+        2,
+        1,
+        1
+      ]
+    }
+  ]
+}

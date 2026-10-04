@@ -46,3 +46,20 @@ def test_secrets_do_not_leak_through_repr_or_str() -> None:
 def test_secret_key_must_be_long_enough() -> None:
     with pytest.raises(ValidationError, match="at least"):
         Settings(database_url="postgresql://u:p@h/d", app_secret_key="short")
+
+
+def test_files_and_banks_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    base = Settings(database_url="postgresql://u:p@h/d", _env_file=None)
+    assert base.files_dir is None
+    assert base.files_max_bytes == 25 * 1024 * 1024
+    assert base.banks_statement_max_bytes == 10 * 1024 * 1024
+    monkeypatch.setenv("FILES_DIR", "/data/files")
+    monkeypatch.setenv("FILES_MAX_BYTES", "1000")
+    monkeypatch.setenv("BANKS_STATEMENT_MAX_BYTES", "2048")
+    configured = Settings(database_url="postgresql://u:p@h/d", _env_file=None)
+    assert configured.files_dir == "/data/files"
+    assert (configured.files_max_bytes, configured.banks_statement_max_bytes) == (1000, 2048)
+    monkeypatch.setenv("FILES_DIR", "  ")  # an empty compose variable means "not configured"
+    assert Settings(database_url="postgresql://u:p@h/d", _env_file=None).files_dir is None
+    with pytest.raises(ValidationError):
+        Settings(database_url="postgresql://u:p@h/d", files_max_bytes=0, _env_file=None)

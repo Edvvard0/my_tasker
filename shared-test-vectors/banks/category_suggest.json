@@ -1,0 +1,347 @@
+{
+  "description": "suggest_category(merchant, mcc, kind, user_rules) with the starter dictionary",
+  "cases": [
+    {
+      "name": "keyword_cyrillic",
+      "input": {
+        "merchant": "Пятёрочка 1234 Москва",
+        "mcc": null,
+        "kind": "expense",
+        "user_rules": []
+      },
+      "expected": {
+        "source": "keyword",
+        "category_id": "01f83d01-9902-5d71-9018-b1b2acf68322",
+        "system_key": "expense.groceries"
+      }
+    },
+    {
+      "name": "keyword_latin",
+      "input": {
+        "merchant": "PYATEROCHKA 1234 MOSKVA",
+        "mcc": null,
+        "kind": "expense",
+        "user_rules": []
+      },
+      "expected": {
+        "source": "keyword",
+        "category_id": "01f83d01-9902-5d71-9018-b1b2acf68322",
+        "system_key": "expense.groceries"
+      }
+    },
+    {
+      "name": "keyword_two_words",
+      "input": {
+        "merchant": "Яндекс Такси",
+        "mcc": null,
+        "kind": "expense",
+        "user_rules": []
+      },
+      "expected": {
+        "source": "keyword",
+        "category_id": "ef02eec2-4318-5a7e-938d-021b2a21f823",
+        "system_key": "expense.transport.taxi"
+      }
+    },
+    {
+      "name": "keyword_inside_a_longer_name",
+      "input": {
+        "merchant": "ООО Кафе Бодрый день",
+        "mcc": null,
+        "kind": "expense",
+        "user_rules": []
+      },
+      "expected": {
+        "source": "keyword",
+        "category_id": "0cb1f1b5-e1a9-5b4f-8898-57da3f14c32a",
+        "system_key": "expense.eating_out"
+      }
+    },
+    {
+      "name": "keyword_apostrophe_name",
+      "input": {
+        "merchant": "McDonald's",
+        "mcc": null,
+        "kind": "expense",
+        "user_rules": []
+      },
+      "expected": {
+        "source": "keyword",
+        "category_id": "0cb1f1b5-e1a9-5b4f-8898-57da3f14c32a",
+        "system_key": "expense.eating_out"
+      }
+    },
+    {
+      "name": "keyword_income_salary",
+      "input": {
+        "merchant": "Зарплата",
+        "mcc": null,
+        "kind": "income",
+        "user_rules": []
+      },
+      "expected": {
+        "source": "keyword",
+        "category_id": "7fd63005-0b53-5a7c-a8e6-67b592406581",
+        "system_key": "income.salary"
+      }
+    },
+    {
+      "name": "income_keyword_not_for_expense",
+      "input": {
+        "merchant": "Зарплата",
+        "mcc": null,
+        "kind": "expense",
+        "user_rules": []
+      },
+      "expected": {
+        "source": null,
+        "category_id": null,
+        "system_key": null
+      }
+    },
+    {
+      "name": "expense_keyword_not_for_income",
+      "input": {
+        "merchant": "Пятёрочка",
+        "mcc": null,
+        "kind": "income",
+        "user_rules": []
+      },
+      "expected": {
+        "source": null,
+        "category_id": null,
+        "system_key": null
+      }
+    },
+    {
+      "name": "mcc_when_no_keyword",
+      "input": {
+        "merchant": "ABC SHOP",
+        "mcc": "5411",
+        "kind": "expense",
+        "user_rules": []
+      },
+      "expected": {
+        "source": "mcc",
+        "category_id": "01f83d01-9902-5d71-9018-b1b2acf68322",
+        "system_key": "expense.groceries"
+      }
+    },
+    {
+      "name": "mcc_wrong_kind",
+      "input": {
+        "merchant": "ABC SHOP",
+        "mcc": "5411",
+        "kind": "income",
+        "user_rules": []
+      },
+      "expected": {
+        "source": null,
+        "category_id": null,
+        "system_key": null
+      }
+    },
+    {
+      "name": "keyword_beats_mcc",
+      "input": {
+        "merchant": "Лукойл",
+        "mcc": "5411",
+        "kind": "expense",
+        "user_rules": []
+      },
+      "expected": {
+        "source": "keyword",
+        "category_id": "b9185c56-a2b3-50fe-9bdf-79bbf09e011a",
+        "system_key": "expense.car.fuel"
+      }
+    },
+    {
+      "name": "unknown_mcc",
+      "input": {
+        "merchant": "ABC SHOP",
+        "mcc": "0000",
+        "kind": "expense",
+        "user_rules": []
+      },
+      "expected": {
+        "source": null,
+        "category_id": null,
+        "system_key": null
+      }
+    },
+    {
+      "name": "no_merchant_no_mcc",
+      "input": {
+        "merchant": null,
+        "mcc": null,
+        "kind": "expense",
+        "user_rules": []
+      },
+      "expected": {
+        "source": null,
+        "category_id": null,
+        "system_key": null
+      }
+    },
+    {
+      "name": "word_must_be_a_whole_token",
+      "input": {
+        "merchant": "Магнитогорск",
+        "mcc": null,
+        "kind": "expense",
+        "user_rules": []
+      },
+      "expected": {
+        "source": null,
+        "category_id": null,
+        "system_key": null
+      }
+    },
+    {
+      "name": "user_exact_rule_beats_the_dictionary",
+      "input": {
+        "merchant": "Пятёрочка Москва",
+        "mcc": null,
+        "kind": "expense",
+        "user_rules": [
+          {
+            "id": "r1",
+            "merchant_key": "пятерочка",
+            "match_type": "exact",
+            "kind": "expense",
+            "category_id": "00000000-0000-7000-8000-00000000c001"
+          }
+        ]
+      },
+      "expected": {
+        "source": "user",
+        "category_id": "00000000-0000-7000-8000-00000000c001",
+        "system_key": null
+      }
+    },
+    {
+      "name": "user_exact_rule_needs_the_whole_name",
+      "input": {
+        "merchant": "Пятёрочка Экспресс",
+        "mcc": "5411",
+        "kind": "expense",
+        "user_rules": [
+          {
+            "id": "r1",
+            "merchant_key": "пятерочка",
+            "match_type": "exact",
+            "kind": "expense",
+            "category_id": "00000000-0000-7000-8000-00000000c001"
+          }
+        ]
+      },
+      "expected": {
+        "source": "keyword",
+        "category_id": "01f83d01-9902-5d71-9018-b1b2acf68322",
+        "system_key": "expense.groceries"
+      }
+    },
+    {
+      "name": "user_contains_rule",
+      "input": {
+        "merchant": "Кофейня Кофе Хаус",
+        "mcc": null,
+        "kind": "expense",
+        "user_rules": [
+          {
+            "id": "r1",
+            "merchant_key": "кофе хаус",
+            "match_type": "contains",
+            "kind": "expense",
+            "category_id": "00000000-0000-7000-8000-00000000c002"
+          }
+        ]
+      },
+      "expected": {
+        "source": "user",
+        "category_id": "00000000-0000-7000-8000-00000000c002",
+        "system_key": null
+      }
+    },
+    {
+      "name": "user_rule_of_the_other_kind_is_ignored",
+      "input": {
+        "merchant": "Кофе Хаус",
+        "mcc": null,
+        "kind": "income",
+        "user_rules": [
+          {
+            "id": "r1",
+            "merchant_key": "кофе хаус",
+            "match_type": "exact",
+            "kind": "expense",
+            "category_id": "00000000-0000-7000-8000-00000000c002"
+          }
+        ]
+      },
+      "expected": {
+        "source": null,
+        "category_id": null,
+        "system_key": null
+      }
+    },
+    {
+      "name": "user_exact_beats_contains",
+      "input": {
+        "merchant": "Кофе Хаус",
+        "mcc": null,
+        "kind": "expense",
+        "user_rules": [
+          {
+            "id": "r2",
+            "merchant_key": "кофе",
+            "match_type": "contains",
+            "kind": "expense",
+            "category_id": "00000000-0000-7000-8000-00000000c002"
+          },
+          {
+            "id": "r1",
+            "merchant_key": "кофе хаус",
+            "match_type": "exact",
+            "kind": "expense",
+            "category_id": "00000000-0000-7000-8000-00000000c003"
+          }
+        ]
+      },
+      "expected": {
+        "source": "user",
+        "category_id": "00000000-0000-7000-8000-00000000c003",
+        "system_key": null
+      }
+    },
+    {
+      "name": "user_longer_contains_wins",
+      "input": {
+        "merchant": "Кофе Хаус Центр",
+        "mcc": null,
+        "kind": "expense",
+        "user_rules": [
+          {
+            "id": "r1",
+            "merchant_key": "кофе",
+            "match_type": "contains",
+            "kind": "expense",
+            "category_id": "00000000-0000-7000-8000-00000000c002"
+          },
+          {
+            "id": "r2",
+            "merchant_key": "кофе хаус",
+            "match_type": "contains",
+            "kind": "expense",
+            "category_id": "00000000-0000-7000-8000-00000000c003"
+          }
+        ]
+      },
+      "expected": {
+        "source": "user",
+        "category_id": "00000000-0000-7000-8000-00000000c003",
+        "system_key": null
+      }
+    }
+  ]
+}

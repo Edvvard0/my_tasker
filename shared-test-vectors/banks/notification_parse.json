@@ -1,0 +1,758 @@
+{
+  "description": "parse_notification(package, title, text) with shared-data/banks/notification_rules.json",
+  "cases": [
+    {
+      "name": "tbank.purchase#1",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Покупка",
+        "text": "Покупка на 1 234,56 ₽, Пятёрочка. Карта *1234. Доступно 10 000,50 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.purchase",
+        "kind": "expense",
+        "refund": false,
+        "amount": 123456,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "Пятёрочка",
+        "balance": 1000050,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.purchase#2",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Покупка",
+        "text": "Покупка на 349 ₽, YANDEX*TAXI. Карта *4321. Доступно 52 340 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.purchase",
+        "kind": "expense",
+        "refund": false,
+        "amount": 34900,
+        "currency": "RUB",
+        "card_last4": "4321",
+        "merchant": "YANDEX*TAXI",
+        "balance": 5234000,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.purchase#3",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Покупка",
+        "text": "Покупка на 12,50 $, AMAZON.COM. Карта *1234. Доступно 9 000 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.purchase",
+        "kind": "expense",
+        "refund": false,
+        "amount": 1250,
+        "currency": "USD",
+        "card_last4": "1234",
+        "merchant": "AMAZON.COM",
+        "balance": 900000,
+        "time": null,
+        "needs_review": true,
+        "review_reason": "foreign_currency"
+      }
+    },
+    {
+      "name": "tbank.purchase_no_balance#1",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Покупка",
+        "text": "Покупка на 500 ₽, Кофейня «Бодрый день». Карта *1234"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.purchase_no_balance",
+        "kind": "expense",
+        "refund": false,
+        "amount": 50000,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "Кофейня «Бодрый день»",
+        "balance": null,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.purchase_no_balance#2",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Покупка",
+        "text": "Покупка на 89,90 ₽, Магнит. Карта *1234."
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.purchase_no_balance",
+        "kind": "expense",
+        "refund": false,
+        "amount": 8990,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "Магнит",
+        "balance": null,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.transfer_out#1",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Перевод",
+        "text": "Перевод 5 000 ₽ Иван И. Карта *1234. Доступно 4 000 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.transfer_out",
+        "kind": "expense",
+        "refund": false,
+        "amount": 500000,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "Иван И",
+        "balance": 400000,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.transfer_out#2",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Перевод",
+        "text": "Перевод 5 000 ₽ Мария Петровна. Карта *1234. Доступно 4 000 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.transfer_out",
+        "kind": "expense",
+        "refund": false,
+        "amount": 500000,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "Мария Петровна",
+        "balance": 400000,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.income_top_up#1",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Пополнение",
+        "text": "Пополнение на 10 000 ₽. Карта *1234. Доступно 14 000 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.income_top_up",
+        "kind": "income",
+        "refund": false,
+        "amount": 1000000,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": null,
+        "balance": 1400000,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.income_from_person#1",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Входящий перевод",
+        "text": "2 500 ₽ от Сергей Сергеевич. Карта *1234. Доступно 6 500,25 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.income_from_person",
+        "kind": "income",
+        "refund": false,
+        "amount": 250000,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "Сергей Сергеевич",
+        "balance": 650025,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.cashback#1",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Кэшбэк",
+        "text": "Начислен кэшбэк 120 ₽. Карта *1234"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.cashback",
+        "kind": "income",
+        "refund": false,
+        "amount": 12000,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "Кэшбэк",
+        "balance": null,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.cashback#2",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Кэшбэк",
+        "text": "Начислен кэшбэк 15,40 ₽. Карта *1234."
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.cashback",
+        "kind": "income",
+        "refund": false,
+        "amount": 1540,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "Кэшбэк",
+        "balance": null,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.cash_withdrawal#1",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Снятие наличных",
+        "text": "Снятие 3 000 ₽, Банкомат Т-Банк. Карта *1234. Доступно 7 000 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.cash_withdrawal",
+        "kind": "expense",
+        "refund": false,
+        "amount": 300000,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "Банкомат Т-Банк",
+        "balance": 700000,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.refund#1",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Возврат",
+        "text": "Возврат на 300 ₽, Магнит. Карта *1234. Доступно 10 300 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.refund",
+        "kind": "income",
+        "refund": true,
+        "amount": 30000,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "Магнит",
+        "balance": 1030000,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.salary#1",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Зарплата",
+        "text": "Зарплата 85 000 ₽. Карта *1234. Доступно 90 000 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.salary",
+        "kind": "income",
+        "refund": false,
+        "amount": 8500000,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "Зарплата",
+        "balance": 9000000,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "tbank.ignore_service#1",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Т-Банк",
+        "text": "Скидки до 30% у партнёров"
+      },
+      "expected": {
+        "status": "ignored",
+        "bank": "tbank",
+        "rule_id": "tbank.ignore_service"
+      }
+    },
+    {
+      "name": "tbank.ignore_service#2",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Безопасность",
+        "text": "Вход выполнен с нового устройства"
+      },
+      "expected": {
+        "status": "ignored",
+        "bank": "tbank",
+        "rule_id": "tbank.ignore_service"
+      }
+    },
+    {
+      "name": "vtb.purchase#1",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "ВТБ",
+        "text": "Оплата 1 500 RUB. Карта *5678. PYATEROCHKA 1234 MOSKVA. Баланс 20 000,10 RUB"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "vtb",
+        "rule_id": "vtb.purchase",
+        "kind": "expense",
+        "refund": false,
+        "amount": 150000,
+        "currency": "RUB",
+        "card_last4": "5678",
+        "merchant": "PYATEROCHKA 1234 MOSKVA",
+        "balance": 2000010,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "vtb.purchase#2",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "ВТБ",
+        "text": "Оплата 20,00 USD. Карта *5678. STEAMGAMES.COM. Баланс 3 000 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "vtb",
+        "rule_id": "vtb.purchase",
+        "kind": "expense",
+        "refund": false,
+        "amount": 2000,
+        "currency": "USD",
+        "card_last4": "5678",
+        "merchant": "STEAMGAMES.COM",
+        "balance": 300000,
+        "time": null,
+        "needs_review": true,
+        "review_reason": "foreign_currency"
+      }
+    },
+    {
+      "name": "vtb.purchase_with_time#1",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "ВТБ",
+        "text": "Оплата 799,99 ₽, 14:05, карта *5678, Лента. Остаток 15 000 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "vtb",
+        "rule_id": "vtb.purchase_with_time",
+        "kind": "expense",
+        "refund": false,
+        "amount": 79999,
+        "currency": "RUB",
+        "card_last4": "5678",
+        "merchant": "Лента",
+        "balance": 1500000,
+        "time": "14:05",
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "vtb.income#1",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "ВТБ",
+        "text": "Поступление 30 000 RUB. Карта *5678. Перевод от ООО Ромашка. Баланс 50 000 RUB"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "vtb",
+        "rule_id": "vtb.income",
+        "kind": "income",
+        "refund": false,
+        "amount": 3000000,
+        "currency": "RUB",
+        "card_last4": "5678",
+        "merchant": "Перевод от ООО Ромашка",
+        "balance": 5000000,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "vtb.transfer_out#1",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "ВТБ",
+        "text": "Перевод 1 000 RUB. Карта *5678. Перевод на карту Т-Банк. Баланс 19 000 RUB"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "vtb",
+        "rule_id": "vtb.transfer_out",
+        "kind": "expense",
+        "refund": false,
+        "amount": 100000,
+        "currency": "RUB",
+        "card_last4": "5678",
+        "merchant": "Перевод на карту Т-Банк",
+        "balance": 1900000,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "vtb.cash_withdrawal#1",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "ВТБ",
+        "text": "Снятие наличных 5 000 RUB. Карта *5678. ATM VTB. Баланс 15 000 RUB"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "vtb",
+        "rule_id": "vtb.cash_withdrawal",
+        "kind": "expense",
+        "refund": false,
+        "amount": 500000,
+        "currency": "RUB",
+        "card_last4": "5678",
+        "merchant": "ATM VTB",
+        "balance": 1500000,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "vtb.refund#1",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "ВТБ",
+        "text": "Возврат 1 500 RUB. Карта *5678. PYATEROCHKA. Баланс 21 500 RUB"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "vtb",
+        "rule_id": "vtb.refund",
+        "kind": "income",
+        "refund": true,
+        "amount": 150000,
+        "currency": "RUB",
+        "card_last4": "5678",
+        "merchant": "PYATEROCHKA",
+        "balance": 2150000,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "vtb.latin_purchase#1",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "VTB",
+        "text": "Karta *5678. Oplata 253.00 RUB. MCDONALDS. Dostupno 1000.00 RUB"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "vtb",
+        "rule_id": "vtb.latin_purchase",
+        "kind": "expense",
+        "refund": false,
+        "amount": 25300,
+        "currency": "RUB",
+        "card_last4": "5678",
+        "merchant": "MCDONALDS",
+        "balance": 100000,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "vtb.latin_purchase#2",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "VTB",
+        "text": "Karta *5678. Oplata 9.99 EUR. SPOTIFY. Dostupno 1000.00 RUB"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "vtb",
+        "rule_id": "vtb.latin_purchase",
+        "kind": "expense",
+        "refund": false,
+        "amount": 999,
+        "currency": "EUR",
+        "card_last4": "5678",
+        "merchant": "SPOTIFY",
+        "balance": 100000,
+        "time": null,
+        "needs_review": true,
+        "review_reason": "foreign_currency"
+      }
+    },
+    {
+      "name": "vtb.ignore_service#1",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "ВТБ",
+        "text": "Код подтверждения 123456"
+      },
+      "expected": {
+        "status": "ignored",
+        "bank": "vtb",
+        "rule_id": "vtb.ignore_service"
+      }
+    },
+    {
+      "name": "unknown_package",
+      "input": {
+        "package": "com.example.other",
+        "title": "Покупка",
+        "text": "Покупка на 1 ₽, X. Карта *1234"
+      },
+      "expected": {
+        "status": "ignored",
+        "bank": null,
+        "rule_id": null,
+        "reason": "unknown_package"
+      }
+    },
+    {
+      "name": "unrecognized_text",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Покупка",
+        "text": "Что-то совсем другое"
+      },
+      "expected": {
+        "status": "unrecognized",
+        "bank": "tbank",
+        "rule_id": null,
+        "reason": "no_rule"
+      }
+    },
+    {
+      "name": "title_must_match",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Другое",
+        "text": "Покупка на 500 ₽, Магнит. Карта *1234"
+      },
+      "expected": {
+        "status": "unrecognized",
+        "bank": "tbank",
+        "rule_id": null,
+        "reason": "no_rule"
+      }
+    },
+    {
+      "name": "whitespace_is_normalized",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": " Покупка ",
+        "text": "Покупка  на 1 234,56 ₽,\nПятёрочка.\tКарта *1234. Доступно 10 000,50 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.purchase",
+        "kind": "expense",
+        "refund": false,
+        "amount": 123456,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "Пятёрочка",
+        "balance": 1000050,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "amount_without_kopecks_and_spaces",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "ВТБ",
+        "text": "Оплата 1 234 567 RUB. Карта *5678. Магнит. Баланс 5 RUB"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "vtb",
+        "rule_id": "vtb.purchase",
+        "kind": "expense",
+        "refund": false,
+        "amount": 123456700,
+        "currency": "RUB",
+        "card_last4": "5678",
+        "merchant": "Магнит",
+        "balance": 500,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "amount_with_one_decimal_digit",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "ВТБ",
+        "text": "Оплата 10,5 RUB. Карта *5678. Магнит. Баланс 100,5 RUB"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "vtb",
+        "rule_id": "vtb.purchase",
+        "kind": "expense",
+        "refund": false,
+        "amount": 1050,
+        "currency": "RUB",
+        "card_last4": "5678",
+        "merchant": "Магнит",
+        "balance": 10050,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "amount_with_dot_decimal",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "VTB",
+        "text": "Karta *5678. Oplata 1000.05 RUB. SHOP. Dostupno 2000.10 RUB"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "vtb",
+        "rule_id": "vtb.latin_purchase",
+        "kind": "expense",
+        "refund": false,
+        "amount": 100005,
+        "currency": "RUB",
+        "card_last4": "5678",
+        "merchant": "SHOP",
+        "balance": 200010,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "merchant_with_dots",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "Покупка",
+        "text": "Покупка на 100 ₽, ООО Ромашка. Мск. Карта *1234. Доступно 1 ₽"
+      },
+      "expected": {
+        "status": "parsed",
+        "bank": "tbank",
+        "rule_id": "tbank.purchase",
+        "kind": "expense",
+        "refund": false,
+        "amount": 10000,
+        "currency": "RUB",
+        "card_last4": "1234",
+        "merchant": "ООО Ромашка. Мск",
+        "balance": 100,
+        "time": null,
+        "needs_review": false,
+        "review_reason": null
+      }
+    },
+    {
+      "name": "a_different_banks_text_is_not_parsed",
+      "input": {
+        "package": "ru.vtb24.mobilebanking.android",
+        "title": "Покупка",
+        "text": "Покупка на 500 ₽, Магнит. Карта *1234"
+      },
+      "expected": {
+        "status": "unrecognized",
+        "bank": "vtb",
+        "rule_id": null,
+        "reason": "no_rule"
+      }
+    },
+    {
+      "name": "empty_text",
+      "input": {
+        "package": "com.idamob.tinkoff.android",
+        "title": "",
+        "text": ""
+      },
+      "expected": {
+        "status": "unrecognized",
+        "bank": "tbank",
+        "rule_id": null,
+        "reason": "no_rule"
+      }
+    }
+  ]
+}

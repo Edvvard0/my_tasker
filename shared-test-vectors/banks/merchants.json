@@ -1,0 +1,264 @@
+{
+  "description": "normalize_merchant(text): the merchant key used by hashes, matching and rules",
+  "cases": [
+    {
+      "name": "plain_lowercase",
+      "input": {
+        "text": "Пятёрочка"
+      },
+      "expected": "пятерочка"
+    },
+    {
+      "name": "capitals_and_yo",
+      "input": {
+        "text": "ПЯТЁРОЧКА"
+      },
+      "expected": "пятерочка"
+    },
+    {
+      "name": "ascii_capitals",
+      "input": {
+        "text": "PYATEROCHKA"
+      },
+      "expected": "pyaterochka"
+    },
+    {
+      "name": "guillemets_quotes",
+      "input": {
+        "text": "Кофейня «Бодрый день»"
+      },
+      "expected": "кофейня бодрый день"
+    },
+    {
+      "name": "ascii_quotes",
+      "input": {
+        "text": "Кафе \"Берёзка\""
+      },
+      "expected": "кафе березка"
+    },
+    {
+      "name": "typographic_quotes",
+      "input": {
+        "text": "Пекарня “Хлебница”"
+      },
+      "expected": "пекарня хлебница"
+    },
+    {
+      "name": "legal_form_ooo_prefix",
+      "input": {
+        "text": "ООО Ромашка"
+      },
+      "expected": "ромашка"
+    },
+    {
+      "name": "legal_form_ooo_with_quotes",
+      "input": {
+        "text": "ООО \"Ромашка\""
+      },
+      "expected": "ромашка"
+    },
+    {
+      "name": "legal_form_ip",
+      "input": {
+        "text": "ИП Петров"
+      },
+      "expected": "петров"
+    },
+    {
+      "name": "legal_form_llc_latin",
+      "input": {
+        "text": "Rose LLC"
+      },
+      "expected": "rose"
+    },
+    {
+      "name": "legal_form_ooo_latin_lookalike",
+      "input": {
+        "text": "OOO Rose"
+      },
+      "expected": "rose"
+    },
+    {
+      "name": "terminal_number_trailing",
+      "input": {
+        "text": "Пятёрочка 1234"
+      },
+      "expected": "пятерочка"
+    },
+    {
+      "name": "terminal_number_with_sign",
+      "input": {
+        "text": "Магнит №5678"
+      },
+      "expected": "магнит"
+    },
+    {
+      "name": "terminal_number_hash",
+      "input": {
+        "text": "Лента #17"
+      },
+      "expected": "лента"
+    },
+    {
+      "name": "city_trailing",
+      "input": {
+        "text": "Пятёрочка Москва"
+      },
+      "expected": "пятерочка"
+    },
+    {
+      "name": "city_trailing_latin",
+      "input": {
+        "text": "PYATEROCHKA MOSKVA"
+      },
+      "expected": "pyaterochka"
+    },
+    {
+      "name": "city_two_words",
+      "input": {
+        "text": "Вкусвилл Санкт-Петербург"
+      },
+      "expected": "вкусвилл"
+    },
+    {
+      "name": "city_three_words",
+      "input": {
+        "text": "Магнит Ростов-на-Дону"
+      },
+      "expected": "магнит"
+    },
+    {
+      "name": "number_then_city",
+      "input": {
+        "text": "PYATEROCHKA 1234 MOSKVA"
+      },
+      "expected": "pyaterochka"
+    },
+    {
+      "name": "city_then_number",
+      "input": {
+        "text": "Магнит Москва 99"
+      },
+      "expected": "магнит"
+    },
+    {
+      "name": "city_then_country",
+      "input": {
+        "text": "Лента Москва RUS"
+      },
+      "expected": "лента"
+    },
+    {
+      "name": "country_only_trailing",
+      "input": {
+        "text": "Ozon RU"
+      },
+      "expected": "ozon"
+    },
+    {
+      "name": "number_in_the_middle_kept",
+      "input": {
+        "text": "Магнит 5 Косметик"
+      },
+      "expected": "магнит 5 косметик"
+    },
+    {
+      "name": "leading_number_kept",
+      "input": {
+        "text": "7 Эльдорадо"
+      },
+      "expected": "7 эльдорадо"
+    },
+    {
+      "name": "star_separators",
+      "input": {
+        "text": "YANDEX*5411*TAXI"
+      },
+      "expected": "yandex 5411 taxi"
+    },
+    {
+      "name": "apostrophe",
+      "input": {
+        "text": "McDonald's"
+      },
+      "expected": "mcdonald s"
+    },
+    {
+      "name": "dots_and_commas",
+      "input": {
+        "text": "Ип. Сидоров, г. Тула"
+      },
+      "expected": "сидоров г"
+    },
+    {
+      "name": "multiple_spaces_and_tabs",
+      "input": {
+        "text": "  Кофе\tДом   "
+      },
+      "expected": "кофе дом"
+    },
+    {
+      "name": "nbsp",
+      "input": {
+        "text": "Кофе Дом"
+      },
+      "expected": "кофе дом"
+    },
+    {
+      "name": "only_legal_form_kept",
+      "input": {
+        "text": "ООО"
+      },
+      "expected": "ооо"
+    },
+    {
+      "name": "only_number_kept",
+      "input": {
+        "text": "12345"
+      },
+      "expected": "12345"
+    },
+    {
+      "name": "only_city_kept",
+      "input": {
+        "text": "Москва"
+      },
+      "expected": "москва"
+    },
+    {
+      "name": "empty",
+      "input": {
+        "text": ""
+      },
+      "expected": ""
+    },
+    {
+      "name": "only_punctuation",
+      "input": {
+        "text": "«»—"
+      },
+      "expected": ""
+    },
+    {
+      "name": "cjk_is_a_separator",
+      "input": {
+        "text": "Sushi 寿司 Bar"
+      },
+      "expected": "sushi bar"
+    },
+    {
+      "name": "already_normal",
+      "input": {
+        "text": "пятерочка"
+      },
+      "expected": "пятерочка"
+    },
+    {
+      "name": "idempotent_input",
+      "input": {
+        "text": "yandex 5411 taxi"
+      },
+      "expected": "yandex 5411 taxi"
+    }
+  ]
+}

@@ -35,4 +35,11 @@ uv run uvicorn tasker.main:create_app --factory --no-access-log         # api
 uv run python -m tasker.worker                                          # worker
 ```
 
+## Банки и учёба (этапы 6 и 7)
+
+- Банки: контракт `../docs/specs/stage6_banks.md`; правила уведомлений и словари — `../shared-data/banks/`; `POST /banks/statements/parse` разбирает CSV/XLSX/PDF-выписку в памяти и ничего не хранит (лимит `BANKS_STATEMENT_MAX_BYTES`, 10 МБ).
+- Учёба: контракт `../docs/specs/stage7_study.md`; вложения — `PUT`/`GET /files/{id}`, содержимое на диске в `FILES_DIR` за интерфейсом `tasker.files.store.FileStore` (лимит `FILES_MAX_BYTES`, 25 МБ); воркер удаляет файлы вместе с очисткой корзины. Бэкап базы файлы не покрывает.
+- `SHARED_DATA_DIR` — каталог `shared-data` (в контейнере монтируется только на чтение; по умолчанию берётся из репозитория).
+- Векторы: `uv run python -m tests.banks_vectors_gen`, `uv run python -m tests.study_vectors_gen`. Образец PDF-выписки пересобирается `uv run python -m tests.banks_samples_gen` (нужен шрифт DejaVu Sans).
+
 Миграции: `uv run alembic revision -m "..."` / `uv run alembic upgrade head`. Общие константы версий: `src/tasker/version.py`. Общие тестовые векторы: `../shared-test-vectors/README.md`.

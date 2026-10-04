@@ -1,0 +1,369 @@
+{
+  "description": "parse_room(text) (op parse) and format_room(building, room) (op format)",
+  "cases": [
+    {
+      "name": "parse_k1_28",
+      "input": {
+        "op": "parse",
+        "text": "к1 28"
+      },
+      "expected": {
+        "building": "1",
+        "room": "28"
+      }
+    },
+    {
+      "name": "parse_capital_k2_101",
+      "input": {
+        "op": "parse",
+        "text": "К2 101"
+      },
+      "expected": {
+        "building": "2",
+        "room": "101"
+      }
+    },
+    {
+      "name": "parse_latin_k",
+      "input": {
+        "op": "parse",
+        "text": "k1 28"
+      },
+      "expected": {
+        "building": "1",
+        "room": "28"
+      }
+    },
+    {
+      "name": "parse_latin_capital_k",
+      "input": {
+        "op": "parse",
+        "text": "K2 101"
+      },
+      "expected": {
+        "building": "2",
+        "room": "101"
+      }
+    },
+    {
+      "name": "parse_k_space_digit",
+      "input": {
+        "op": "parse",
+        "text": "к 1 28"
+      },
+      "expected": {
+        "building": "1",
+        "room": "28"
+      }
+    },
+    {
+      "name": "parse_k_dash",
+      "input": {
+        "op": "parse",
+        "text": "к1-28"
+      },
+      "expected": {
+        "building": "1",
+        "room": "28"
+      }
+    },
+    {
+      "name": "parse_k_dot",
+      "input": {
+        "op": "parse",
+        "text": "к1.28"
+      },
+      "expected": {
+        "building": "1",
+        "room": "28"
+      }
+    },
+    {
+      "name": "parse_k_slash",
+      "input": {
+        "op": "parse",
+        "text": "к1/28"
+      },
+      "expected": {
+        "building": "1",
+        "room": "28"
+      }
+    },
+    {
+      "name": "parse_k_comma",
+      "input": {
+        "op": "parse",
+        "text": "к2, 101"
+      },
+      "expected": {
+        "building": "2",
+        "room": "101"
+      }
+    },
+    {
+      "name": "parse_korp_kab",
+      "input": {
+        "op": "parse",
+        "text": "корп. 2 каб. 101"
+      },
+      "expected": {
+        "building": "2",
+        "room": "101"
+      }
+    },
+    {
+      "name": "parse_korpus_aud",
+      "input": {
+        "op": "parse",
+        "text": "Корпус 1 ауд. 305"
+      },
+      "expected": {
+        "building": "1",
+        "room": "305"
+      }
+    },
+    {
+      "name": "parse_korp_without_dots",
+      "input": {
+        "op": "parse",
+        "text": "корп 1 каб 12"
+      },
+      "expected": {
+        "building": "1",
+        "room": "12"
+      }
+    },
+    {
+      "name": "parse_k_with_kab",
+      "input": {
+        "op": "parse",
+        "text": "к1 каб28"
+      },
+      "expected": {
+        "building": "1",
+        "room": "28"
+      }
+    },
+    {
+      "name": "parse_digits_dash",
+      "input": {
+        "op": "parse",
+        "text": "1-28"
+      },
+      "expected": {
+        "building": "1",
+        "room": "28"
+      }
+    },
+    {
+      "name": "parse_digits_space",
+      "input": {
+        "op": "parse",
+        "text": "2 101"
+      },
+      "expected": {
+        "building": "2",
+        "room": "101"
+      }
+    },
+    {
+      "name": "parse_digits_slash",
+      "input": {
+        "op": "parse",
+        "text": "1/28"
+      },
+      "expected": {
+        "building": "1",
+        "room": "28"
+      }
+    },
+    {
+      "name": "parse_room_with_a_letter",
+      "input": {
+        "op": "parse",
+        "text": "к2 101а"
+      },
+      "expected": {
+        "building": "2",
+        "room": "101а"
+      }
+    },
+    {
+      "name": "parse_capital_room_letter",
+      "input": {
+        "op": "parse",
+        "text": "к1 28Б"
+      },
+      "expected": {
+        "building": "1",
+        "room": "28б"
+      }
+    },
+    {
+      "name": "parse_bare_room",
+      "input": {
+        "op": "parse",
+        "text": "28"
+      },
+      "expected": {
+        "building": null,
+        "room": "28"
+      }
+    },
+    {
+      "name": "parse_bare_room_with_letter",
+      "input": {
+        "op": "parse",
+        "text": "305а"
+      },
+      "expected": {
+        "building": null,
+        "room": "305а"
+      }
+    },
+    {
+      "name": "parse_free_text",
+      "input": {
+        "op": "parse",
+        "text": "Спортзал"
+      },
+      "expected": {
+        "building": null,
+        "room": "Спортзал"
+      }
+    },
+    {
+      "name": "parse_free_text_with_yo",
+      "input": {
+        "op": "parse",
+        "text": "Актовый зал Ёлка"
+      },
+      "expected": {
+        "building": null,
+        "room": "Актовый зал Ёлка"
+      }
+    },
+    {
+      "name": "parse_two_digit_building",
+      "input": {
+        "op": "parse",
+        "text": "к12 5"
+      },
+      "expected": {
+        "building": "12",
+        "room": "5"
+      }
+    },
+    {
+      "name": "parse_glued_digits_are_not_split",
+      "input": {
+        "op": "parse",
+        "text": "к128"
+      },
+      "expected": {
+        "building": null,
+        "room": "к128"
+      }
+    },
+    {
+      "name": "parse_extra_spaces",
+      "input": {
+        "op": "parse",
+        "text": "  к1   28  "
+      },
+      "expected": {
+        "building": "1",
+        "room": "28"
+      }
+    },
+    {
+      "name": "parse_nbsp",
+      "input": {
+        "op": "parse",
+        "text": "к1 28"
+      },
+      "expected": {
+        "building": "1",
+        "room": "28"
+      }
+    },
+    {
+      "name": "parse_empty",
+      "input": {
+        "op": "parse",
+        "text": ""
+      },
+      "expected": null
+    },
+    {
+      "name": "parse_blank",
+      "input": {
+        "op": "parse",
+        "text": "   "
+      },
+      "expected": null
+    },
+    {
+      "name": "parse_too_long",
+      "input": {
+        "op": "parse",
+        "text": "очень длинное название аудитории"
+      },
+      "expected": null
+    },
+    {
+      "name": "format_both",
+      "input": {
+        "op": "format",
+        "building": "1",
+        "room": "28"
+      },
+      "expected": "к1 28"
+    },
+    {
+      "name": "format_building_only",
+      "input": {
+        "op": "format",
+        "building": "2",
+        "room": null
+      },
+      "expected": "к2"
+    },
+    {
+      "name": "format_room_only",
+      "input": {
+        "op": "format",
+        "building": null,
+        "room": "28"
+      },
+      "expected": "28"
+    },
+    {
+      "name": "format_text_room",
+      "input": {
+        "op": "format",
+        "building": null,
+        "room": "Спортзал"
+      },
+      "expected": "Спортзал"
+    },
+    {
+      "name": "format_nothing",
+      "input": {
+        "op": "format",
+        "building": null,
+        "room": null
+      },
+      "expected": ""
+    },
+    {
+      "name": "format_empty_strings",
+      "input": {
+        "op": "format",
+        "building": "",
+        "room": ""
+      },
+      "expected": ""
+    }
+  ]
+}

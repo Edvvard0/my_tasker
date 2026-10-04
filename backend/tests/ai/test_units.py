@@ -64,6 +64,9 @@ def test_the_registry_has_the_builtin_tools() -> None:
         "get_goals",
         "get_projects",
         "get_receivables",
+        "get_study_absences",
+        "get_study_debts",
+        "get_study_schedule",
         "get_tasks",
         "get_work_hours",
     ]
@@ -78,6 +81,9 @@ def test_the_registry_has_the_builtin_tools() -> None:
         "get_finance_summary": "read",
         "get_goals": "read",
         "get_debts": "read",
+        "get_study_schedule": "read",
+        "get_study_absences": "read",
+        "get_study_debts": "read",
     }
     assert TOOLS.get("nothing") is None
     spec = TOOLS.get("get_tasks")

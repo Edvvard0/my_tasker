@@ -2,6 +2,7 @@
 
 import secrets
 from dataclasses import dataclass
+from pathlib import Path
 
 from argon2 import PasswordHasher
 from fastapi import Request
@@ -11,6 +12,7 @@ from tasker.auth.crypto import AccessTokenCodec, derive_key
 from tasker.auth.passwords import make_hasher
 from tasker.clock import Clock
 from tasker.config import Settings
+from tasker.files.store import DiskFileStore, FileStore
 from tasker.sync.notify import ChangeHub
 from tasker.sync.registry import SyncRegistry
 
@@ -30,6 +32,12 @@ class Runtime:
     box_key: bytes
     hub: ChangeHub
     sse_ping_seconds: float = SSE_PING_SECONDS
+    files: FileStore | None = None
+
+
+def build_file_store(settings: Settings) -> FileStore | None:
+    """The attachment store of the configured ``FILES_DIR`` (``None``: not configured)."""
+    return DiskFileStore(Path(settings.files_dir)) if settings.files_dir else None
 
 
 def build_runtime(
@@ -54,6 +62,7 @@ def build_runtime(
         codec=AccessTokenCodec(derive_key(master, "access-token")),
         box_key=derive_key(master, "secret-box"),
         hub=ChangeHub(settings.db_url),
+        files=build_file_store(settings),
     )
 
 

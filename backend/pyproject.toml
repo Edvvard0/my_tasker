@@ -18,6 +18,8 @@ dependencies = [
     "tzdata==2026.4",
     "structlog==26.1.0",
     "uvicorn[standard]==0.54.0",
+    "pdfplumber==0.11.10",
+    "openpyxl==3.1.5",
 ]
 
 [build-system]
@@ -29,12 +31,14 @@ packages = ["src/tasker"]
 
 [dependency-groups]
 dev = [
+    "fpdf2==2.8.9",
     "hypothesis==6.168.3",
     "mypy==2.3.1",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
     "ruff==0.16.9",
+    "types-openpyxl==3.1.5.20260827",
     "types-python-dateutil==2.9.0.20260807",
 ]
 
@@ -58,6 +62,9 @@ ignore = ["PLR2004"]
 "src/tasker/work/**" = ["PLR0913", "PLR0917", "PLR0911", "PLR0912"]
 "src/tasker/work/tools.py" = ["RUF001", "RUF003"]
 "src/tasker/finance/**" = ["PLR0913", "PLR0917", "PLR0911", "PLR0912"]
+"src/tasker/files/**" = ["PLR0911"]
+"src/tasker/banks/**" = ["PLR0913", "PLR0917", "PLR0911", "PLR0912", "RUF001", "RUF002", "RUF003"]
+"src/tasker/study/**" = ["PLR0913", "PLR0917", "PLR0911", "PLR0912", "RUF001", "RUF002", "RUF003"]
 "src/tasker/finance/presets.py" = ["RUF001", "RUF003"]
 "src/tasker/finance/tools.py" = ["RUF001", "RUF003"]
 "src/tasker/ai/agents.py" = ["RUF001", "RUF003"]

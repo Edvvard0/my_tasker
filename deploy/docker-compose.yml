@@ -21,6 +21,13 @@ x-backend: &backend
     # AI chat provider (stage 3); empty values mean "default" / "not configured".
     POLZA_BASE_URL: ${POLZA_BASE_URL:-}
     POLZA_API_KEY: ${POLZA_API_KEY:-}
+    # Shared data files (bank rules, holidays) are mounted read-only below.
+    SHARED_DATA_DIR: /shared-data
+    # Attachment files (stage 7) live on their own volume; the database backup does not cover it.
+    FILES_DIR: /data/files
+  volumes:
+    - files:/data/files
+    - ../shared-data:/shared-data:ro
   networks: [internal]
   restart: unless-stopped
   read_only: true
@@ -107,5 +114,6 @@ networks:
 
 volumes:
   pgdata:
+  files:
   caddy_data:
   caddy_config:

@@ -1,0 +1,1460 @@
+{
+  "description": "classify_candidates(account_id, candidates, existing): new / duplicate / merge",
+  "cases": [
+    {
+      "name": "no_candidates",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": null,
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": []
+    },
+    {
+      "name": "nothing_existing_is_new",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 123456,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "date_only": false,
+            "merchant": "Пятёрочка 1234",
+            "external_id": null
+          }
+        ],
+        "existing": []
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "27d9e12dbd47902efbf9cdad6968fee5",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "notification_draft_refined_by_a_dated_statement_line",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 123456,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "ПЯТЁРОЧКА",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 123456,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Пятёрочка 1234",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "9c684702fe017ac993f078e26b791019",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {
+            "merchant": "ПЯТЁРОЧКА"
+          }
+        }
+      ]
+    },
+    {
+      "name": "statement_line_with_a_time_refines_the_moment",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 123456,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T11:33:10Z",
+            "date_only": false,
+            "merchant": "Пятёрочка",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 123456,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Пятёрочка",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "c7af994cc909ed3185be86e67c2da2d7",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {
+            "occurred_at": "2026-10-03T11:33:10Z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same_hash_is_a_duplicate",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 123456,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "date_only": false,
+            "merchant": "Пятёрочка 1234",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 123456,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Пятёрочка 1234",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": "27d9e12dbd47902efbf9cdad6968fee5"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "duplicate",
+          "existing_id": "e1",
+          "reason": "hash",
+          "similarity": null,
+          "dedup_hash": "27d9e12dbd47902efbf9cdad6968fee5",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "same_external_id_is_a_duplicate_even_if_everything_else_differs",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 100,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "date_only": false,
+            "merchant": "A",
+            "external_id": "OP-1"
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 999,
+            "occurred_at": "2026-09-01T00:00:00Z",
+            "merchant": "B",
+            "source": "notification",
+            "status": "draft",
+            "external_id": "OP-1",
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "duplicate",
+          "existing_id": "e1",
+          "reason": "external_id",
+          "similarity": null,
+          "dedup_hash": "325ac7fbddf0687a12694ab574e4b33c",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "different_external_ids_are_two_operations",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 100,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "date_only": false,
+            "merchant": "Кофе",
+            "external_id": "OP-2"
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Кофе",
+            "source": "statement",
+            "status": "draft",
+            "external_id": "OP-1",
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "01062071bd87ae4d02fc5d707fb95f7a",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "candidate_with_id_matches_a_draft_without_one",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 100,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "date_only": false,
+            "merchant": "Кофе",
+            "external_id": "OP-2"
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Кофе",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "01062071bd87ae4d02fc5d707fb95f7a",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {}
+        }
+      ]
+    },
+    {
+      "name": "near_amount_is_not_a_match",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 123450,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "date_only": false,
+            "merchant": "Пятёрочка",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 123456,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Пятёрочка",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "4d89c992226aa2cbe0e65b8c70fd5f76",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "one_kopeck_apart_is_not_a_match",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 100001,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "date_only": false,
+            "merchant": "Кофе",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 100000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Кофе",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "e22d6812454de309dc539f19a756024b",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "two_equal_purchases_one_existing_draft",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 50000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          },
+          {
+            "kind": "expense",
+            "amount": 50000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 50000,
+            "occurred_at": "2026-10-03T07:00:00Z",
+            "merchant": "Кофе Дом",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "4273ee92666c06fb6ffc3b306b2bff2c",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {}
+        },
+        {
+          "index": 1,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "c8d62248479933052221b7ac1b2a16bf",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "two_equal_purchases_two_existing_drafts",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 50000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          },
+          {
+            "kind": "expense",
+            "amount": 50000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 50000,
+            "occurred_at": "2026-10-03T07:00:00Z",
+            "merchant": "Кофе Дом",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          },
+          {
+            "id": "e2",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 50000,
+            "occurred_at": "2026-10-03T15:00:00Z",
+            "merchant": "Кофе Дом",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "4273ee92666c06fb6ffc3b306b2bff2c",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {}
+        },
+        {
+          "index": 1,
+          "action": "merge",
+          "existing_id": "e2",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "c8d62248479933052221b7ac1b2a16bf",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {}
+        }
+      ]
+    },
+    {
+      "name": "two_equal_purchases_nothing_existing_get_different_hashes",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 50000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          },
+          {
+            "kind": "expense",
+            "amount": 50000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          }
+        ],
+        "existing": []
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "4273ee92666c06fb6ffc3b306b2bff2c",
+          "needs_review": false,
+          "review_reason": null
+        },
+        {
+          "index": 1,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "c8d62248479933052221b7ac1b2a16bf",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "reimport_of_two_equal_purchases_is_all_duplicates",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 50000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          },
+          {
+            "kind": "expense",
+            "amount": 50000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 50000,
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "merchant": "Кофе Дом",
+            "source": "statement",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": "4273ee92666c06fb6ffc3b306b2bff2c"
+          },
+          {
+            "id": "e2",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 50000,
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "merchant": "Кофе Дом",
+            "source": "statement",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": "c8d62248479933052221b7ac1b2a16bf"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "duplicate",
+          "existing_id": "e1",
+          "reason": "hash",
+          "similarity": null,
+          "dedup_hash": "4273ee92666c06fb6ffc3b306b2bff2c",
+          "needs_review": false,
+          "review_reason": null
+        },
+        {
+          "index": 1,
+          "action": "duplicate",
+          "existing_id": "e2",
+          "reason": "hash",
+          "similarity": null,
+          "dedup_hash": "c8d62248479933052221b7ac1b2a16bf",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "refund_is_not_the_purchase",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "income",
+            "amount": 30000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "date_only": false,
+            "merchant": "Магнит",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 30000,
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "merchant": "Магнит",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "cf2739100ca247067f6cc76126e56afc",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "refund_matches_the_refund_notification",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "income",
+            "amount": 30000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-04T09:00:00Z",
+            "date_only": true,
+            "merchant": "Магнит",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "income",
+            "amount": 30000,
+            "occurred_at": "2026-10-04T08:15:00Z",
+            "merchant": "Магнит",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "0b0732ea80c4cf87afd47c280e08011b",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {}
+        }
+      ]
+    },
+    {
+      "name": "window_edge_exactly_48_hours_matches",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 100,
+            "currency": "RUB",
+            "occurred_at": "2026-10-05T11:30:00Z",
+            "date_only": false,
+            "merchant": "Кофе",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Кофе",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "8986083f4882871f50f3d20bdad992d1",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {
+            "occurred_at": "2026-10-05T11:30:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "window_edge_one_second_more_is_new",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 100,
+            "currency": "RUB",
+            "occurred_at": "2026-10-05T11:30:01Z",
+            "date_only": false,
+            "merchant": "Кофе",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Кофе",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "8986083f4882871f50f3d20bdad992d1",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "foreign_currency_is_needs_review_and_never_fuzzy_matched",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 100000,
+            "currency": "USD",
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "date_only": false,
+            "merchant": "AMAZON",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 100000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "AMAZON",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "d025a9a7c1894666bc1f4500ac5b276d",
+          "needs_review": true,
+          "review_reason": "foreign_currency"
+        }
+      ]
+    },
+    {
+      "name": "foreign_currency_with_the_same_hash_is_still_a_duplicate",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 100000,
+            "currency": "USD",
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "date_only": false,
+            "merchant": "AMAZON",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 100000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "AMAZON",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": "d025a9a7c1894666bc1f4500ac5b276d"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "duplicate",
+          "existing_id": "e1",
+          "reason": "hash",
+          "similarity": null,
+          "dedup_hash": "d025a9a7c1894666bc1f4500ac5b276d",
+          "needs_review": true,
+          "review_reason": "foreign_currency"
+        }
+      ]
+    },
+    {
+      "name": "unknown_merchant_on_the_draft_matches",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 7000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 7000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": null,
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 60,
+          "dedup_hash": "469ed38e5dc50699519cf0a312887908",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {
+            "merchant": "Кофе Дом"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown_merchant_on_the_line_matches",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 7000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": null,
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 7000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Кофе Дом",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 60,
+          "dedup_hash": "d33733894f634f3608da748109a14d5c",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {}
+        }
+      ]
+    },
+    {
+      "name": "different_names_do_not_match",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 7000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Лукойл",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 7000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Кофе Дом",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "68382e9b07f26abdd338474642e1c61e",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "latin_vs_cyrillic_names_do_not_match",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 123456,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Пятёрочка",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 123456,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "PYATEROCHKA 1234 MOSKVA",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "9c684702fe017ac993f078e26b791019",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "manual_confirmed_row_is_merged_not_duplicated",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 7000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 7000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "кофе дом",
+            "source": "manual",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "469ed38e5dc50699519cf0a312887908",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {
+            "merchant": "Кофе Дом"
+          }
+        }
+      ]
+    },
+    {
+      "name": "an_existing_statement_row_makes_a_fuzzy_match_a_duplicate",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 7000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 7000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Кофе Дом",
+            "source": "statement",
+            "status": "confirmed",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "duplicate",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "469ed38e5dc50699519cf0a312887908",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "another_account_is_ignored",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 7000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a2",
+            "kind": "expense",
+            "amount": 7000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Кофе Дом",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "469ed38e5dc50699519cf0a312887908",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "better_name_wins",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 7000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофейня Бодрый день",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 7000,
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "merchant": "Кофейня Бодрый",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          },
+          {
+            "id": "e2",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 7000,
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "merchant": "Кофейня Бодрый день",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e2",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "8b712f32e552dbc6ee915055ca66d4a9",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {}
+        }
+      ]
+    },
+    {
+      "name": "equal_names_the_closer_time_wins",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 7000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T12:00:00Z",
+            "date_only": false,
+            "merchant": "Кофе Дом",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 7000,
+            "occurred_at": "2026-10-03T08:00:00Z",
+            "merchant": "Кофе Дом",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          },
+          {
+            "id": "e2",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 7000,
+            "occurred_at": "2026-10-03T11:00:00Z",
+            "merchant": "Кофе Дом",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e2",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "94ecdd9bb1d2f0ffe1420f2269ddd74e",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {
+            "occurred_at": "2026-10-03T12:00:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a_row_taken_by_hash_is_not_reused_by_a_fuzzy_match",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 100,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "date_only": false,
+            "merchant": "Кофе",
+            "external_id": null
+          },
+          {
+            "kind": "expense",
+            "amount": 100,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Кофе",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 100,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Кофе",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": "01062071bd87ae4d02fc5d707fb95f7a"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "duplicate",
+          "existing_id": "e1",
+          "reason": "hash",
+          "similarity": null,
+          "dedup_hash": "01062071bd87ae4d02fc5d707fb95f7a",
+          "needs_review": false,
+          "review_reason": null
+        },
+        {
+          "index": 1,
+          "action": "new",
+          "existing_id": null,
+          "reason": null,
+          "similarity": null,
+          "dedup_hash": "e9bcbd34a13388171843935cb909e798",
+          "needs_review": false,
+          "review_reason": null
+        }
+      ]
+    },
+    {
+      "name": "income_transfer_between_own_banks_is_just_an_income_here",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "income",
+            "amount": 1000000,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T09:00:00Z",
+            "date_only": true,
+            "merchant": "Перевод с карты Т-Банк",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "income",
+            "amount": 1000000,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Перевод с карты Т-Банк",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "9d14a00297e278abbe1573eaf09924e0",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {}
+        }
+      ]
+    }
+  ]
+}

@@ -48,12 +48,22 @@ class Settings(BaseSettings):
     ai_billing_timezone: str = "Europe/Moscow"
     ai_sse_ping_seconds: float = Field(default=15.0, gt=0)
 
-    @field_validator("polza_api_key", "polza_base_url", mode="before")
+    # Banks (stage 6): the largest statement file the api accepts and parses (nothing is stored).
+    banks_statement_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
+
+    # Attachments (stage 7): directory of the file store (a separate volume on the server) and the
+    # largest file. Without FILES_DIR the file endpoints answer `files_not_configured`.
+    files_dir: str | None = None
+    files_max_bytes: int = Field(default=25 * 1024 * 1024, ge=1)
+
+    @field_validator("polza_api_key", "polza_base_url", "files_dir", mode="before")
     @classmethod
     def _blank_means_unset(cls, value: object, info: ValidationInfo) -> object:
         """An empty variable (``POLZA_API_KEY=`` in compose) means "not configured"/default."""
         if isinstance(value, str) and not value.strip():
-            return None if info.field_name == "polza_api_key" else "https://polza.ai/api/v1"
+            if info.field_name in ("polza_api_key", "files_dir"):
+                return None
+            return "https://polza.ai/api/v1"
         return value
 
     @field_validator("ai_billing_timezone")

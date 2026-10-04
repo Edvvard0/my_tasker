@@ -1,0 +1,125 @@
+{
+  "description": "similarity(a, b) of two normalized names: integer 0..100",
+  "cases": [
+    {
+      "name": "equal",
+      "input": {
+        "a": "пятерочка",
+        "b": "пятерочка"
+      },
+      "expected": 100
+    },
+    {
+      "name": "empty_left",
+      "input": {
+        "a": "",
+        "b": "пятерочка"
+      },
+      "expected": 0
+    },
+    {
+      "name": "empty_right",
+      "input": {
+        "a": "пятерочка",
+        "b": ""
+      },
+      "expected": 0
+    },
+    {
+      "name": "both_empty",
+      "input": {
+        "a": "",
+        "b": ""
+      },
+      "expected": 0
+    },
+    {
+      "name": "leading_words_are_prefix",
+      "input": {
+        "a": "магнит",
+        "b": "магнит косметик"
+      },
+      "expected": 90
+    },
+    {
+      "name": "prefix_symmetric",
+      "input": {
+        "a": "магнит косметик",
+        "b": "магнит"
+      },
+      "expected": 90
+    },
+    {
+      "name": "prefix_of_three_words",
+      "input": {
+        "a": "кофейня бодрый",
+        "b": "кофейня бодрый день"
+      },
+      "expected": 90
+    },
+    {
+      "name": "not_a_word_prefix",
+      "input": {
+        "a": "маг",
+        "b": "магнит"
+      },
+      "expected": 57
+    },
+    {
+      "name": "one_letter_apart",
+      "input": {
+        "a": "пятерочка",
+        "b": "пятерочка1"
+      },
+      "expected": 94
+    },
+    {
+      "name": "typo",
+      "input": {
+        "a": "перекресток",
+        "b": "перекрестог"
+      },
+      "expected": 90
+    },
+    {
+      "name": "different_scripts",
+      "input": {
+        "a": "pyaterochka",
+        "b": "пятерочка"
+      },
+      "expected": 0
+    },
+    {
+      "name": "unrelated",
+      "input": {
+        "a": "магнит",
+        "b": "лукойл"
+      },
+      "expected": 0
+    },
+    {
+      "name": "shared_word_in_the_middle",
+      "input": {
+        "a": "кафе бодрый день",
+        "b": "бодрый день кафе"
+      },
+      "expected": 92
+    },
+    {
+      "name": "single_letters_differ",
+      "input": {
+        "a": "а",
+        "b": "б"
+      },
+      "expected": 0
+    },
+    {
+      "name": "space_insensitive_core",
+      "input": {
+        "a": "кофе дом",
+        "b": "кофедом"
+      },
+      "expected": 100
+    }
+  ]
+}

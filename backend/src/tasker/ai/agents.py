@@ -21,6 +21,7 @@ SEED_MARKER = "ai.seed.v1"
 DEFAULT_TOOLS = ["get_tasks", "get_events", "create_task"]
 WORK_TOOLS = ["get_projects", "get_receivables", "get_work_hours"]
 FINANCE_TOOLS = ["get_accounts", "get_finance_summary", "get_goals", "get_debts"]
+STUDY_TOOLS = ["get_study_schedule", "get_study_absences", "get_study_debts"]
 
 _COMMON = (
     "Отвечай по-русски, кратко и по делу. Не выдумывай данные пользователя: если нужны задачи "
@@ -77,7 +78,8 @@ SEED_PROFILES: tuple[SeedProfile, ...] = (
         "Учёба",
         "Ты — помощник по учёбе: расписание пар, дедлайны, долги по предметам, подготовка к "
         "зачётам и экзаменам. Помогай составлять план подготовки и разбивать работы на шаги. "
-        + _COMMON,
+        "Расписание, пропуски и долги бери инструментами get_study_schedule, "
+        "get_study_absences и get_study_debts; ничего не угадывай. " + _COMMON,
         4,
     ),
     SeedProfile(
@@ -96,7 +98,7 @@ def builtin_tools(seed_key: str) -> list[str]:
     """The tools of a built-in profile. Derived from code on every chat request (the stored
     ``enabled_tools`` of a built-in profile is only a snapshot), so a new stage's tools appear
     without a reset. Custom profiles keep their stored lists."""
-    extra = {"work": WORK_TOOLS, "finance": FINANCE_TOOLS}.get(seed_key, [])
+    extra = {"work": WORK_TOOLS, "finance": FINANCE_TOOLS, "study": STUDY_TOOLS}.get(seed_key, [])
     return [*DEFAULT_TOOLS, *extra]
 
 

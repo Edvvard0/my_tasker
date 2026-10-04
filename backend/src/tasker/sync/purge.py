@@ -1,5 +1,7 @@
 """Physical removal of old tombstones and other housekeeping (worker job)."""
 
+import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
@@ -15,12 +17,21 @@ JOURNAL_DAYS = 60
 CONFLICT_DAYS = 180
 
 
+# Called after the commit with (table name, ids of the rows that were physically removed): the
+# place where a module cleans up what lives outside the database (files of attachments).
+PurgeHook = Callable[[str, list[uuid.UUID]], Awaitable[None]]
+
+
 async def purge_tombstones(
-    sessionmaker: async_sessionmaker[AsyncSession], registry: SyncRegistry, now: datetime
+    sessionmaker: async_sessionmaker[AsyncSession],
+    registry: SyncRegistry,
+    now: datetime,
+    on_purged: PurgeHook | None = None,
 ) -> int:
     """Delete tombstones older than 30 days that every active device has already pulled."""
     cutoff = now - timedelta(days=TRASH_DAYS)
     purged = 0
+    removed: dict[str, list[uuid.UUID]] = {}
     async with sessionmaker() as session, session.begin():
         await lock_sync_state(session)
         cursor_row = (
@@ -41,17 +52,23 @@ async def purge_tombstones(
             for child, column in registry.children_of(spec.name):
                 conditions.append(~sa.exists().where(child.table.c[column.name] == table.c.id))
             result = await session.execute(
-                sa.delete(table).where(*conditions).returning(table.c.server_version)
+                sa.delete(table).where(*conditions).returning(table.c.server_version, table.c.id)
             )
-            versions: list[int] = list(result.scalars())
+            rows = result.all()
+            versions: list[int] = [int(row[0]) for row in rows]
             purged += len(versions)
             watermark = max([watermark, *versions])
+            if rows:
+                removed[spec.name] = [row[1] for row in rows]
         if watermark:
             await session.execute(
                 sa.update(sync_state)
                 .where(sync_state.c.id == 1)
                 .values(purge_watermark=sa.func.greatest(sync_state.c.purge_watermark, watermark))
             )
+    if on_purged is not None:
+        for name, ids in removed.items():
+            await on_purged(name, ids)
     return purged
 
 

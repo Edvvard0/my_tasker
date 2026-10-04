@@ -1,0 +1,560 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "description": "Правила разбора уведомлений банков (docs/specs/stage6_banks.md, раздел 2). ВСЕ тексты и пакеты — СИНТЕТИЧЕСКИЕ образцы, составленные по общему виду уведомлений; реальные образцы заказчика заменят их и станут тестами. Новый формат уведомления = новая запись rules, без кода.",
+  "currencies": {
+    "₽": "RUB",
+    "RUB": "RUB",
+    "$": "USD",
+    "USD": "USD",
+    "€": "EUR",
+    "EUR": "EUR"
+  },
+  "banks": [
+    {
+      "id": "tbank",
+      "name": "Т-Банк",
+      "packages": [
+        "com.idamob.tinkoff.android"
+      ],
+      "rules": [
+        {
+          "id": "tbank.purchase",
+          "kind": "expense",
+          "title": [
+            "Покупка"
+          ],
+          "pattern": "^Покупка на ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (₽|\\$|€|RUB|USD|EUR), (.+)\\. Карта \\*([0-9]{4})\\. Доступно ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽$",
+          "groups": {
+            "amount": 1,
+            "currency": 2,
+            "merchant": 3,
+            "card_last4": 4,
+            "balance": 5
+          },
+          "samples": [
+            {
+              "title": "Покупка",
+              "text": "Покупка на 1 234,56 ₽, Пятёрочка. Карта *1234. Доступно 10 000,50 ₽",
+              "expected": {
+                "status": "parsed",
+                "kind": "expense",
+                "amount": 123456,
+                "currency": "RUB",
+                "merchant": "Пятёрочка",
+                "card_last4": "1234",
+                "balance": 1000050,
+                "needs_review": false
+              }
+            },
+            {
+              "title": "Покупка",
+              "text": "Покупка на 349 ₽, YANDEX*TAXI. Карта *4321. Доступно 52 340 ₽",
+              "expected": {
+                "amount": 34900,
+                "merchant": "YANDEX*TAXI",
+                "card_last4": "4321",
+                "balance": 5234000
+              }
+            },
+            {
+              "title": "Покупка",
+              "text": "Покупка на 12,50 $, AMAZON.COM. Карта *1234. Доступно 9 000 ₽",
+              "expected": {
+                "amount": 1250,
+                "currency": "USD",
+                "needs_review": true,
+                "review_reason": "foreign_currency"
+              }
+            }
+          ]
+        },
+        {
+          "id": "tbank.purchase_no_balance",
+          "kind": "expense",
+          "title": [
+            "Покупка"
+          ],
+          "pattern": "^Покупка на ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (₽|\\$|€|RUB|USD|EUR), (.+)\\. Карта \\*([0-9]{4})\\.?$",
+          "groups": {
+            "amount": 1,
+            "currency": 2,
+            "merchant": 3,
+            "card_last4": 4
+          },
+          "samples": [
+            {
+              "title": "Покупка",
+              "text": "Покупка на 500 ₽, Кофейня «Бодрый день». Карта *1234",
+              "expected": {
+                "kind": "expense",
+                "amount": 50000,
+                "merchant": "Кофейня «Бодрый день»",
+                "balance": null
+              }
+            },
+            {
+              "title": "Покупка",
+              "text": "Покупка на 89,90 ₽, Магнит. Карта *1234.",
+              "expected": {
+                "amount": 8990,
+                "merchant": "Магнит"
+              }
+            }
+          ]
+        },
+        {
+          "id": "tbank.transfer_out",
+          "kind": "expense",
+          "title": [
+            "Перевод"
+          ],
+          "pattern": "^Перевод ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽ (.+)\\. Карта \\*([0-9]{4})\\. Доступно ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽$",
+          "groups": {
+            "amount": 1,
+            "merchant": 2,
+            "card_last4": 3,
+            "balance": 4
+          },
+          "samples": [
+            {
+              "title": "Перевод",
+              "text": "Перевод 5 000 ₽ Иван И. Карта *1234. Доступно 4 000 ₽",
+              "expected": {
+                "status": "parsed",
+                "kind": "expense",
+                "amount": 500000,
+                "merchant": "Иван И",
+                "card_last4": "1234",
+                "balance": 400000
+              }
+            },
+            {
+              "title": "Перевод",
+              "text": "Перевод 5 000 ₽ Мария Петровна. Карта *1234. Доступно 4 000 ₽",
+              "expected": {
+                "kind": "expense",
+                "amount": 500000,
+                "merchant": "Мария Петровна",
+                "balance": 400000
+              }
+            }
+          ]
+        },
+        {
+          "id": "tbank.income_top_up",
+          "kind": "income",
+          "title": [
+            "Пополнение"
+          ],
+          "pattern": "^Пополнение на ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽\\. Карта \\*([0-9]{4})\\. Доступно ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽$",
+          "groups": {
+            "amount": 1,
+            "card_last4": 2,
+            "balance": 3
+          },
+          "samples": [
+            {
+              "title": "Пополнение",
+              "text": "Пополнение на 10 000 ₽. Карта *1234. Доступно 14 000 ₽",
+              "expected": {
+                "kind": "income",
+                "amount": 1000000,
+                "merchant": null,
+                "card_last4": "1234",
+                "balance": 1400000
+              }
+            }
+          ]
+        },
+        {
+          "id": "tbank.income_from_person",
+          "kind": "income",
+          "title": [
+            "Входящий перевод"
+          ],
+          "pattern": "^([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽ от (.+)\\. Карта \\*([0-9]{4})\\. Доступно ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽$",
+          "groups": {
+            "amount": 1,
+            "merchant": 2,
+            "card_last4": 3,
+            "balance": 4
+          },
+          "samples": [
+            {
+              "title": "Входящий перевод",
+              "text": "2 500 ₽ от Сергей Сергеевич. Карта *1234. Доступно 6 500,25 ₽",
+              "expected": {
+                "kind": "income",
+                "amount": 250000,
+                "merchant": "Сергей Сергеевич",
+                "balance": 650025
+              }
+            }
+          ]
+        },
+        {
+          "id": "tbank.cashback",
+          "kind": "income",
+          "title": [
+            "Кэшбэк"
+          ],
+          "pattern": "^Начислен кэшбэк ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽\\. Карта \\*([0-9]{4})\\.?$",
+          "groups": {
+            "amount": 1,
+            "card_last4": 2
+          },
+          "merchant_fixed": "Кэшбэк",
+          "samples": [
+            {
+              "title": "Кэшбэк",
+              "text": "Начислен кэшбэк 120 ₽. Карта *1234",
+              "expected": {
+                "kind": "income",
+                "amount": 12000,
+                "merchant": "Кэшбэк"
+              }
+            },
+            {
+              "title": "Кэшбэк",
+              "text": "Начислен кэшбэк 15,40 ₽. Карта *1234.",
+              "expected": {
+                "amount": 1540
+              }
+            }
+          ]
+        },
+        {
+          "id": "tbank.cash_withdrawal",
+          "kind": "expense",
+          "title": [
+            "Снятие наличных"
+          ],
+          "pattern": "^Снятие ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽, (.+)\\. Карта \\*([0-9]{4})\\. Доступно ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽$",
+          "groups": {
+            "amount": 1,
+            "merchant": 2,
+            "card_last4": 3,
+            "balance": 4
+          },
+          "samples": [
+            {
+              "title": "Снятие наличных",
+              "text": "Снятие 3 000 ₽, Банкомат Т-Банк. Карта *1234. Доступно 7 000 ₽",
+              "expected": {
+                "kind": "expense",
+                "amount": 300000,
+                "merchant": "Банкомат Т-Банк",
+                "balance": 700000
+              }
+            }
+          ]
+        },
+        {
+          "id": "tbank.refund",
+          "kind": "income",
+          "title": [
+            "Возврат"
+          ],
+          "pattern": "^Возврат на ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (₽|\\$|€|RUB|USD|EUR), (.+)\\. Карта \\*([0-9]{4})\\. Доступно ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽$",
+          "groups": {
+            "amount": 1,
+            "currency": 2,
+            "merchant": 3,
+            "card_last4": 4,
+            "balance": 5
+          },
+          "refund": true,
+          "samples": [
+            {
+              "title": "Возврат",
+              "text": "Возврат на 300 ₽, Магнит. Карта *1234. Доступно 10 300 ₽",
+              "expected": {
+                "kind": "income",
+                "refund": true,
+                "amount": 30000,
+                "merchant": "Магнит",
+                "balance": 1030000
+              }
+            }
+          ]
+        },
+        {
+          "id": "tbank.salary",
+          "kind": "income",
+          "title": [
+            "Зарплата"
+          ],
+          "pattern": "^Зарплата ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽\\. Карта \\*([0-9]{4})\\. Доступно ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) ₽$",
+          "groups": {
+            "amount": 1,
+            "card_last4": 2,
+            "balance": 3
+          },
+          "merchant_fixed": "Зарплата",
+          "samples": [
+            {
+              "title": "Зарплата",
+              "text": "Зарплата 85 000 ₽. Карта *1234. Доступно 90 000 ₽",
+              "expected": {
+                "kind": "income",
+                "amount": 8500000,
+                "merchant": "Зарплата",
+                "balance": 9000000
+              }
+            }
+          ]
+        },
+        {
+          "id": "tbank.ignore_service",
+          "kind": "ignore",
+          "title": null,
+          "pattern": "^(Скидки|Акция|Вход выполнен|Новый вход|Ваш код)",
+          "groups": {},
+          "samples": [
+            {
+              "title": "Т-Банк",
+              "text": "Скидки до 30% у партнёров",
+              "expected": {
+                "status": "ignored"
+              }
+            },
+            {
+              "title": "Безопасность",
+              "text": "Вход выполнен с нового устройства",
+              "expected": {
+                "status": "ignored"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "vtb",
+      "name": "ВТБ",
+      "packages": [
+        "ru.vtb24.mobilebanking.android"
+      ],
+      "rules": [
+        {
+          "id": "vtb.purchase",
+          "kind": "expense",
+          "title": null,
+          "pattern": "^Оплата ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (₽|\\$|€|RUB|USD|EUR)\\. Карта \\*([0-9]{4})\\. (.+)\\. Баланс ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (?:RUB|₽)$",
+          "groups": {
+            "amount": 1,
+            "currency": 2,
+            "card_last4": 3,
+            "merchant": 4,
+            "balance": 5
+          },
+          "samples": [
+            {
+              "title": "ВТБ",
+              "text": "Оплата 1 500 RUB. Карта *5678. PYATEROCHKA 1234 MOSKVA. Баланс 20 000,10 RUB",
+              "expected": {
+                "kind": "expense",
+                "amount": 150000,
+                "currency": "RUB",
+                "card_last4": "5678",
+                "merchant": "PYATEROCHKA 1234 MOSKVA",
+                "balance": 2000010
+              }
+            },
+            {
+              "title": "ВТБ",
+              "text": "Оплата 20,00 USD. Карта *5678. STEAMGAMES.COM. Баланс 3 000 ₽",
+              "expected": {
+                "amount": 2000,
+                "currency": "USD",
+                "needs_review": true,
+                "review_reason": "foreign_currency"
+              }
+            }
+          ]
+        },
+        {
+          "id": "vtb.purchase_with_time",
+          "kind": "expense",
+          "title": null,
+          "pattern": "^Оплата ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (₽|\\$|€|RUB|USD|EUR), ([0-9]{2}:[0-9]{2}), карта \\*([0-9]{4}), (.+)\\. Остаток ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (?:RUB|₽)$",
+          "groups": {
+            "amount": 1,
+            "currency": 2,
+            "time": 3,
+            "card_last4": 4,
+            "merchant": 5,
+            "balance": 6
+          },
+          "samples": [
+            {
+              "title": "ВТБ",
+              "text": "Оплата 799,99 ₽, 14:05, карта *5678, Лента. Остаток 15 000 ₽",
+              "expected": {
+                "kind": "expense",
+                "amount": 79999,
+                "time": "14:05",
+                "merchant": "Лента",
+                "balance": 1500000
+              }
+            }
+          ]
+        },
+        {
+          "id": "vtb.income",
+          "kind": "income",
+          "title": null,
+          "pattern": "^Поступление ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (₽|\\$|€|RUB|USD|EUR)\\. Карта \\*([0-9]{4})\\. (.+)\\. Баланс ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (?:RUB|₽)$",
+          "groups": {
+            "amount": 1,
+            "currency": 2,
+            "card_last4": 3,
+            "merchant": 4,
+            "balance": 5
+          },
+          "samples": [
+            {
+              "title": "ВТБ",
+              "text": "Поступление 30 000 RUB. Карта *5678. Перевод от ООО Ромашка. Баланс 50 000 RUB",
+              "expected": {
+                "kind": "income",
+                "amount": 3000000,
+                "merchant": "Перевод от ООО Ромашка",
+                "balance": 5000000
+              }
+            }
+          ]
+        },
+        {
+          "id": "vtb.transfer_out",
+          "kind": "expense",
+          "title": null,
+          "pattern": "^Перевод ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (₽|\\$|€|RUB|USD|EUR)\\. Карта \\*([0-9]{4})\\. (.+)\\. Баланс ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (?:RUB|₽)$",
+          "groups": {
+            "amount": 1,
+            "currency": 2,
+            "card_last4": 3,
+            "merchant": 4,
+            "balance": 5
+          },
+          "samples": [
+            {
+              "title": "ВТБ",
+              "text": "Перевод 1 000 RUB. Карта *5678. Перевод на карту Т-Банк. Баланс 19 000 RUB",
+              "expected": {
+                "kind": "expense",
+                "amount": 100000,
+                "merchant": "Перевод на карту Т-Банк",
+                "balance": 1900000
+              }
+            }
+          ]
+        },
+        {
+          "id": "vtb.cash_withdrawal",
+          "kind": "expense",
+          "title": null,
+          "pattern": "^Снятие наличных ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (₽|\\$|€|RUB|USD|EUR)\\. Карта \\*([0-9]{4})\\. (.+)\\. Баланс ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (?:RUB|₽)$",
+          "groups": {
+            "amount": 1,
+            "currency": 2,
+            "card_last4": 3,
+            "merchant": 4,
+            "balance": 5
+          },
+          "samples": [
+            {
+              "title": "ВТБ",
+              "text": "Снятие наличных 5 000 RUB. Карта *5678. ATM VTB. Баланс 15 000 RUB",
+              "expected": {
+                "kind": "expense",
+                "amount": 500000,
+                "merchant": "ATM VTB",
+                "balance": 1500000
+              }
+            }
+          ]
+        },
+        {
+          "id": "vtb.refund",
+          "kind": "income",
+          "title": null,
+          "pattern": "^Возврат ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (₽|\\$|€|RUB|USD|EUR)\\. Карта \\*([0-9]{4})\\. (.+)\\. Баланс ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (?:RUB|₽)$",
+          "groups": {
+            "amount": 1,
+            "currency": 2,
+            "card_last4": 3,
+            "merchant": 4,
+            "balance": 5
+          },
+          "refund": true,
+          "samples": [
+            {
+              "title": "ВТБ",
+              "text": "Возврат 1 500 RUB. Карта *5678. PYATEROCHKA. Баланс 21 500 RUB",
+              "expected": {
+                "kind": "income",
+                "refund": true,
+                "amount": 150000,
+                "merchant": "PYATEROCHKA",
+                "balance": 2150000
+              }
+            }
+          ]
+        },
+        {
+          "id": "vtb.latin_purchase",
+          "kind": "expense",
+          "title": null,
+          "pattern": "^Karta \\*([0-9]{4})\\. Oplata ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (RUB|USD|EUR)\\. (.+)\\. Dostupno ([0-9][0-9 ]*(?:[.,][0-9]{1,2})?) (?:RUB|USD|EUR)$",
+          "groups": {
+            "card_last4": 1,
+            "amount": 2,
+            "currency": 3,
+            "merchant": 4,
+            "balance": 5
+          },
+          "samples": [
+            {
+              "title": "VTB",
+              "text": "Karta *5678. Oplata 253.00 RUB. MCDONALDS. Dostupno 1000.00 RUB",
+              "expected": {
+                "kind": "expense",
+                "amount": 25300,
+                "currency": "RUB",
+                "merchant": "MCDONALDS",
+                "balance": 100000
+              }
+            },
+            {
+              "title": "VTB",
+              "text": "Karta *5678. Oplata 9.99 EUR. SPOTIFY. Dostupno 1000.00 RUB",
+              "expected": {
+                "amount": 999,
+                "currency": "EUR",
+                "needs_review": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "vtb.ignore_service",
+          "kind": "ignore",
+          "title": null,
+          "pattern": "^(Код подтверждения|Ваш код|Вход в|Push-код)",
+          "groups": {},
+          "samples": [
+            {
+              "title": "ВТБ",
+              "text": "Код подтверждения 123456",
+              "expected": {
+                "status": "ignored"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
