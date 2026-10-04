@@ -237,6 +237,13 @@ void main() {
         '/calendar/tasks': 'tasks-empty',
         '/calendar/layers': 'layers-list',
         '/calendar/settings': 'cycle-card',
+        // Этап 4: «Работа» — настоящие экраны.
+        '/work': 'work-overview',
+        '/work/receivables': 'receivables-screen',
+        '/work/payments': 'payments-screen',
+        '/work/time': 'time-screen',
+        '/work/people': 'people-screen',
+        '/work/projects/some-id': 'project-screen',
       };
       for (final entry in routes.entries) {
         await _pump(tester, location: entry.key);
@@ -247,7 +254,6 @@ void main() {
 
     testWidgets('все экраны-заглушки открываются без ошибок', (tester) async {
       const routes = {
-        '/work': 'этапе 4',
         '/work/servers': 'этапе 9',
         '/finance': 'этапе 5',
         '/study': 'этапе 7',

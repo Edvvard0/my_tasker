@@ -29,3 +29,20 @@ Future<void> runMigrationSteps(
     await step(m);
   }
 }
+
+/// Добавляет колонку, только если её ещё нет. Нужна шагам, расширяющим
+/// таблицу, созданную более ранним шагом той же цепочки: `createTable`
+/// всегда строит таблицу по **текущей** схеме (с новой колонкой), и
+/// повторный `ALTER TABLE ADD COLUMN` упал бы с «duplicate column».
+Future<void> addColumnIfMissing(
+  Migrator m,
+  TableInfo<Table, Object?> table,
+  GeneratedColumn<Object> column,
+) async {
+  final db = m.database;
+  final rows = await db
+      .customSelect('PRAGMA table_info("${table.actualTableName}")')
+      .get();
+  final exists = rows.any((r) => r.read<String>('name') == column.name);
+  if (!exists) await m.addColumn(table, column);
+}

@@ -2,7 +2,8 @@ import 'package:my_tasker/core/sync/sync_table.dart';
 
 /// Синхронизируемые таблицы задач (spec Этапа 2, раздел 4).
 
-/// `projects` — минимальная таблица проектов (spec 4.3).
+/// `projects` — проекты: заготовка Этапа 2 (spec 4.3) и колонки Этапа 4
+/// (`stage4_work.md`, 1.1), все необязательные.
 const SyncTableSpec projectsSpec = SyncTableSpec(
   name: 'projects',
   label: 'Проект',
@@ -10,17 +11,31 @@ const SyncTableSpec projectsSpec = SyncTableSpec(
     SyncColumn('title', SyncColumnType.text),
     SyncColumn('color', SyncColumnType.text, nullable: true),
     SyncColumn('archived', SyncColumnType.boolean),
+    // Мягкая ссылка на заказчика (`people.id`), без FK и каскада.
+    SyncColumn('client_id', SyncColumnType.uuid, nullable: true),
+    SyncColumn('status', SyncColumnType.text, nullable: true),
+    SyncColumn('pay_type', SyncColumnType.text, nullable: true),
+    SyncColumn('base_amount', SyncColumnType.integer, nullable: true),
+    SyncColumn('hourly_rate', SyncColumnType.integer, nullable: true),
+    SyncColumn('start_date', SyncColumnType.text, nullable: true),
+    SyncColumn('deadline_date', SyncColumnType.text, nullable: true),
+    SyncColumn('completed_date', SyncColumnType.text, nullable: true),
+    SyncColumn('description', SyncColumnType.text, nullable: true),
+    SyncColumn('links', SyncColumnType.json, nullable: true),
   ],
   titleOf: _title,
 );
 
-/// `people` — минимальная таблица людей (spec 4.3).
+/// `people` — люди: заготовка Этапа 2 (spec 4.3) и `role`/`contact`
+/// Этапа 4 (`stage4_work.md`, 1.2).
 const SyncTableSpec peopleSpec = SyncTableSpec(
   name: 'people',
   label: 'Человек',
   columns: [
     SyncColumn('name', SyncColumnType.text),
     SyncColumn('archived', SyncColumnType.boolean),
+    SyncColumn('role', SyncColumnType.text, nullable: true),
+    SyncColumn('contact', SyncColumnType.text, nullable: true),
   ],
   titleOf: _name,
 );

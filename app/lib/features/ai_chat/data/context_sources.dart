@@ -8,6 +8,7 @@ import 'package:my_tasker/features/calendar/application/device_timezone.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_items.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_models.dart';
 import 'package:my_tasker/features/tasks/domain/task_models.dart';
+import 'package:my_tasker/features/work/data/work_context_source.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 String _two(int n) => n.toString().padLeft(2, '0');
@@ -219,10 +220,14 @@ class EventsContextSource extends ContextSource {
 }
 
 /// Реестр источников контекста. Этапы 4–8 дописывают свои источники сюда
-/// (проекты, финансы, учёба, сон) — чат, конструктор и превью работают с
+/// (Работа — Этап 4; финансы, учёба, сон — позже) — чат, конструктор и превью работают с
 /// ними без изменений.
 final contextSourcesProvider = Provider<List<ContextSource>>(
-  (ref) => const [TasksContextSource(), EventsContextSource()],
+  (ref) => const [
+    TasksContextSource(),
+    EventsContextSource(),
+    WorkContextSource(),
+  ],
 );
 
 /// Окружение сборки контекста на текущий момент (каждый вызов — свежее).

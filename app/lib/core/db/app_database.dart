@@ -3,6 +3,7 @@ import 'package:my_tasker/core/db/calendar_tables.dart';
 import 'package:my_tasker/core/db/migration_steps.dart';
 import 'package:my_tasker/core/db/sync_tables.dart';
 import 'package:my_tasker/features/ai_chat/data/ai_tables.dart';
+import 'package:my_tasker/features/work/data/work_tables.dart';
 
 part 'app_database.g.dart';
 
@@ -30,6 +31,10 @@ class LocalSettings extends Table {
 /// * v4 — Этап 3 (ИИ-чат): `ai_agent_profiles`, `ai_prompt_versions`,
 ///   `ai_context_presets`, `ai_model_favorites`, `ai_conversations`,
 ///   `ai_messages`, `ai_tool_proposals` (`features/ai_chat/data/ai_tables.dart`).
+/// * v5 — Этап 4 (Работа): `projects` и `people` получают необязательные
+///   колонки (`ALTER TABLE ADD COLUMN`), новые таблицы `change_requests`,
+///   `payments`, `payment_allocations`, `time_entries`
+///   (`features/work/data/work_tables.dart`).
 ///
 /// Правила миграций: любое изменение схемы = `schemaVersion + 1` и новый шаг
 /// в [migrationSteps]; шаги применяются последовательно. Откат версии
@@ -58,13 +63,17 @@ class LocalSettings extends Table {
     AiConversations,
     AiMessages,
     AiToolProposals,
+    ChangeRequests,
+    Payments,
+    PaymentAllocations,
+    TimeEntries,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   /// Текущая версия схемы (то же значение, что и [schemaVersion]).
-  static const int currentSchemaVersion = 4;
+  static const int currentSchemaVersion = 5;
 
   @override
   int get schemaVersion => currentSchemaVersion;
@@ -109,6 +118,34 @@ class AppDatabase extends _$AppDatabase {
       await m.createIndex(db.aiPromptVersionsProfileIdx);
       await m.createIndex(db.aiMessagesConversationIdx);
       await m.createIndex(db.aiToolProposalsMessageIdx);
+    },
+    5: (m) async {
+      final db = m.database as AppDatabase;
+      // Расширение таблиц Этапа 2: все колонки необязательные, строки
+      // и id остаются как были. Если таблицы создал шаг 3 этой же цепочки
+      // (обновление с v2), колонки в них уже есть.
+      await addColumnIfMissing(m, db.projects, db.projects.clientId);
+      await addColumnIfMissing(m, db.projects, db.projects.status);
+      await addColumnIfMissing(m, db.projects, db.projects.payType);
+      await addColumnIfMissing(m, db.projects, db.projects.baseAmount);
+      await addColumnIfMissing(m, db.projects, db.projects.hourlyRate);
+      await addColumnIfMissing(m, db.projects, db.projects.startDate);
+      await addColumnIfMissing(m, db.projects, db.projects.deadlineDate);
+      await addColumnIfMissing(m, db.projects, db.projects.completedDate);
+      await addColumnIfMissing(m, db.projects, db.projects.description);
+      await addColumnIfMissing(m, db.projects, db.projects.links);
+      await addColumnIfMissing(m, db.people, db.people.role);
+      await addColumnIfMissing(m, db.people, db.people.contact);
+      await m.createTable(db.changeRequests);
+      await m.createTable(db.payments);
+      await m.createTable(db.paymentAllocations);
+      await m.createTable(db.timeEntries);
+      await m.createIndex(db.changeRequestsProjectIdx);
+      await m.createIndex(db.paymentsPaidAtIdx);
+      await m.createIndex(db.paymentAllocationsPaymentIdx);
+      await m.createIndex(db.paymentAllocationsProjectIdx);
+      await m.createIndex(db.timeEntriesProjectIdx);
+      await m.createIndex(db.timeEntriesStartedIdx);
     },
   };
 

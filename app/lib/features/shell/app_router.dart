@@ -30,6 +30,11 @@ import 'package:my_tasker/features/sync/presentation/conflicts_screen.dart';
 import 'package:my_tasker/features/sync/presentation/sync_screen.dart';
 import 'package:my_tasker/features/today/today_screen.dart';
 import 'package:my_tasker/features/trash/presentation/trash_screen.dart';
+import 'package:my_tasker/features/work/presentation/payments_screen.dart';
+import 'package:my_tasker/features/work/presentation/people_screen.dart';
+import 'package:my_tasker/features/work/presentation/project_screen.dart';
+import 'package:my_tasker/features/work/presentation/receivables_screen.dart';
+import 'package:my_tasker/features/work/presentation/time_screen.dart';
 import 'package:my_tasker/features/work/servers_screen.dart';
 import 'package:my_tasker/features/work/work_screen.dart';
 
@@ -112,6 +117,24 @@ GoRouter createRouter({
               path: '/work',
               builder: (_, _) => const WorkScreen(),
               routes: [
+                GoRoute(
+                  path: 'projects/:id',
+                  builder: (_, state) =>
+                      ProjectScreen(projectId: state.pathParameters['id']!),
+                ),
+                GoRoute(
+                  path: 'receivables',
+                  builder: (_, _) => const ReceivablesScreen(),
+                ),
+                GoRoute(
+                  path: 'payments',
+                  builder: (_, _) => const PaymentsScreen(),
+                ),
+                GoRoute(path: 'time', builder: (_, _) => const TimeScreen()),
+                GoRoute(
+                  path: 'people',
+                  builder: (_, _) => const PeopleScreen(),
+                ),
                 GoRoute(
                   path: 'servers',
                   builder: (_, _) => const ServersScreen(),

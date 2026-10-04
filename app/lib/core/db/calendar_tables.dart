@@ -75,22 +75,35 @@ class EventOverrides extends Table with SyncColumns {
   String get tableName => 'event_overrides';
 }
 
-/// Проекты (минимальная таблица Этапа 2, spec 4.3).
+/// Проекты: заготовка Этапа 2 (spec 4.3) + колонки Этапа 4
+/// (`docs/specs/stage4_work.md`, 1.1) — все необязательные.
 @DataClassName('ProjectRow')
 class Projects extends Table with SyncColumns {
   TextColumn get title => text()();
   TextColumn get color => text().nullable()();
   BoolColumn get archived => boolean()();
+  TextColumn get clientId => text().nullable()();
+  TextColumn get status => text().nullable()();
+  TextColumn get payType => text().nullable()();
+  IntColumn get baseAmount => integer().nullable()();
+  IntColumn get hourlyRate => integer().nullable()();
+  TextColumn get startDate => text().nullable()();
+  TextColumn get deadlineDate => text().nullable()();
+  TextColumn get completedDate => text().nullable()();
+  TextColumn get description => text().nullable()();
+  TextColumn get links => text().nullable()();
 
   @override
   String get tableName => 'projects';
 }
 
-/// Люди (минимальная таблица Этапа 2, spec 4.3).
+/// Люди: заготовка Этапа 2 (spec 4.3) + `role` и `contact` Этапа 4 (1.2).
 @DataClassName('PersonRow')
 class People extends Table with SyncColumns {
   TextColumn get name => text()();
   BoolColumn get archived => boolean()();
+  TextColumn get role => text().nullable()();
+  TextColumn get contact => text().nullable()();
 
   @override
   String get tableName => 'people';

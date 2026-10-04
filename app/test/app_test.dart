@@ -58,7 +58,9 @@ void main() {
 
     // Настоящая БД (SQLCipher), настоящие токены (пустые), настоящий роутер.
     app.main();
-    for (var i = 0; i < 50; i++) {
+    // До 15 с: БД открывается в настоящем изоляте SQLCipher (схема растёт с
+    // каждым этапом), а тесты Flutter идут параллельно и грузят процессор.
+    for (var i = 0; i < 150; i++) {
       // Настоящий изолят SQLCipher: ждать приходится реальное время.
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 100)),

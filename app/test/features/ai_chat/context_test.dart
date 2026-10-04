@@ -363,9 +363,9 @@ void main() {
       expect(estimateTokens('abcd'), 2);
     });
 
-    test('реестр по умолчанию: задачи и расписание', () {
+    test('реестр по умолчанию: задачи, расписание и работа', () {
       final sources = device.container.read(contextSourcesProvider);
-      expect(sources.map((s) => s.id), ['tasks', 'events']);
+      expect(sources.map((s) => s.id), ['tasks', 'events', 'work']);
       expect(sources.every((s) => !s.sensitive), isTrue);
     });
   });

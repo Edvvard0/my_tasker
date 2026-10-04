@@ -22,6 +22,9 @@ import 'package:my_tasker/features/calendar/presentation/widgets/recurrence_fiel
 import 'package:my_tasker/features/tasks/data/task_repository.dart';
 import 'package:my_tasker/features/tasks/domain/task_models.dart';
 import 'package:my_tasker/features/tasks/domain/task_validation.dart';
+import 'package:my_tasker/features/work/application/timer_providers.dart';
+import 'package:my_tasker/features/work/presentation/project_picker.dart';
+import 'package:my_tasker/features/work/presentation/timer_widgets.dart';
 
 /// Открывает редактор задачи. [taskId] — правка существующей; иначе
 /// создание (с необязательным начальным сроком [initialDue] и названием).
@@ -526,6 +529,8 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
                     label: 'Человек',
                     child: _personPicker(context, people),
                   ),
+                  if (!_isNew)
+                    FormBlock(label: 'Время', child: _timerControl(context)),
                   FormBlock(label: 'Теги', child: _tagsField(context)),
                   FormBlock(
                     label: 'Заметки',
@@ -595,6 +600,54 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ---- таймер времени (Этап 4) -------------------------------------------------
+
+  /// Старт/стоп таймера по задаче: время пишется на проект задачи (если
+  /// проекта нет — спрашиваем) и привязывается к задаче.
+  Widget _timerControl(BuildContext context) {
+    final taskId = widget.taskId!;
+    final running = [
+      for (final t in ref.watch(runningTimersProvider))
+        if (t.entry.taskId == taskId) t,
+    ];
+    if (running.isNotEmpty) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          key: const Key('task-timer-stop'),
+          onPressed: () => stopTimerWithToast(context, ref, running.first),
+          icon: const Icon(LucideIcons.square, size: 18),
+          label: const Text('Остановить таймер'),
+        ),
+      );
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        key: const Key('task-timer-start'),
+        onPressed: () async {
+          final projectId =
+              _projectId ??
+              await showProjectPicker(
+                context,
+                title: 'На какой проект писать время?',
+              );
+          if (projectId == null || !context.mounted) return;
+          final ok = await startTimerFor(
+            context,
+            ref,
+            projectId: projectId,
+            taskId: taskId,
+            note: _title.text.trim().isEmpty ? null : _title.text.trim(),
+          );
+          if (ok && context.mounted) Navigator.of(context).pop();
+        },
+        icon: const Icon(LucideIcons.play, size: 18),
+        label: const Text('Запустить таймер'),
       ),
     );
   }

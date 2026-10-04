@@ -12,6 +12,7 @@ import 'package:my_tasker/features/calendar/reminders/reminder_taps.dart';
 import 'package:my_tasker/features/recovery/presentation/recovery_screen.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 import 'package:my_tasker/features/shell/splash_screen.dart';
+import 'package:my_tasker/features/work/application/timer_providers.dart';
 
 /// Корневой виджет приложения.
 ///
@@ -31,7 +32,9 @@ class MyTaskerApp extends ConsumerWidget {
         // Локальные напоминания (Этап 2): следят за данными календаря.
         ..watch(reminderLifecycleProvider)
         // Нажатие на напоминание открывает событие или задачу.
-        ..watch(reminderTapHandlerProvider);
+        ..watch(reminderTapHandlerProvider)
+        // Таймер времени (Этап 4): уведомление/трей и «Стоп» из системы.
+        ..watch(timerLifecycleProvider);
     }
     final auth = ok ? ref.watch(authControllerProvider) : const AuthUnknown();
     return MaterialApp.router(

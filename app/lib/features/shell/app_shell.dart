@@ -7,6 +7,7 @@ import 'package:my_tasker/features/shell/app_section.dart';
 import 'package:my_tasker/features/shell/bottom_tab_bar.dart';
 import 'package:my_tasker/features/shell/quick_create_sheet.dart';
 import 'package:my_tasker/features/shell/side_navigation.dart';
+import 'package:my_tasker/features/work/presentation/timer_widgets.dart';
 
 /// Пользователь свернул левую панель десктопа в рейл (кнопка `≡`).
 class SideNavCollapsed extends Notifier<bool> {
@@ -58,6 +59,17 @@ class AppShell extends ConsumerWidget {
               ),
               child: content,
             ),
+            // Плашка «идёт таймер» (02, 4.11) — над таб-баром.
+            Positioned(
+              left: AppSpacing.s4,
+              right: AppSpacing.s4,
+              bottom:
+                  mq.padding.bottom +
+                  AppSpacing.tabBarHeight +
+                  AppSpacing.s3 +
+                  AppSpacing.s2,
+              child: const Center(child: RunningTimerPill()),
+            ),
             Positioned(
               left: 0,
               right: 0,
@@ -92,7 +104,20 @@ class AppShell extends ConsumerWidget {
                 ? null
                 : ref.read(sideNavCollapsedProvider.notifier).toggle,
           ),
-          Expanded(child: content),
+          Expanded(
+            child: Stack(
+              children: [
+                content,
+                // Плашка «идёт таймер» на десктопе: внизу контента.
+                const Positioned(
+                  left: AppSpacing.s6,
+                  right: AppSpacing.s6,
+                  bottom: AppSpacing.s4,
+                  child: Center(child: RunningTimerPill()),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

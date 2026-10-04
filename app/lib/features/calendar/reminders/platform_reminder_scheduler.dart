@@ -32,16 +32,22 @@ const String _channelName = 'Напоминания';
 ///
 /// [onTap] получает `payload` нажатого уведомления (включая то, из которого
 /// приложение было запущено): `event:<id>|<ключ>` или `task:<id>`.
+///
+/// [onAction] получает нажатия на **кнопки** уведомлений (`actionId` и
+/// `payload`): плагин уведомлений один на приложение, поэтому кнопка «Стоп»
+/// уведомления таймера (Этап 4) приходит сюда же.
 ReminderScheduler createPlatformReminderScheduler({
   required DateTime Function() now,
   void Function(String? payload)? onTap,
-}) => _LazyReminderScheduler(now, onTap);
+  void Function(String actionId, String? payload)? onAction,
+}) => _LazyReminderScheduler(now, onTap, onAction);
 
 class _LazyReminderScheduler implements ReminderScheduler {
-  _LazyReminderScheduler(this._now, this._onTap);
+  _LazyReminderScheduler(this._now, this._onTap, this._onAction);
 
   final DateTime Function() _now;
   final void Function(String? payload)? _onTap;
+  final void Function(String actionId, String? payload)? _onAction;
   Future<ReminderScheduler>? _delegate;
 
   Future<ReminderScheduler> get _scheduler => _delegate ??= _create();
@@ -49,8 +55,15 @@ class _LazyReminderScheduler implements ReminderScheduler {
   Future<ReminderScheduler> _create() async {
     try {
       final plugin = FlutterLocalNotificationsPlugin();
-      void tapped(NotificationResponse response) =>
-          _onTap?.call(response.payload);
+      void tapped(NotificationResponse response) {
+        final action = response.actionId;
+        if (action != null && action.isNotEmpty) {
+          _onAction?.call(action, response.payload);
+          return;
+        }
+        _onTap?.call(response.payload);
+      }
+
       switch (defaultTargetPlatform) {
         case TargetPlatform.android:
           await plugin.initialize(
@@ -62,7 +75,12 @@ class _LazyReminderScheduler implements ReminderScheduler {
           // Приложение запущено нажатием на уведомление (холодный старт).
           final launch = await plugin.getNotificationAppLaunchDetails();
           if (launch?.didNotificationLaunchApp ?? false) {
-            _onTap?.call(launch?.notificationResponse?.payload);
+            final response = launch?.notificationResponse;
+            if (response != null) {
+              tapped(response);
+            } else {
+              _onTap?.call(null);
+            }
           }
           return _AndroidReminderScheduler(plugin);
         case TargetPlatform.windows:

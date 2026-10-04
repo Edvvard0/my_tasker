@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -55,10 +55,10 @@ void main() {
     tearDown(() => db.close());
 
     test(
-      'создаёт схему v4: настройки, синхронизация, календарь и ИИ-чат',
+      'создаёт схему v5: настройки, синхронизация, календарь, ИИ-чат и Работа',
       () async {
         expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
-        expect(db.schemaVersion, 4);
+        expect(db.schemaVersion, 5);
         final tables = await db
             .customSelect(
               "SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -74,9 +74,12 @@ void main() {
           'ai_prompt_versions',
           'ai_tool_proposals',
           'calendars',
+          'change_requests',
           'event_overrides',
           'events',
           'local_settings',
+          'payment_allocations',
+          'payments',
           'people',
           'projects',
           'subtasks',
@@ -86,6 +89,7 @@ void main() {
           'task_completions',
           'task_tags',
           'tasks',
+          'time_entries',
           'user_settings',
         ]);
       },
@@ -132,8 +136,8 @@ void main() {
       );
     });
 
-    test('в реестре AppDatabase есть шаги до v2, v3 и v4 (ИИ-чат)', () {
-      expect(AppDatabase.migrationSteps.keys, [2, 3, 4]);
+    test('в реестре AppDatabase есть шаги до v2, v3, v4 (ИИ-чат) и v5', () {
+      expect(AppDatabase.migrationSteps.keys, [2, 3, 4, 5]);
     });
   });
 
@@ -214,6 +218,10 @@ void main() {
         ..execute('DROP TABLE ai_conversations')
         ..execute('DROP TABLE ai_messages')
         ..execute('DROP TABLE ai_tool_proposals')
+        ..execute('DROP TABLE change_requests')
+        ..execute('DROP TABLE payments')
+        ..execute('DROP TABLE payment_allocations')
+        ..execute('DROP TABLE time_entries')
         ..execute('PRAGMA user_version = 2')
         ..close();
 
@@ -244,6 +252,11 @@ void main() {
         'ai_conversations',
         'ai_messages',
         'ai_tool_proposals',
+        // Настоящая БД v3 таблиц Работы (v5) ещё не знает.
+        'change_requests',
+        'payments',
+        'payment_allocations',
+        'time_entries',
       ]) {
         raw.execute('DROP TABLE $t');
       }
@@ -264,6 +277,110 @@ void main() {
           'ai_tool_proposals_message_idx',
           'ai_prompt_versions_profile_idx',
         ]),
+      );
+    });
+
+    test('миграция v4 -> v5 (Работа): колонки и таблицы, данные и id целы', () async {
+      final first = AppDatabase(NativeDatabase(file));
+      await first.customSelect('SELECT 1').get();
+      await first.close();
+      // Настоящая БД v4: старые `projects`/`people` без колонок Этапа 4,
+      // без таблиц Работы, с данными Этапа 2.
+      final raw = sqlite3.open(file.path);
+      for (final t in [
+        'change_requests',
+        'payments',
+        'payment_allocations',
+        'time_entries',
+        'projects',
+        'people',
+      ]) {
+        raw.execute('DROP TABLE $t');
+      }
+      const service =
+          'id TEXT NOT NULL PRIMARY KEY, created_at TEXT NOT NULL, '
+          'updated_at TEXT NOT NULL, deleted_at TEXT, '
+          'server_version INTEGER NOT NULL DEFAULT 0, origin_device_id TEXT';
+      raw
+        ..execute(
+          'CREATE TABLE projects ($service, title TEXT NOT NULL, '
+          'color TEXT, archived INTEGER NOT NULL)',
+        )
+        ..execute(
+          'CREATE TABLE people ($service, name TEXT NOT NULL, '
+          'archived INTEGER NOT NULL)',
+        )
+        ..execute(
+          'INSERT INTO projects (id, created_at, updated_at, title, archived) '
+          "VALUES ('p1', 'c', 'u', 'Старый проект', 0)",
+        )
+        ..execute(
+          'INSERT INTO people (id, created_at, updated_at, name, archived) '
+          "VALUES ('h1', 'c', 'u', 'Рома', 0)",
+        )
+        ..execute('PRAGMA user_version = 4')
+        ..close();
+
+      final db = AppDatabase(NativeDatabase(file));
+      addTearDown(db.close);
+      final project = await db
+          .customSelect('SELECT * FROM projects')
+          .getSingle();
+      expect(project.read<String>('id'), 'p1');
+      expect(project.read<String>('title'), 'Старый проект');
+      for (final c in [
+        'client_id',
+        'status',
+        'pay_type',
+        'base_amount',
+        'hourly_rate',
+        'start_date',
+        'deadline_date',
+        'completed_date',
+        'description',
+        'links',
+      ]) {
+        expect(project.data.containsKey(c), isTrue, reason: c);
+        expect(project.data[c], isNull, reason: c);
+      }
+      final person = await db.customSelect('SELECT * FROM people').getSingle();
+      expect(person.read<String>('name'), 'Рома');
+      expect(person.data.containsKey('role'), isTrue);
+      expect(person.data.containsKey('contact'), isTrue);
+
+      final names = await db
+          .customSelect(
+            'SELECT name FROM sqlite_master WHERE name IN '
+            "('change_requests', 'payments', 'payment_allocations', "
+            "'time_entries', 'change_requests_project_idx', "
+            "'payments_paid_at_idx', 'payment_allocations_payment_idx', "
+            "'payment_allocations_project_idx', 'time_entries_project_idx', "
+            "'time_entries_started_idx')",
+          )
+          .get();
+      expect(names, hasLength(10));
+      final version = await db.customSelect('PRAGMA user_version').getSingle();
+      expect(version.read<int>('user_version'), 5);
+      // Новые таблицы пишутся и читаются.
+      await db.customStatement(
+        'INSERT INTO payments (id, created_at, updated_at, paid_at, amount) '
+        "VALUES ('x', 'c', 'u', '2026-10-05T09:00:00Z', 100)",
+      );
+      final amount = await db
+          .customSelect('SELECT amount FROM payments')
+          .getSingle();
+      expect(amount.read<int>('amount'), 100);
+    });
+
+    test('addColumnIfMissing не падает, если колонка уже есть', () async {
+      final db = _MigratorDb(NativeDatabase.memory());
+      addTearDown(db.close);
+      await db.customSelect('SELECT 1').get();
+      await addColumnIfMissing(db.migrator(), db.projects, db.projects.status);
+      final cols = await db.customSelect('PRAGMA table_info(projects)').get();
+      expect(
+        cols.where((r) => r.read<String>('name') == 'status'),
+        hasLength(1),
       );
     });
 
