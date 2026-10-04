@@ -341,18 +341,24 @@ class WorkRepository {
         await _store.update(paymentsTable, next.id, fields);
       }
 
-      final existing = {
-        for (final a in await allocationsOfPayment(next.id))
-          '${a.projectId}|${a.changeRequestId ?? ''}': a,
-      };
+      // После синхронизации с двух устройств на одно «куда» могут оказаться
+      // несколько строк: оставляем первую, остальные удаляем, иначе их
+      // суммы двоились бы в «получено».
+      final existing = <String, List<Allocation>>{};
+      for (final a in await allocationsOfPayment(next.id)) {
+        existing
+            .putIfAbsent('${a.projectId}|${a.changeRequestId ?? ''}', () => [])
+            .add(a);
+      }
       final wanted = {for (final d in allocations) d.key: d};
       for (final e in existing.entries) {
-        if (!wanted.containsKey(e.key)) {
-          await _store.softDelete(allocationsTable, e.value.id);
+        final keep = wanted.containsKey(e.key) ? 1 : 0;
+        for (final extra in e.value.skip(keep)) {
+          await _store.softDelete(allocationsTable, extra.id);
         }
       }
       for (final e in wanted.entries) {
-        final old = existing[e.key];
+        final old = existing[e.key]?.first;
         if (old == null) {
           await _store.create(allocationsTable, _newId(), {
             'payment_id': next.id,
@@ -446,7 +452,9 @@ class WorkRepository {
 
   /// Запускает таймер. Идущие на устройстве записи (в том числе
   /// пришедшие с другого устройства) останавливаются: «одновременно идёт
-  /// только один таймер» (02, 4.11).
+  /// только один таймер» (02, 4.11). Запуск идемпотентен: если уже идёт
+  /// таймер на том же проекте, доработке и задаче (двойной тап), он и
+  /// возвращается, новая запись не создаётся.
   Future<TimerStartResult> startTimer({
     required String projectId,
     String? changeRequestId,
@@ -458,12 +466,26 @@ class WorkRepository {
     await _store.transaction(() async {
       final now = _nowUtc;
       final stopped = <TimeEntry>[];
-      for (final running in await runningEntries()) {
+      final all = await runningEntries();
+      TimeEntry? same;
+      for (final running in all) {
+        if (running.projectId == projectId &&
+            running.changeRequestId == changeRequestId &&
+            running.taskId == taskId) {
+          same = running; // самый поздний по началу (список по возрастанию)
+        }
+      }
+      for (final running in all) {
+        if (same != null && running.id == same.id) continue;
         final end = stopMoment(running, now);
         await _store.update(timeEntriesTable, running.id, {
           'ended_at': storedWorkInstant(end),
         });
         stopped.add(running.copyWith(endedAt: end));
+      }
+      if (same != null) {
+        result = TimerStartResult(started: same, stopped: stopped);
+        return;
       }
       final entry = TimeEntry(
         id: _newId(),

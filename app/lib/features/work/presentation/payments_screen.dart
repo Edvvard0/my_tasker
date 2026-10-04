@@ -8,7 +8,6 @@ import 'package:my_tasker/core/widgets/app_card.dart';
 import 'package:my_tasker/core/widgets/empty_state.dart';
 import 'package:my_tasker/core/widgets/notice_card.dart';
 import 'package:my_tasker/core/widgets/screen_scaffold.dart';
-import 'package:my_tasker/core/widgets/status_pill.dart';
 import 'package:my_tasker/features/work/application/work_providers.dart';
 import 'package:my_tasker/features/work/domain/work_calc.dart';
 import 'package:my_tasker/features/work/domain/work_format.dart';
@@ -40,9 +39,8 @@ class PaymentsScreen extends ConsumerWidget {
       ],
       child: data.when(
         loading: () => const ListSkeleton(),
-        error: (error, _) => const NoticeCard(
-          label: 'Не загрузилось',
-          tone: StatusTone.danger,
+        error: (error, _) => const WorkErrorCard(
+          key: Key('payments-error'),
           text: 'Не удалось прочитать платежи на устройстве.',
         ),
         data: (d) => _Body(data: d),

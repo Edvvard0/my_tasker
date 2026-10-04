@@ -188,8 +188,10 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
     );
   }
 
-  Future<void> _save() async {
-    if (_saving) return;
+  /// Сохраняет задачу. [close] — закрыть редактор после сохранения;
+  /// возвращает `true`, если задача записана.
+  Future<bool> _save({bool close = true}) async {
+    if (_saving) return false;
     setState(() {
       _error = null;
       _saving = true;
@@ -258,14 +260,20 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
       }
       await _applySubtasks(repo, id);
       await repo.setTaskTags(id, _tags);
-      if (!mounted) return;
-      Navigator.of(context).pop();
+      if (!mounted) return true;
+      if (close) {
+        Navigator.of(context).pop();
+      } else {
+        setState(() => _saving = false);
+      }
+      return true;
     } on ValidationError catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         _error = e.message;
         _saving = false;
       });
+      return false;
     }
   }
 
@@ -637,6 +645,10 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
                 title: 'На какой проект писать время?',
               );
           if (projectId == null || !context.mounted) return;
+          // Редактор закрывается после старта — несохранённые правки не
+          // должны пропасть: сначала записываем задачу (ошибка проверки
+          // остаётся в форме, таймер не стартует).
+          if (!await _save(close: false) || !context.mounted) return;
           final ok = await startTimerFor(
             context,
             ref,

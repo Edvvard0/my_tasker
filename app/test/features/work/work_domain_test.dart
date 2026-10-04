@@ -272,6 +272,33 @@ void main() {
       );
     });
 
+    test('ссылки: JSON не больше 8192 байт, как на сервере', () {
+      // 10 адресов по 500 символов — около 5 КБ, проходит.
+      expect(
+        linksProblem([
+          for (var i = 0; i < 10; i++)
+            ProjectLink(url: 'https://${'a' * 492}', title: 'x'),
+        ]),
+        isNull,
+      );
+      // 17 адресов по 500 символов — больше 8192 байт.
+      expect(
+        linksProblem([
+          for (var i = 0; i < 17; i++) ProjectLink(url: 'https://${'a' * 492}'),
+        ]),
+        contains('слишком много места'),
+      );
+      // Сервер считает кириллицу как `\uXXXX` (6 байт на символ): 20 ссылок
+      // с названием из 100 букв не влезают, хотя в UTF-8 это около 5 КБ.
+      expect(
+        linksProblem([
+          for (var i = 0; i < 20; i++)
+            ProjectLink(url: 'https://a.example', title: 'т' * 100),
+        ]),
+        contains('слишком много места'),
+      );
+    });
+
     test('проект: суммы, описание, даты', () {
       const ok = WorkProject(id: 'p', title: 'П');
       expect(projectProblem(ok), isNull);

@@ -560,6 +560,39 @@ void main() {
     });
 
     test(
+      'правка платежа: дубли распределений на одно «куда» удаляются',
+      () async {
+        final a = await project(title: 'A');
+        final b = await project(title: 'B');
+        final pay = payment(5000);
+        await repo.createPayment(pay, [
+          AllocationDraft(projectId: a, amount: 1000),
+        ]);
+        // Вторая строка на тот же проект пришла с другого устройства, и ещё
+        // две — на проект B, которого в форме уже нет.
+        for (final (target, amount) in [(a, 700), (b, 300), (b, 200)]) {
+          await dev.device.store.create('payment_allocations', repo.newId(), {
+            'payment_id': pay.id,
+            'project_id': target,
+            'change_request_id': null,
+            'amount': amount,
+          });
+        }
+        expect(await repo.allocationsOfPayment(pay.id), hasLength(4));
+        final stored = (await repo.getPayment(pay.id))!;
+        await repo.updatePayment(stored, [
+          AllocationDraft(projectId: a, amount: 1500),
+        ]);
+        final after = await repo.allocationsOfPayment(pay.id);
+        expect(after, hasLength(1));
+        expect(after.single.projectId, a);
+        expect(after.single.amount, 1500);
+        final rows = await dev.device.store.visibleRows('payment_allocations');
+        expect(rows, hasLength(1), reason: 'лишние строки удалены мягко');
+      },
+    );
+
+    test(
       'удаление платежа скрывает распределения, возврат — возвращает',
       () async {
         final a = await project();
@@ -665,6 +698,29 @@ void main() {
       expect(entrySeconds(firstRow), 1800);
     });
 
+    test('старт идемпотентен: двойной тап возвращает идущий таймер', () async {
+      final a = await project(title: 'A');
+      final cr = await changeRequest(a);
+      final first = await repo.startTimer(projectId: a);
+      clock.advance(const Duration(seconds: 1));
+      final again = await repo.startTimer(projectId: a);
+      expect(again.started.id, first.started.id);
+      expect(again.stopped, isEmpty);
+      expect(await repo.runningEntries(), hasLength(1));
+      expect(
+        await dev.device.store.visibleRows('time_entries'),
+        hasLength(1),
+        reason: 'записи «0 мин» не появилось',
+      );
+      // Та же доработка — другой таймер: прежний останавливается.
+      final other = await repo.startTimer(projectId: a, changeRequestId: cr);
+      expect(other.started.id, isNot(first.started.id));
+      expect(other.stopped.single.id, first.started.id);
+      final same = await repo.startTimer(projectId: a, changeRequestId: cr);
+      expect(same.started.id, other.started.id);
+      expect(same.stopped, isEmpty);
+    });
+
     test('таймер из чужого устройства тоже останавливается новым', () async {
       final a = await project();
       // Идущая запись пришла с другого устройства (видима, без окончания).
@@ -680,7 +736,8 @@ void main() {
         foreign.id,
         foreign.toFields(),
       );
-      final result = await repo.startTimer(projectId: a);
+      final b = await project(title: 'B');
+      final result = await repo.startTimer(projectId: b);
       expect(result.stopped.single.id, foreign.id);
     });
 

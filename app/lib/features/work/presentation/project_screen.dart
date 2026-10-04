@@ -53,10 +53,8 @@ class ProjectScreen extends ConsumerWidget {
       ],
       child: data.when(
         loading: () => const ListSkeleton(),
-        error: (error, _) => const NoticeCard(
+        error: (error, _) => const WorkErrorCard(
           key: Key('project-error-card'),
-          label: 'Не загрузилось',
-          tone: StatusTone.danger,
           text: 'Не удалось прочитать проект на устройстве.',
         ),
         data: (d) => project == null

@@ -458,7 +458,9 @@ class _PaymentEditorState extends ConsumerState<PaymentEditor> {
     final row = _rows[i];
     final projects = [
       for (final p in data?.projects ?? const <WorkProject>[])
+        // Архивные «завершённые» с долгом нужны: платёж закрывает их долг.
         if ((!p.archived && p.effectiveStatus != ProjectStatus.cancelled) ||
+            (p.archived && (data?.hasDebt(p.id) ?? false)) ||
             p.id == row.projectId)
           p,
     ];
@@ -500,12 +502,18 @@ class _PaymentEditorState extends ConsumerState<PaymentEditor> {
                       PopupMenuItem<String>(
                         key: Key('alloc-project-$i-${p.id}'),
                         value: p.id,
-                        child: Text(p.title),
+                        child: Text(
+                          p.archived ? '${p.title} · в архиве' : p.title,
+                        ),
                       ),
                   ],
                   child: _pickerLabel(
                     context,
-                    project?.title ?? 'Выберите проект',
+                    project == null
+                        ? 'Выберите проект'
+                        : project.archived
+                        ? '${project.title} · в архиве'
+                        : project.title,
                     placeholder: project == null,
                   ),
                 ),

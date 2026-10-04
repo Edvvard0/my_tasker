@@ -15,7 +15,6 @@ import 'package:my_tasker/core/widgets/empty_state.dart';
 import 'package:my_tasker/core/widgets/form_text_field.dart';
 import 'package:my_tasker/core/widgets/notice_card.dart';
 import 'package:my_tasker/core/widgets/screen_scaffold.dart';
-import 'package:my_tasker/core/widgets/status_pill.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_validation.dart';
 import 'package:my_tasker/features/work/application/work_providers.dart';
 import 'package:my_tasker/features/work/data/work_repository.dart';
@@ -60,9 +59,8 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
       ],
       child: data.when(
         loading: () => const ListSkeleton(),
-        error: (error, _) => const NoticeCard(
-          label: 'Не загрузилось',
-          tone: StatusTone.danger,
+        error: (error, _) => const WorkErrorCard(
+          key: Key('people-error'),
           text: 'Не удалось прочитать людей на устройстве.',
         ),
         data: (d) => _body(context, d),

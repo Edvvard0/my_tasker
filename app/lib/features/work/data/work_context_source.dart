@@ -142,8 +142,12 @@ class WorkContextSource extends ContextSource {
         'получено ${formatAmount(s.received)} (${formatPercentBp(s.paidBp)})',
         if (s.remaining < 0)
           'переплата ${formatAmount(-s.remaining)}'
+        else if (debtStatuses.contains(p.effectiveStatus))
+          'остаток ${formatAmount(s.remaining)}'
         else
-          'остаток ${formatAmount(s.remaining)}',
+          // Лид и отменённый проект долга не создают: «остаток» модель
+          // приняла бы за деньги, которые должны.
+          'долга нет',
         if (p.deadlineDate != null) 'срок ${p.deadlineDate}',
       ];
       out.add('- ${parts.join(' · ')}');

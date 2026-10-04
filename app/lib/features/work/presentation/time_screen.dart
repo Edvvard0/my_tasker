@@ -9,7 +9,6 @@ import 'package:my_tasker/core/widgets/app_chips.dart';
 import 'package:my_tasker/core/widgets/empty_state.dart';
 import 'package:my_tasker/core/widgets/notice_card.dart';
 import 'package:my_tasker/core/widgets/screen_scaffold.dart';
-import 'package:my_tasker/core/widgets/status_pill.dart';
 import 'package:my_tasker/features/work/application/timer_providers.dart';
 import 'package:my_tasker/features/work/application/work_providers.dart';
 import 'package:my_tasker/features/work/domain/work_calc.dart';
@@ -42,9 +41,8 @@ class TimeScreen extends ConsumerWidget {
       ],
       child: data.when(
         loading: () => const ListSkeleton(),
-        error: (error, _) => const NoticeCard(
-          label: 'Не загрузилось',
-          tone: StatusTone.danger,
+        error: (error, _) => const WorkErrorCard(
+          key: Key('time-error'),
           text: 'Не удалось прочитать записи времени на устройстве.',
         ),
         data: (d) => _Body(data: d),
@@ -53,13 +51,25 @@ class TimeScreen extends ConsumerWidget {
   }
 }
 
-class _Body extends ConsumerWidget {
+/// Сколько записей показываем за раз; «Показать ещё» добавляет столько же.
+const int _pageSize = 60;
+
+class _Body extends ConsumerStatefulWidget {
   const _Body({required this.data});
 
   final WorkData data;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_Body> createState() => _BodyState();
+}
+
+class _BodyState extends ConsumerState<_Body> {
+  int _shown = _pageSize;
+
+  WorkData get data => widget.data;
+
+  @override
+  Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.text;
     final today = parseDate(moscowDate(data.now))!;
@@ -72,11 +82,18 @@ class _Body extends ConsumerWidget {
     final done = [
       for (final e in data.entries)
         if (!e.isRunning) e,
-    ].take(60).toList();
-    final groups = <String, List<TimeEntry>>{};
+    ];
+    // Сумма дня — по всем записям дня, даже если часть ещё не показана.
+    final daySeconds = <String, int>{};
     for (final e in done) {
+      final day = moscowDate(e.startedAt);
+      daySeconds[day] = (daySeconds[day] ?? 0) + (entrySeconds(e) ?? 0);
+    }
+    final groups = <String, List<TimeEntry>>{};
+    for (final e in done.take(_shown)) {
       groups.putIfAbsent(moscowDate(e.startedAt), () => []).add(e);
     }
+    final hidden = done.length - _shown;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -124,9 +141,7 @@ class _Body extends ConsumerWidget {
             WorkSectionHeader(
               title: formatDateText(day.key, data.now),
               trailing: Text(
-                formatHours(
-                  day.value.fold<int>(0, (n, e) => n + (entrySeconds(e) ?? 0)),
-                ),
+                formatHours(daySeconds[day.key] ?? 0),
                 style: t.numS.copyWith(color: c.textSecondary),
               ),
             ),
@@ -137,6 +152,17 @@ class _Body extends ConsumerWidget {
               ),
             ),
           ],
+        if (hidden > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.s3),
+            child: Center(
+              child: OutlinedButton(
+                key: const Key('time-show-more'),
+                onPressed: () => setState(() => _shown += _pageSize),
+                child: Text('Показать ещё ($hidden)'),
+              ),
+            ),
+          ),
         const SizedBox(height: AppSpacing.s4),
       ],
     );

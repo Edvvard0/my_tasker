@@ -4,6 +4,8 @@
 /// проверяет только клиент — при вводе.
 library;
 
+import 'dart:convert';
+
 import 'package:my_tasker/core/calendar_time/civil_date.dart';
 import 'package:my_tasker/core/money/money.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_validation.dart';
@@ -21,6 +23,9 @@ final DateTime workEpoch = DateTime.utc(2015);
 
 const int maxLinks = 20;
 
+/// Предел JSON-колонки `links` на сервере (`json_column(max_bytes=8192)`).
+const int maxLinksJsonBytes = 8192;
+
 bool _isRealDate(String? date) => date != null && parseDate(date) != null;
 
 String? _moneyProblem(int? value, String what, {int min = 0}) {
@@ -31,6 +36,17 @@ String? _moneyProblem(int? value, String what, {int min = 0}) {
         : '$what: от 0 до 999 999 999 999,99 ₽';
   }
   return null;
+}
+
+/// Размер JSON так, как его считает сервер: компактный JSON Python
+/// (`json.dumps` с `ensure_ascii`), где каждый символ вне ASCII занимает
+/// 6 байт (`\uXXXX`; символ вне BMP — две такие последовательности).
+int _serverJsonBytes(Object? value) {
+  var bytes = 0;
+  for (final unit in jsonEncode(value).codeUnits) {
+    bytes += unit < 0x80 ? 1 : 6;
+  }
+  return bytes;
 }
 
 /// Ссылки проекта: до 20, `http(s)://`, адрес до 500, название до 100.
@@ -46,6 +62,10 @@ String? linksProblem(List<ProjectLink> links) {
     if ((l.title?.length ?? 0) > 100) {
       return 'Название ссылки — не длиннее 100 символов';
     }
+  }
+  if (_serverJsonBytes([for (final l in links) l.toJson()]) >
+      maxLinksJsonBytes) {
+    return 'Ссылки занимают слишком много места — сократите адреса или названия';
   }
   return null;
 }

@@ -225,9 +225,34 @@ void main() {
       );
 
       await tester.enterText(find.byKey(const Key('cr-title')), 'Админка');
-      await tester.enterText(find.byKey(const Key('cr-estimate')), 'много');
+      await tester.enterText(find.byKey(const Key('cr-estimate')), '1.2.3');
       await tapKey(tester, 'cr-save');
       expect(find.textContaining('число часов'), findsOneWidget);
+
+      // «Infinity»/«NaN»/«1e400» буквами не вводятся; а цифры, дающие
+      // бесконечность при разборе, отвергаются, и кнопка остаётся рабочей.
+      await tester.enterText(find.byKey(const Key('cr-estimate')), 'Infinity');
+      expect(
+        tester
+            .widget<TextField>(
+              find.descendant(
+                of: find.byKey(const Key('cr-estimate')),
+                matching: find.byType(TextField),
+              ),
+            )
+            .controller!
+            .text,
+        '',
+      );
+      await tester.enterText(
+        find.byKey(const Key('cr-estimate')),
+        List.filled(400, '9').join(),
+      );
+      await tapKey(tester, 'cr-save');
+      expect(find.textContaining('число часов'), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('cr-estimate')), '10001');
+      await tapKey(tester, 'cr-save');
+      expect(find.textContaining('не больше 10 000'), findsOneWidget);
 
       await tester.enterText(find.byKey(const Key('cr-estimate')), '1,5');
       await tester.enterText(find.byKey(const Key('cr-note')), 'Заметка');

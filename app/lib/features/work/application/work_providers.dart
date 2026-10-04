@@ -177,6 +177,18 @@ class WorkData {
   }
 }
 
+/// «Повторить» после ошибки чтения: пересоздаёт все потоки раздела, а не
+/// только проекты и платежи — ошибка могла быть в любом из них.
+void retryWorkData(WidgetRef ref) {
+  ref
+    ..invalidate(workProjectsProvider)
+    ..invalidate(workPeopleProvider)
+    ..invalidate(changeRequestsProvider)
+    ..invalidate(paymentsProvider)
+    ..invalidate(allocationsProvider)
+    ..invalidate(timeEntriesProvider);
+}
+
 /// Снимок «Работы»: ошибка любого потока — ошибка экрана, пока хотя бы
 /// один загружается — загрузка.
 final Provider<AsyncValue<WorkData>> workDataProvider =
@@ -187,7 +199,10 @@ final Provider<AsyncValue<WorkData>> workDataProvider =
       final payments = ref.watch(paymentsProvider);
       final allocations = ref.watch(allocationsProvider);
       final entries = ref.watch(timeEntriesProvider);
-      final now = ref.watch(nowProvider);
+      // «Сейчас» нужно только ради московской даты (неделя, месяц, «вчера»):
+      // пересчитываем снимок при смене даты, а не каждые 30 секунд.
+      ref.watch(nowProvider.select(moscowDate));
+      final now = ref.read(nowProvider);
       final all = <AsyncValue<Object?>>[
         projects,
         people,

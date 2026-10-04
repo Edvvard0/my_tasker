@@ -10,7 +10,6 @@ import 'package:my_tasker/core/widgets/app_card.dart';
 import 'package:my_tasker/core/widgets/empty_state.dart';
 import 'package:my_tasker/core/widgets/notice_card.dart';
 import 'package:my_tasker/core/widgets/screen_scaffold.dart';
-import 'package:my_tasker/core/widgets/status_pill.dart';
 import 'package:my_tasker/features/work/application/work_providers.dart';
 import 'package:my_tasker/features/work/domain/work_calc.dart';
 import 'package:my_tasker/features/work/presentation/project_list.dart';
@@ -32,9 +31,8 @@ class ReceivablesScreen extends ConsumerWidget {
       onBack: () => workBack(context),
       child: data.when(
         loading: () => const ListSkeleton(),
-        error: (error, _) => const NoticeCard(
-          label: 'Не загрузилось',
-          tone: StatusTone.danger,
+        error: (error, _) => const WorkErrorCard(
+          key: Key('receivables-error'),
           text: 'Не удалось прочитать данные на устройстве.',
         ),
         data: (d) => _Body(data: d),

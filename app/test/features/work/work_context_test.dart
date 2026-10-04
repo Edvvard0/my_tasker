@@ -126,6 +126,52 @@ void main() {
     expect(lines.last, isNot(contains('срок')));
   });
 
+  testWidgets('лид и отменённый проект: «долга нет», а не «остаток»', (
+    tester,
+  ) async {
+    final container = await pumpWork(tester);
+    final repo = container.read(workRepositoryProvider);
+    late List<String> lines;
+    await tester.runAsync(() async {
+      await repo.createProject(
+        WorkProject(
+          id: repo.newId(),
+          title: 'Лид-сайт',
+          baseAmount: 100000,
+          status: ProjectStatus.lead,
+        ),
+      );
+      await repo.createProject(
+        WorkProject(
+          id: repo.newId(),
+          title: 'Отменённый',
+          baseAmount: 200000,
+          status: ProjectStatus.cancelled,
+        ),
+      );
+      await repo.createProject(
+        WorkProject(
+          id: repo.newId(),
+          title: 'Живой',
+          baseAmount: 300000,
+          status: ProjectStatus.active,
+        ),
+      );
+      lines = await source.lines(
+        container.read(contextEnvProvider)(),
+        source.defaultFilter,
+      );
+    });
+    String lineOf(String title) =>
+        lines.firstWhere((l) => l.startsWith('- проект «$title»'));
+    expect(lineOf('Лид-сайт'), contains('долга нет'));
+    expect(lineOf('Лид-сайт'), isNot(contains('остаток')));
+    expect(lineOf('Отменённый'), contains('долга нет'));
+    expect(lineOf('Отменённый'), isNot(contains('остаток')));
+    expect(lineOf('Живой'), contains('остаток ${nb('3 000 ₽')}'));
+    expect(lines[0], '- Мне должны всего: ${nb('3 000 ₽')}');
+  });
+
   testWidgets('раздел «Работа» собирается в контекст чата', (tester) async {
     final container = await pumpWork(tester, seed: true);
     final builder = container.read(contextBuilderProvider);

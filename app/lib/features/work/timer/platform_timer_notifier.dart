@@ -52,12 +52,33 @@ class _AndroidTimerPlatform implements TimerPlatform {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   Future<void>? _ready;
+  bool _permissionAsked = false;
 
   Future<void> get _initialised => _ready ??= _ensureReady();
+
+  /// Android 13+: без разрешения уведомление таймера молча не появится.
+  /// Запрашиваем при первом показе (один раз за запуск приложения); отказ
+  /// таймер не останавливает — запись времени идёт в любом случае.
+  Future<void> _askNotificationPermission() async {
+    if (_permissionAsked) return;
+    _permissionAsked = true;
+    try {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (android == null) return;
+      if (await android.areNotificationsEnabled() ?? true) return;
+      await android.requestNotificationsPermission();
+    } on Object {
+      // Не удалось спросить: таймер идёт, просто без уведомления.
+    }
+  }
 
   @override
   Future<void> show(TimerNotice notice) async {
     await _initialised;
+    await _askNotificationPermission();
     await _plugin.show(
       id: _notificationId,
       title: 'Идёт таймер',

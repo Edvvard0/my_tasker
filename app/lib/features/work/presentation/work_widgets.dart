@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:my_tasker/core/theme/app_radii.dart';
 import 'package:my_tasker/core/theme/app_spacing.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/core/widgets/app_card.dart';
+import 'package:my_tasker/core/widgets/notice_card.dart';
 import 'package:my_tasker/core/widgets/status_pill.dart';
+import 'package:my_tasker/features/work/application/work_providers.dart';
 import 'package:my_tasker/features/work/domain/work_models.dart';
 
 /// Назад из экрана «Работы»: на шаг назад, а при прямом входе — в «Работу».
@@ -15,6 +18,33 @@ void workBack(BuildContext context) {
   } else {
     context.go('/work');
   }
+}
+
+/// Красная карточка «Не загрузилось» с кнопкой «Повторить», которая
+/// пересоздаёт все потоки «Работы».
+class WorkErrorCard extends ConsumerWidget {
+  const WorkErrorCard({
+    required this.text,
+    this.retryKey = const Key('work-retry'),
+    super.key,
+  });
+
+  final String text;
+  final Key retryKey;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => NoticeCard(
+    label: 'Не загрузилось',
+    tone: StatusTone.danger,
+    text: text,
+    actions: [
+      FilledButton(
+        key: retryKey,
+        onPressed: () => retryWorkData(ref),
+        child: const Text('Повторить'),
+      ),
+    ],
+  );
 }
 
 /// Тон статус-пилюли проекта (02, 4.6): монохром, без цветов статусов.

@@ -385,6 +385,36 @@ void main() {
       expect(_data(container).entries.where((e) => e.isRunning), isEmpty);
     });
 
+    testWidgets('старт таймера сохраняет несохранённые правки задачи', (
+      tester,
+    ) async {
+      final container = await pump(tester);
+      final id = await task(tester, container, projectTitle: 'Бот разборов ИИ');
+      await openEditor(tester, id);
+      await tester.enterText(find.byKey(const Key('task-title')), 'Новое имя');
+      await tapKey(tester, 'task-timer-start');
+      expect(find.byKey(const Key('task-title')), findsNothing);
+      final saved = (await tester.runAsync(
+        () => container.read(taskRepositoryProvider).getTask(id),
+      ))!;
+      expect(saved.title, 'Новое имя');
+      final running = _data(container).entries.singleWhere((e) => e.isRunning);
+      expect(running.taskId, id);
+      expect(running.note, 'Новое имя');
+    });
+
+    testWidgets('ошибка проверки при сохранении: таймер не стартует', (
+      tester,
+    ) async {
+      final container = await pump(tester);
+      final id = await task(tester, container, projectTitle: 'Бот разборов ИИ');
+      await openEditor(tester, id);
+      await tester.enterText(find.byKey(const Key('task-title')), '');
+      await tapKey(tester, 'task-timer-start');
+      expect(find.byKey(const Key('task-title')), findsOneWidget);
+      expect(_data(container).entries.where((e) => e.isRunning), isEmpty);
+    });
+
     testWidgets('у задачи без проекта: сначала выбор проекта', (tester) async {
       final container = await pump(tester);
       final id = await task(tester, container);

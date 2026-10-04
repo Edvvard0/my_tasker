@@ -10,7 +10,6 @@ import 'package:my_tasker/core/widgets/app_chips.dart';
 import 'package:my_tasker/core/widgets/empty_state.dart';
 import 'package:my_tasker/core/widgets/notice_card.dart';
 import 'package:my_tasker/core/widgets/screen_scaffold.dart';
-import 'package:my_tasker/core/widgets/status_pill.dart';
 import 'package:my_tasker/features/work/application/work_providers.dart';
 import 'package:my_tasker/features/work/domain/work_calc.dart';
 import 'package:my_tasker/features/work/domain/work_format.dart';
@@ -41,20 +40,9 @@ class WorkScreen extends ConsumerWidget {
       ],
       child: data.when(
         loading: () => const ListSkeleton(rows: 4),
-        error: (error, _) => NoticeCard(
-          key: const Key('work-error'),
-          label: 'Не загрузилось',
-          tone: StatusTone.danger,
+        error: (error, _) => const WorkErrorCard(
+          key: Key('work-error'),
           text: 'Не удалось прочитать данные «Работы» на устройстве.',
-          actions: [
-            FilledButton(
-              key: const Key('work-retry'),
-              onPressed: () => ref
-                ..invalidate(workProjectsProvider)
-                ..invalidate(paymentsProvider),
-              child: const Text('Повторить'),
-            ),
-          ],
         ),
         data: (d) => _WorkBody(data: d),
       ),

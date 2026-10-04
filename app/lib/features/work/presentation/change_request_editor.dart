@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:my_tasker/core/theme/app_spacing.dart';
@@ -108,6 +109,9 @@ class _ChangeRequestEditorState extends ConsumerState<ChangeRequestEditor> {
     });
   }
 
+  /// Верхняя граница оценки: 600 000 минут (как в `changeRequestProblem`).
+  static const int _maxEstimateHours = 10000;
+
   static String _hoursText(int minutes) {
     final h = minutes ~/ 60;
     final m = minutes % 60;
@@ -119,8 +123,11 @@ class _ChangeRequestEditorState extends ConsumerState<ChangeRequestEditor> {
     final text = _estimate.text.trim().replaceAll(',', '.');
     if (text.isEmpty) return (null, null);
     final hours = double.tryParse(text);
-    if (hours == null || hours < 0) {
+    if (hours == null || !hours.isFinite || hours < 0) {
       return (null, 'Оценка: число часов, например 1,5');
+    }
+    if (hours > _maxEstimateHours) {
+      return (null, 'Оценка — не больше 10 000 часов');
     }
     return ((hours * 60).round(), null);
   }
@@ -141,6 +148,7 @@ class _ChangeRequestEditorState extends ConsumerState<ChangeRequestEditor> {
       _error = null;
       _saving = true;
     });
+    var closedEditor = false;
     final repo = ref.read(workRepositoryProvider);
     try {
       final today = ref.read(todayProvider);
@@ -170,13 +178,14 @@ class _ChangeRequestEditorState extends ConsumerState<ChangeRequestEditor> {
         await repo.updateChangeRequest(draft);
       }
       if (!mounted) return;
+      closedEditor = true;
       Navigator.of(context).pop();
     } on ValidationError catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.message;
-        _saving = false;
-      });
+      setState(() => _error = e.message);
+    } finally {
+      // Любой исход, кроме закрытия формы, возвращает кнопку к жизни.
+      if (!closedEditor && mounted) setState(() => _saving = false);
     }
   }
 
@@ -287,6 +296,9 @@ class _ChangeRequestEditorState extends ConsumerState<ChangeRequestEditor> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp('[0-9.,]')),
+                      ],
                       decoration: const InputDecoration(
                         hintText: 'Например, 4',
                       ),
