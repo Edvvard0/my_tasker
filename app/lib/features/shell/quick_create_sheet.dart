@@ -6,6 +6,7 @@ import 'package:my_tasker/core/layout/window_class.dart';
 import 'package:my_tasker/core/theme/app_spacing.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/features/calendar/presentation/event_editor.dart';
+import 'package:my_tasker/features/finance/presentation/transaction_editor.dart';
 import 'package:my_tasker/features/tasks/presentation/quick_add_bar.dart';
 import 'package:my_tasker/features/tasks/presentation/task_editor.dart';
 
@@ -105,6 +106,20 @@ class QuickCreateBody extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: AppSpacing.s3),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              key: const Key('quick-create-transaction'),
+              onPressed: () {
+                final root = Navigator.of(context).context;
+                Navigator.of(context).pop();
+                unawaited(showTransactionEditor(root));
+              },
+              icon: const Icon(LucideIcons.wallet, size: 18),
+              label: const Text('Операция'),
+            ),
           ),
         ],
       ),

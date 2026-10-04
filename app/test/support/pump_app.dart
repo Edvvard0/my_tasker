@@ -13,6 +13,8 @@ import 'package:my_tasker/core/network/api_providers.dart';
 import 'package:my_tasker/core/network/connection_checker.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/features/ai_chat/application/ai_providers.dart';
+import 'package:my_tasker/features/finance/application/privacy_providers.dart';
+import 'package:my_tasker/features/finance/data/secret_store.dart';
 import 'package:my_tasker/features/settings/data/server_connection_repository.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 
@@ -42,7 +44,8 @@ const desktopSize = Size(1440, 900);
 /// разрешён); [serverUrl] — сохранить адрес сервера в БД до старта;
 /// [now] — зафиксировать «текущее время» (стабильные подписи «5 мин назад»);
 /// [opener] — свой способ открыть БД (например, «сломанную»);
-/// [defaultAiApi] — поддельный API ИИ по умолчанию (экраны ИИ не ходят в сеть).
+/// [defaultAiApi] — поддельный API ИИ по умолчанию (экраны ИИ не ходят в сеть);
+/// [secretStore] — защищённое хранилище PIN «Финансов» (по умолчанию память).
 Future<ProviderContainer> pumpApp(
   WidgetTester tester, {
   Size size = phoneSize,
@@ -57,6 +60,7 @@ Future<ProviderContainer> pumpApp(
   DateTime? now,
   AppDatabaseOpener? opener,
   bool defaultAiApi = true,
+  SecretStore? secretStore,
 }) async {
   tester.view
     ..physicalSize = size
@@ -88,6 +92,8 @@ Future<ProviderContainer> pumpApp(
       if (now != null) clockProvider.overrideWithValue(() => now),
       // Экраны ИИ не ходят в настоящую сеть: поддельный API по умолчанию.
       if (defaultAiApi) aiApiProvider.overrideWithValue(FakeAiApi()),
+      // Замок «Финансов»: PIN лежит в памяти, а не в защищённом хранилище ОС.
+      secretStoreProvider.overrideWithValue(secretStore ?? MemorySecretStore()),
       ...overrides,
     ],
   );

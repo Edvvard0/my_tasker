@@ -17,6 +17,14 @@ import 'package:my_tasker/features/calendar/presentation/calendar_settings_scree
 import 'package:my_tasker/features/calendar/presentation/layers_screen.dart';
 import 'package:my_tasker/features/devices/presentation/devices_screen.dart';
 import 'package:my_tasker/features/finance/finance_screen.dart';
+import 'package:my_tasker/features/finance/presentation/accounts_screen.dart';
+import 'package:my_tasker/features/finance/presentation/analytics_screen.dart';
+import 'package:my_tasker/features/finance/presentation/categories_screen.dart';
+import 'package:my_tasker/features/finance/presentation/debts_screen.dart';
+import 'package:my_tasker/features/finance/presentation/finance_gate.dart';
+import 'package:my_tasker/features/finance/presentation/goals_screen.dart';
+import 'package:my_tasker/features/finance/presentation/transactions_screen.dart';
+import 'package:my_tasker/features/finance/presentation/work_income_screen.dart';
 import 'package:my_tasker/features/local_ai/presentation/local_benchmark_screen.dart';
 import 'package:my_tasker/features/local_ai/presentation/local_models_screen.dart';
 import 'package:my_tasker/features/settings/presentation/server_connection_screen.dart';
@@ -145,7 +153,58 @@ GoRouter createRouter({
         ),
         StatefulShellBranch(
           routes: [
-            GoRoute(path: '/finance', builder: (_, _) => const FinanceScreen()),
+            // Замок раздела (PIN) закрывает каждый экран «Финансов».
+            GoRoute(
+              path: '/finance',
+              builder: (_, _) => const FinanceLockGate(child: FinanceScreen()),
+              routes: [
+                GoRoute(
+                  path: 'accounts',
+                  builder: (_, _) =>
+                      const FinanceLockGate(child: AccountsScreen()),
+                  routes: [
+                    GoRoute(
+                      path: ':id',
+                      builder: (_, state) => FinanceLockGate(
+                        child: AccountScreen(
+                          accountId: state.pathParameters['id']!,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                GoRoute(
+                  path: 'transactions',
+                  builder: (_, _) =>
+                      const FinanceLockGate(child: TransactionsScreen()),
+                ),
+                GoRoute(
+                  path: 'categories',
+                  builder: (_, _) =>
+                      const FinanceLockGate(child: CategoriesScreen()),
+                ),
+                GoRoute(
+                  path: 'debts',
+                  builder: (_, _) =>
+                      const FinanceLockGate(child: DebtsScreen()),
+                ),
+                GoRoute(
+                  path: 'goals',
+                  builder: (_, _) =>
+                      const FinanceLockGate(child: GoalsScreen()),
+                ),
+                GoRoute(
+                  path: 'analytics',
+                  builder: (_, _) =>
+                      const FinanceLockGate(child: AnalyticsScreen()),
+                ),
+                GoRoute(
+                  path: 'work',
+                  builder: (_, _) =>
+                      const FinanceLockGate(child: WorkIncomeScreen()),
+                ),
+              ],
+            ),
           ],
         ),
         StatefulShellBranch(

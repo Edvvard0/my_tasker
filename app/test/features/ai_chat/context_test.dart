@@ -363,10 +363,11 @@ void main() {
       expect(estimateTokens('abcd'), 2);
     });
 
-    test('реестр по умолчанию: задачи, расписание и работа', () {
+    test('реестр по умолчанию: задачи, расписание, работа и финансы', () {
       final sources = device.container.read(contextSourcesProvider);
-      expect(sources.map((s) => s.id), ['tasks', 'events', 'work']);
-      expect(sources.every((s) => !s.sensitive), isTrue);
+      expect(sources.map((s) => s.id), ['tasks', 'events', 'work', 'finance']);
+      // Суммы финансов — чувствительные данные: источник не уходит в облако.
+      expect(sources.where((s) => s.sensitive).map((s) => s.id), ['finance']);
     });
   });
 

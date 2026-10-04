@@ -252,10 +252,16 @@ void main() {
       }
     });
 
+    testWidgets('«Финансы» — настоящий раздел, а не заглушка', (tester) async {
+      await _pump(tester, location: '/finance');
+      expect(find.byKey(const Key('finance-overview')), findsOneWidget);
+      expect(find.textContaining('этапе 5'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('все экраны-заглушки открываются без ошибок', (tester) async {
       const routes = {
         '/work/servers': 'этапе 9',
-        '/finance': 'этапе 5',
         '/study': 'этапе 7',
         '/sleep': 'этапе 8',
       };

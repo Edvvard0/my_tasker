@@ -42,6 +42,17 @@ class _PlainSqliteDb extends Fake implements Database {
       ResultSet(const [], null, const []);
 }
 
+/// Таблицы Этапа 5 (Финансы, схема v6).
+const financeTables = [
+  'accounts',
+  'categories',
+  'transactions',
+  'balance_checkpoints',
+  'debts',
+  'debt_repayments',
+  'goals',
+];
+
 void main() {
   const keyA =
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -54,46 +65,50 @@ void main() {
     setUp(() => db = AppDatabase(NativeDatabase.memory()));
     tearDown(() => db.close());
 
-    test(
-      'создаёт схему v5: настройки, синхронизация, календарь, ИИ-чат и Работа',
-      () async {
-        expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
-        expect(db.schemaVersion, 5);
-        final tables = await db
-            .customSelect(
-              "SELECT name FROM sqlite_master WHERE type = 'table' "
-              "AND name NOT LIKE 'sqlite_%' ORDER BY name",
-            )
-            .get();
-        expect(tables.map((r) => r.read<String>('name')), [
-          'ai_agent_profiles',
-          'ai_context_presets',
-          'ai_conversations',
-          'ai_messages',
-          'ai_model_favorites',
-          'ai_prompt_versions',
-          'ai_tool_proposals',
-          'calendars',
-          'change_requests',
-          'event_overrides',
-          'events',
-          'local_settings',
-          'payment_allocations',
-          'payments',
-          'people',
-          'projects',
-          'subtasks',
-          'sync_meta',
-          'sync_outbox',
-          'tags',
-          'task_completions',
-          'task_tags',
-          'tasks',
-          'time_entries',
-          'user_settings',
-        ]);
-      },
-    );
+    test('создаёт схему v6: настройки, синхронизация, календарь, ИИ-чат, Работа и Финансы', () async {
+      expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
+      expect(db.schemaVersion, 6);
+      final tables = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name NOT LIKE 'sqlite_%' ORDER BY name",
+          )
+          .get();
+      expect(tables.map((r) => r.read<String>('name')), [
+        'accounts',
+        'ai_agent_profiles',
+        'ai_context_presets',
+        'ai_conversations',
+        'ai_messages',
+        'ai_model_favorites',
+        'ai_prompt_versions',
+        'ai_tool_proposals',
+        'balance_checkpoints',
+        'calendars',
+        'categories',
+        'change_requests',
+        'debt_repayments',
+        'debts',
+        'event_overrides',
+        'events',
+        'goals',
+        'local_settings',
+        'payment_allocations',
+        'payments',
+        'people',
+        'projects',
+        'subtasks',
+        'sync_meta',
+        'sync_outbox',
+        'tags',
+        'task_completions',
+        'task_tags',
+        'tasks',
+        'time_entries',
+        'transactions',
+        'user_settings',
+      ]);
+    });
 
     test('внешние ключи включены', () async {
       final row = await db.customSelect('PRAGMA foreign_keys').getSingle();
@@ -136,8 +151,8 @@ void main() {
       );
     });
 
-    test('в реестре AppDatabase есть шаги до v2, v3, v4 (ИИ-чат) и v5', () {
-      expect(AppDatabase.migrationSteps.keys, [2, 3, 4, 5]);
+    test('в реестре AppDatabase есть шаги до v2…v6 (v6 — Финансы)', () {
+      expect(AppDatabase.migrationSteps.keys, [2, 3, 4, 5, 6]);
     });
   });
 
@@ -222,6 +237,13 @@ void main() {
         ..execute('DROP TABLE payments')
         ..execute('DROP TABLE payment_allocations')
         ..execute('DROP TABLE time_entries')
+        ..execute('DROP TABLE accounts')
+        ..execute('DROP TABLE categories')
+        ..execute('DROP TABLE transactions')
+        ..execute('DROP TABLE balance_checkpoints')
+        ..execute('DROP TABLE debts')
+        ..execute('DROP TABLE debt_repayments')
+        ..execute('DROP TABLE goals')
         ..execute('PRAGMA user_version = 2')
         ..close();
 
@@ -257,6 +279,8 @@ void main() {
         'payments',
         'payment_allocations',
         'time_entries',
+        // …и Финансов (v6).
+        ...financeTables,
       ]) {
         raw.execute('DROP TABLE $t');
       }
@@ -294,6 +318,7 @@ void main() {
         'time_entries',
         'projects',
         'people',
+        ...financeTables,
       ]) {
         raw.execute('DROP TABLE $t');
       }
@@ -360,7 +385,7 @@ void main() {
           .get();
       expect(names, hasLength(10));
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.read<int>('user_version'), 5);
+      expect(version.read<int>('user_version'), 6);
       // Новые таблицы пишутся и читаются.
       await db.customStatement(
         'INSERT INTO payments (id, created_at, updated_at, paid_at, amount) '
@@ -370,6 +395,104 @@ void main() {
           .customSelect('SELECT amount FROM payments')
           .getSingle();
       expect(amount.read<int>('amount'), 100);
+    });
+
+    test('миграция v5 -> v6 (Финансы): таблицы и индексы, прежние данные '
+        'целы, новые таблицы пишутся', () async {
+      final first = AppDatabase(NativeDatabase(file));
+      await first.customSelect('SELECT 1').get();
+      await first.close();
+      // Настоящая БД v5: без таблиц Финансов, с данными прежних этапов.
+      final raw = sqlite3.open(file.path);
+      for (final t in financeTables) {
+        raw.execute('DROP TABLE $t');
+      }
+      raw
+        ..execute(
+          "INSERT INTO local_settings VALUES ('server_url', 'https://x')",
+        )
+        ..execute(
+          'INSERT INTO projects (id, created_at, updated_at, title, archived) '
+          "VALUES ('p1', 'c', 'u', 'Проект', 0)",
+        )
+        ..execute(
+          'INSERT INTO payments (id, created_at, updated_at, paid_at, amount) '
+          "VALUES ('pay', 'c', 'u', '2026-10-05T09:00:00Z', 100)",
+        )
+        ..execute('PRAGMA user_version = 5')
+        ..close();
+
+      final db = AppDatabase(NativeDatabase(file));
+      addTearDown(db.close);
+      expect(await LocalSettingsRepository(db).read('server_url'), 'https://x');
+      final project = await db
+          .customSelect('SELECT * FROM projects')
+          .getSingle();
+      expect(project.read<String>('title'), 'Проект');
+      final payment = await db
+          .customSelect('SELECT amount FROM payments')
+          .getSingle();
+      expect(payment.read<int>('amount'), 100);
+
+      final names = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type IN ('table', 'index') "
+            "AND (name IN ('accounts', 'categories', 'transactions', "
+            "'balance_checkpoints', 'debts', 'debt_repayments', 'goals') "
+            "OR name LIKE '%_idx') ORDER BY name",
+          )
+          .get();
+      expect(
+        names.map((r) => r.read<String>('name')),
+        containsAll([
+          ...financeTables,
+          'transactions_account_idx',
+          'transactions_occurred_idx',
+          'balance_checkpoints_account_idx',
+          'debt_repayments_debt_idx',
+        ]),
+      );
+      final version = await db.customSelect('PRAGMA user_version').getSingle();
+      expect(version.read<int>('user_version'), 6);
+      // Колонки новых таблиц — по контракту; строки пишутся и читаются.
+      final cols = await db
+          .customSelect('PRAGMA table_info(transactions)')
+          .get();
+      expect(
+        cols.map((r) => r.read<String>('name')),
+        containsAll([
+          'id',
+          'created_at',
+          'updated_at',
+          'deleted_at',
+          'server_version',
+          'origin_device_id',
+          'kind',
+          'account_id',
+          'to_account_id',
+          'amount',
+          'occurred_at',
+          'category_id',
+          'merchant',
+          'comment',
+          'source',
+          'status',
+          'external_id',
+          'dedup_hash',
+          'work_payment_id',
+          'debt_id',
+        ]),
+      );
+      await db.customStatement(
+        'INSERT INTO accounts (id, created_at, updated_at, name, kind, '
+        'opening_balance, opening_date, include_in_total, archived) '
+        "VALUES ('a1', 'c', 'u', 'Карта', 'debit_card', -500, "
+        "'2026-01-01', 1, 0)",
+      );
+      final balance = await db
+          .customSelect('SELECT opening_balance FROM accounts')
+          .getSingle();
+      expect(balance.read<int>('opening_balance'), -500);
     });
 
     test('addColumnIfMissing не падает, если колонка уже есть', () async {
