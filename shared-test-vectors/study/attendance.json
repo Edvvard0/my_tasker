@@ -6355,6 +6355,968 @@
           "state": "ok"
         }
       ]
+    },
+    {
+      "name": "a_ghost_move_is_not_a_lesson_and_not_counted",
+      "input": {
+        "semesters": [
+          {
+            "id": "sem1",
+            "start_date": "2026-09-01",
+            "end_date": "2026-12-31",
+            "week1_start": "2026-08-31",
+            "cycle_length": 2,
+            "week_shifts": null,
+            "archived": false
+          }
+        ],
+        "subjects": [
+          {
+            "id": "math",
+            "semester_id": "sem1",
+            "name": "Математический анализ",
+            "building": "1",
+            "room": "28",
+            "absence_limit": 4
+          },
+          {
+            "id": "phys",
+            "semester_id": "sem1",
+            "name": "Физика",
+            "building": "2",
+            "room": "101",
+            "absence_limit": 3
+          },
+          {
+            "id": "prog",
+            "semester_id": "sem1",
+            "name": "Программирование",
+            "building": null,
+            "room": null,
+            "absence_limit": null
+          }
+        ],
+        "bells": [
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 1,
+            "start_time": "08:30",
+            "end_time": "10:00"
+          },
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 2,
+            "start_time": "10:10",
+            "end_time": "11:40"
+          },
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 3,
+            "start_time": "12:10",
+            "end_time": "13:40"
+          },
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 4,
+            "start_time": "13:50",
+            "end_time": "15:20"
+          },
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 5,
+            "start_time": "15:30",
+            "end_time": "17:00"
+          }
+        ],
+        "slots": [
+          {
+            "id": "s-mon-1",
+            "semester_id": "sem1",
+            "subject_id": "math",
+            "title": null,
+            "weekday": 1,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-mon-2",
+            "semester_id": "sem1",
+            "subject_id": "phys",
+            "title": null,
+            "weekday": 1,
+            "number": 2,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lab",
+            "building": "2",
+            "room": "101",
+            "cycle_week": 1
+          },
+          {
+            "id": "s-tue-3",
+            "semester_id": "sem1",
+            "subject_id": "prog",
+            "title": null,
+            "weekday": 2,
+            "number": 3,
+            "start_time": null,
+            "end_time": null,
+            "kind": "practice",
+            "building": "1",
+            "room": "30",
+            "cycle_week": 2
+          },
+          {
+            "id": "s-wed-1",
+            "semester_id": "sem1",
+            "subject_id": "math",
+            "title": null,
+            "weekday": 3,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "practice",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-thu-1",
+            "semester_id": "sem1",
+            "subject_id": "math",
+            "title": null,
+            "weekday": 4,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-thu-2",
+            "semester_id": "sem1",
+            "subject_id": "phys",
+            "title": null,
+            "weekday": 4,
+            "number": 2,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-thu-3",
+            "semester_id": "sem1",
+            "subject_id": "prog",
+            "title": null,
+            "weekday": 4,
+            "number": 3,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-fri-x",
+            "semester_id": "sem1",
+            "subject_id": null,
+            "title": "Кружок",
+            "weekday": 5,
+            "number": null,
+            "start_time": "09:00",
+            "end_time": "10:30",
+            "kind": "other",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-sat-1",
+            "semester_id": "sem1",
+            "subject_id": "prog",
+            "title": null,
+            "weekday": 6,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": "1",
+            "room": "12",
+            "cycle_week": null
+          }
+        ],
+        "day_rules": [
+          {
+            "id": "r-thu",
+            "semester_id": "sem1",
+            "weekday": 4,
+            "on_date": null,
+            "cycle_week": null,
+            "title": "Подготовка к олимпиаде",
+            "hide_regular": true,
+            "items": [
+              {
+                "key": "o1",
+                "number": 1,
+                "start_time": null,
+                "end_time": null,
+                "title": "Подготовка к олимпиаде",
+                "kind": "other",
+                "building": "1",
+                "room": "12",
+                "cycle_week": null
+              },
+              {
+                "key": "o2",
+                "number": 2,
+                "start_time": null,
+                "end_time": null,
+                "title": "Подготовка к олимпиаде",
+                "kind": "other",
+                "building": "1",
+                "room": "12",
+                "cycle_week": null
+              },
+              {
+                "key": "o3",
+                "number": 3,
+                "start_time": null,
+                "end_time": null,
+                "title": "Подготовка к олимпиаде",
+                "kind": "other",
+                "building": "1",
+                "room": "12",
+                "cycle_week": null
+              }
+            ]
+          }
+        ],
+        "overrides": [
+          {
+            "id": "o-1",
+            "slot_id": "s-wed-1",
+            "date": "2026-09-08",
+            "action": "move",
+            "new_date": "2026-09-11",
+            "start_time": null,
+            "end_time": null,
+            "building": null,
+            "room": null,
+            "subject_id": null,
+            "title": null,
+            "lesson_kind": null
+          }
+        ],
+        "holidays": {},
+        "through": "2026-09-14",
+        "attendance": []
+      },
+      "expected": [
+        {
+          "subject_id": "math",
+          "present": 0,
+          "absent": 0,
+          "cancelled": 0,
+          "unmarked": 4,
+          "limit": 4,
+          "left": 4,
+          "state": "ok"
+        },
+        {
+          "subject_id": "phys",
+          "present": 0,
+          "absent": 0,
+          "cancelled": 0,
+          "unmarked": 1,
+          "limit": 3,
+          "left": 3,
+          "state": "ok"
+        },
+        {
+          "subject_id": "prog",
+          "present": 0,
+          "absent": 0,
+          "cancelled": 0,
+          "unmarked": 3,
+          "limit": null,
+          "left": null,
+          "state": "no_limit"
+        }
+      ]
+    },
+    {
+      "name": "a_move_beyond_the_semester_leaves_the_lesson_counted_where_it_was",
+      "input": {
+        "semesters": [
+          {
+            "id": "sem1",
+            "start_date": "2026-09-01",
+            "end_date": "2026-12-31",
+            "week1_start": "2026-08-31",
+            "cycle_length": 2,
+            "week_shifts": null,
+            "archived": false
+          }
+        ],
+        "subjects": [
+          {
+            "id": "math",
+            "semester_id": "sem1",
+            "name": "Математический анализ",
+            "building": "1",
+            "room": "28",
+            "absence_limit": 4
+          },
+          {
+            "id": "phys",
+            "semester_id": "sem1",
+            "name": "Физика",
+            "building": "2",
+            "room": "101",
+            "absence_limit": 3
+          },
+          {
+            "id": "prog",
+            "semester_id": "sem1",
+            "name": "Программирование",
+            "building": null,
+            "room": null,
+            "absence_limit": null
+          }
+        ],
+        "bells": [
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 1,
+            "start_time": "08:30",
+            "end_time": "10:00"
+          },
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 2,
+            "start_time": "10:10",
+            "end_time": "11:40"
+          },
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 3,
+            "start_time": "12:10",
+            "end_time": "13:40"
+          },
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 4,
+            "start_time": "13:50",
+            "end_time": "15:20"
+          },
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 5,
+            "start_time": "15:30",
+            "end_time": "17:00"
+          }
+        ],
+        "slots": [
+          {
+            "id": "s-mon-1",
+            "semester_id": "sem1",
+            "subject_id": "math",
+            "title": null,
+            "weekday": 1,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-mon-2",
+            "semester_id": "sem1",
+            "subject_id": "phys",
+            "title": null,
+            "weekday": 1,
+            "number": 2,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lab",
+            "building": "2",
+            "room": "101",
+            "cycle_week": 1
+          },
+          {
+            "id": "s-tue-3",
+            "semester_id": "sem1",
+            "subject_id": "prog",
+            "title": null,
+            "weekday": 2,
+            "number": 3,
+            "start_time": null,
+            "end_time": null,
+            "kind": "practice",
+            "building": "1",
+            "room": "30",
+            "cycle_week": 2
+          },
+          {
+            "id": "s-wed-1",
+            "semester_id": "sem1",
+            "subject_id": "math",
+            "title": null,
+            "weekday": 3,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "practice",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-thu-1",
+            "semester_id": "sem1",
+            "subject_id": "math",
+            "title": null,
+            "weekday": 4,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-thu-2",
+            "semester_id": "sem1",
+            "subject_id": "phys",
+            "title": null,
+            "weekday": 4,
+            "number": 2,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-thu-3",
+            "semester_id": "sem1",
+            "subject_id": "prog",
+            "title": null,
+            "weekday": 4,
+            "number": 3,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-fri-x",
+            "semester_id": "sem1",
+            "subject_id": null,
+            "title": "Кружок",
+            "weekday": 5,
+            "number": null,
+            "start_time": "09:00",
+            "end_time": "10:30",
+            "kind": "other",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-sat-1",
+            "semester_id": "sem1",
+            "subject_id": "prog",
+            "title": null,
+            "weekday": 6,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": "1",
+            "room": "12",
+            "cycle_week": null
+          }
+        ],
+        "day_rules": [
+          {
+            "id": "r-thu",
+            "semester_id": "sem1",
+            "weekday": 4,
+            "on_date": null,
+            "cycle_week": null,
+            "title": "Подготовка к олимпиаде",
+            "hide_regular": true,
+            "items": [
+              {
+                "key": "o1",
+                "number": 1,
+                "start_time": null,
+                "end_time": null,
+                "title": "Подготовка к олимпиаде",
+                "kind": "other",
+                "building": "1",
+                "room": "12",
+                "cycle_week": null
+              },
+              {
+                "key": "o2",
+                "number": 2,
+                "start_time": null,
+                "end_time": null,
+                "title": "Подготовка к олимпиаде",
+                "kind": "other",
+                "building": "1",
+                "room": "12",
+                "cycle_week": null
+              },
+              {
+                "key": "o3",
+                "number": 3,
+                "start_time": null,
+                "end_time": null,
+                "title": "Подготовка к олимпиаде",
+                "kind": "other",
+                "building": "1",
+                "room": "12",
+                "cycle_week": null
+              }
+            ]
+          }
+        ],
+        "overrides": [
+          {
+            "id": "o-1",
+            "slot_id": "s-wed-1",
+            "date": "2026-12-30",
+            "action": "move",
+            "new_date": "2027-01-02",
+            "start_time": null,
+            "end_time": null,
+            "building": null,
+            "room": null,
+            "subject_id": null,
+            "title": null,
+            "lesson_kind": null
+          }
+        ],
+        "holidays": {},
+        "through": "2027-01-05",
+        "attendance": [
+          {
+            "slot_id": "s-wed-1",
+            "date": "2026-12-30",
+            "status": "absent"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "subject_id": "math",
+          "present": 0,
+          "absent": 1,
+          "cancelled": 0,
+          "unmarked": 34,
+          "limit": 4,
+          "left": 3,
+          "state": "ok"
+        },
+        {
+          "subject_id": "phys",
+          "present": 0,
+          "absent": 0,
+          "cancelled": 0,
+          "unmarked": 8,
+          "limit": 3,
+          "left": 3,
+          "state": "ok"
+        },
+        {
+          "subject_id": "prog",
+          "present": 0,
+          "absent": 0,
+          "cancelled": 0,
+          "unmarked": 26,
+          "limit": null,
+          "left": null,
+          "state": "no_limit"
+        }
+      ]
+    },
+    {
+      "name": "overlapping_semesters_count_a_date_in_the_winning_semester_only",
+      "input": {
+        "semesters": [
+          {
+            "id": "sem1",
+            "start_date": "2026-09-01",
+            "end_date": "2026-12-31",
+            "week1_start": "2026-08-31",
+            "cycle_length": 2,
+            "week_shifts": null,
+            "archived": false
+          },
+          {
+            "id": "sem2",
+            "start_date": "2026-10-01",
+            "end_date": "2026-12-31",
+            "week1_start": "2026-10-05",
+            "cycle_length": 2,
+            "week_shifts": null,
+            "archived": false
+          }
+        ],
+        "subjects": [
+          {
+            "id": "math",
+            "semester_id": "sem1",
+            "name": "Математический анализ",
+            "building": "1",
+            "room": "28",
+            "absence_limit": 4
+          },
+          {
+            "id": "phys",
+            "semester_id": "sem1",
+            "name": "Физика",
+            "building": "2",
+            "room": "101",
+            "absence_limit": 3
+          },
+          {
+            "id": "prog",
+            "semester_id": "sem1",
+            "name": "Программирование",
+            "building": null,
+            "room": null,
+            "absence_limit": null
+          },
+          {
+            "id": "hist",
+            "semester_id": "sem2",
+            "name": "История",
+            "building": null,
+            "room": null,
+            "absence_limit": 2
+          }
+        ],
+        "bells": [
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 1,
+            "start_time": "08:30",
+            "end_time": "10:00"
+          },
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 2,
+            "start_time": "10:10",
+            "end_time": "11:40"
+          },
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 3,
+            "start_time": "12:10",
+            "end_time": "13:40"
+          },
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 4,
+            "start_time": "13:50",
+            "end_time": "15:20"
+          },
+          {
+            "semester_id": "sem1",
+            "on_date": null,
+            "number": 5,
+            "start_time": "15:30",
+            "end_time": "17:00"
+          },
+          {
+            "semester_id": "sem2",
+            "on_date": null,
+            "number": 1,
+            "start_time": "09:00",
+            "end_time": "10:30"
+          }
+        ],
+        "slots": [
+          {
+            "id": "s-mon-1",
+            "semester_id": "sem1",
+            "subject_id": "math",
+            "title": null,
+            "weekday": 1,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-mon-2",
+            "semester_id": "sem1",
+            "subject_id": "phys",
+            "title": null,
+            "weekday": 1,
+            "number": 2,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lab",
+            "building": "2",
+            "room": "101",
+            "cycle_week": 1
+          },
+          {
+            "id": "s-tue-3",
+            "semester_id": "sem1",
+            "subject_id": "prog",
+            "title": null,
+            "weekday": 2,
+            "number": 3,
+            "start_time": null,
+            "end_time": null,
+            "kind": "practice",
+            "building": "1",
+            "room": "30",
+            "cycle_week": 2
+          },
+          {
+            "id": "s-wed-1",
+            "semester_id": "sem1",
+            "subject_id": "math",
+            "title": null,
+            "weekday": 3,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "practice",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-thu-1",
+            "semester_id": "sem1",
+            "subject_id": "math",
+            "title": null,
+            "weekday": 4,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-thu-2",
+            "semester_id": "sem1",
+            "subject_id": "phys",
+            "title": null,
+            "weekday": 4,
+            "number": 2,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-thu-3",
+            "semester_id": "sem1",
+            "subject_id": "prog",
+            "title": null,
+            "weekday": 4,
+            "number": 3,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-fri-x",
+            "semester_id": "sem1",
+            "subject_id": null,
+            "title": "Кружок",
+            "weekday": 5,
+            "number": null,
+            "start_time": "09:00",
+            "end_time": "10:30",
+            "kind": "other",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          },
+          {
+            "id": "s-sat-1",
+            "semester_id": "sem1",
+            "subject_id": "prog",
+            "title": null,
+            "weekday": 6,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": "1",
+            "room": "12",
+            "cycle_week": null
+          },
+          {
+            "id": "s-new",
+            "semester_id": "sem2",
+            "subject_id": "hist",
+            "title": null,
+            "weekday": 1,
+            "number": 1,
+            "start_time": null,
+            "end_time": null,
+            "kind": "lecture",
+            "building": null,
+            "room": null,
+            "cycle_week": null
+          }
+        ],
+        "day_rules": [
+          {
+            "id": "r-thu",
+            "semester_id": "sem1",
+            "weekday": 4,
+            "on_date": null,
+            "cycle_week": null,
+            "title": "Подготовка к олимпиаде",
+            "hide_regular": true,
+            "items": [
+              {
+                "key": "o1",
+                "number": 1,
+                "start_time": null,
+                "end_time": null,
+                "title": "Подготовка к олимпиаде",
+                "kind": "other",
+                "building": "1",
+                "room": "12",
+                "cycle_week": null
+              },
+              {
+                "key": "o2",
+                "number": 2,
+                "start_time": null,
+                "end_time": null,
+                "title": "Подготовка к олимпиаде",
+                "kind": "other",
+                "building": "1",
+                "room": "12",
+                "cycle_week": null
+              },
+              {
+                "key": "o3",
+                "number": 3,
+                "start_time": null,
+                "end_time": null,
+                "title": "Подготовка к олимпиаде",
+                "kind": "other",
+                "building": "1",
+                "room": "12",
+                "cycle_week": null
+              }
+            ]
+          }
+        ],
+        "overrides": [],
+        "holidays": {},
+        "through": "2026-10-12",
+        "attendance": [
+          {
+            "slot_id": "s-mon-1",
+            "date": "2026-10-05",
+            "status": "absent"
+          },
+          {
+            "slot_id": "s-new",
+            "date": "2026-10-05",
+            "status": "absent"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "subject_id": "math",
+          "present": 0,
+          "absent": 0,
+          "cancelled": 0,
+          "unmarked": 9,
+          "limit": 4,
+          "left": 4,
+          "state": "ok"
+        },
+        {
+          "subject_id": "phys",
+          "present": 0,
+          "absent": 0,
+          "cancelled": 0,
+          "unmarked": 2,
+          "limit": 3,
+          "left": 3,
+          "state": "ok"
+        },
+        {
+          "subject_id": "prog",
+          "present": 0,
+          "absent": 0,
+          "cancelled": 0,
+          "unmarked": 6,
+          "limit": null,
+          "left": null,
+          "state": "no_limit"
+        },
+        {
+          "subject_id": "hist",
+          "present": 0,
+          "absent": 1,
+          "cancelled": 0,
+          "unmarked": 1,
+          "limit": 2,
+          "left": 1,
+          "state": "ok"
+        }
+      ]
     }
   ]
 }

@@ -7,7 +7,15 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from tasker.study import reference as ref
-from tests.study_vectors_gen import base, scene
+from tests.study_vectors_gen import (
+    OVERLAP_SEMESTERS,
+    att,
+    base,
+    override,
+    scene,
+    slot,
+    subject,
+)
 
 ROOM = st.from_regex(r"[0-9]{1,3}[а-я]?", fullmatch=True)
 
@@ -146,3 +154,80 @@ def test_archived_semesters_do_not_count_in_attendance() -> None:
         [],
     )
     assert all(row["unmarked"] == 0 for row in summary)
+
+
+def _expand(data: dict[str, Any], day: str) -> dict[str, Any]:
+    day_ = ref.expand_day(
+        day,
+        data["semesters"],
+        data["subjects"],
+        data["bells"],
+        data["slots"],
+        data["day_rules"],
+        data["overrides"],
+        data["holidays"],
+    )
+    assert isinstance(day_, dict)
+    return day_
+
+
+@pytest.mark.parametrize(
+    ("slot_id", "original"),
+    [
+        ("s-mon-2", "2026-09-07"),  # a lab of odd weeks, asked for on an even Monday
+        ("s-wed-1", "2026-09-08"),  # a Wednesday lesson, asked for on a Tuesday
+        ("s-wed-1", "2026-08-26"),  # before the semester
+        ("s-wed-1", "2027-01-06"),  # after the semester
+    ],
+)
+def test_a_move_of_a_lesson_that_does_not_occur_never_shows_up(slot_id: str, original: str) -> None:
+    data = scene([])
+    data["overrides"] = [override("o-1", slot_id, original, "move", new_date="2026-09-11")]
+    friday = _expand(data, "2026-09-11")
+    assert [lesson["key"] for lesson in friday["lessons"]] == ["slot:s-fri-x@2026-09-11"]
+    assert all(lesson["moved_from"] is None for lesson in _expand(data, original)["lessons"])
+
+
+def test_a_real_move_still_arrives() -> None:
+    data = scene([])
+    data["overrides"] = [override("o-1", "s-wed-1", "2026-09-09", "move", new_date="2026-09-11")]
+    keys = [(x["key"], x["moved_from"]) for x in _expand(data, "2026-09-11")["lessons"]]
+    assert ("slot:s-wed-1@2026-09-09", "2026-09-09") in keys
+    assert _expand(data, "2026-09-09")["lessons"][0]["moved_to"] == "2026-09-11"
+
+
+def test_a_move_out_of_the_semester_leaves_the_lesson_where_it_is() -> None:
+    data = scene([])
+    data["overrides"] = [override("o-1", "s-wed-1", "2026-12-30", "move", new_date="2027-01-02")]
+    (lesson,) = _expand(data, "2026-12-30")["lessons"]
+    assert (lesson["moved_to"], lesson["trackable"], lesson["override_id"]) == (None, True, None)
+    assert _expand(data, "2027-01-02")["lessons"] == []
+
+
+def test_overlapping_semesters_are_counted_once() -> None:
+    data = scene([])
+    data["semesters"] = OVERLAP_SEMESTERS
+    data["subjects"] = [
+        *data["subjects"],
+        {**subject("hist", "История", None, None), "semester_id": "sem2"},
+    ]
+    data["slots"] = [*data["slots"], {**slot("s-new", 1, 1, "hist"), "semester_id": "sem2"}]
+    args = (
+        data["semesters"],
+        data["subjects"],
+        data["bells"],
+        data["slots"],
+        data["day_rules"],
+        data["overrides"],
+        data["holidays"],
+    )
+    through = "2026-10-12"
+    summary = {c["subject_id"]: c for c in ref.attendance_summary(through, *args, [])}
+    # Mondays 5 and 12 October and Wednesdays 7 and 14 October belong to the later semester
+    assert (summary["math"]["unmarked"], summary["hist"]["unmarked"]) == (9, 2)
+    marked = ref.attendance_summary(
+        through,
+        *args,
+        [att("s-mon-1", "2026-10-05", "absent"), att("s-new", "2026-10-05", "absent")],
+    )
+    assert [(c["subject_id"], c["absent"]) for c in marked if c["absent"]] == [("hist", 1)]

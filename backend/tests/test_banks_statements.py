@@ -1,6 +1,8 @@
 """Statement parsing: CSV, XLSX and PDF samples (synthetic), header detection, row rules."""
 
 import io
+import re
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -212,6 +214,78 @@ def test_xlsx_too_large_unpacked(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(StatementError) as raised:
         parse_statement(_workbook([VTB_HEADER]))
     assert raised.value.code == "statement_too_large"
+
+
+def _forged_dimension(data: bytes, ref: str) -> bytes:
+    """The same workbook with the ``<dimension>`` of its first sheet replaced by ``ref``."""
+    out = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(data)) as src, zipfile.ZipFile(out, "w") as dst:
+        for info in src.infolist():
+            content = src.read(info.filename)
+            if info.filename == "xl/worksheets/sheet1.xml":
+                content, count = re.subn(
+                    rb'<dimension ref="[^"]*"', f'<dimension ref="{ref}"'.encode(), content
+                )
+                assert count == 1
+            dst.writestr(info, content)
+    return out.getvalue()
+
+
+def test_xlsx_with_a_forged_dimension_is_not_padded() -> None:
+    rows = [VTB_HEADER] + [
+        ["03.10.2026", f"Магазин {n}", "10,00", "", "RUB", "", ""] for n in range(300)
+    ]
+    forged = _forged_dimension(_workbook(rows), "A1:XFD1048576")
+    (table,) = st_mod.extract_tables("xlsx", forged)
+    assert len(table) == 301
+    assert max(len(row) for row in table) == len(VTB_HEADER)  # no padding to 16 384 columns
+    assert len(candidates(parse_statement(forged))) == 300
+
+
+def test_xlsx_cells_beyond_the_column_limit_are_cut() -> None:
+    wide = [*VTB_HEADER, *["x"] * 70, "far away"]
+    row = ["03.10.2026", "Кофе", "100,00", "", "RUB", "", ""]
+    (table,) = st_mod.extract_tables("xlsx", _workbook([wide, row]))
+    assert len(table[0]) == st_mod.MAX_XLSX_COLUMNS
+    assert table[1] == row[:5]  # the empty tail of a row is not kept
+
+
+def test_xlsx_empty_rows_far_apart_cost_no_cells() -> None:
+    book = openpyxl.Workbook()
+    sheet = book.active
+    assert sheet is not None
+    sheet.append(VTB_HEADER)
+    sheet.cell(row=3000, column=1, value="03.10.2026")  # thousands of empty rows in between
+    buffer = io.BytesIO()
+    book.save(buffer)
+    (table,) = st_mod.extract_tables("xlsx", buffer.getvalue())
+    assert len(table) == 3000
+    assert sum(len(row) for row in table) == len(VTB_HEADER) + 1
+
+
+def test_xlsx_too_many_cells(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(st_mod, "MAX_CELLS", 20)
+    rows = [VTB_HEADER] + [["03.10.2026", "x", "1", "", "RUB", "", ""]] * 5
+    with pytest.raises(StatementError) as raised:
+        parse_statement(_workbook(rows))
+    assert raised.value.code == "statement_too_large"
+    assert "cells" in raised.value.message
+
+
+def test_xlsx_too_many_sheets(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(st_mod, "MAX_XLSX_SHEETS", 1)
+    with pytest.raises(StatementError) as raised:
+        parse_statement(_workbook([VTB_HEADER], extra_sheet=True))
+    assert (raised.value.code, "sheets" in raised.value.message) == ("statement_too_large", True)
+
+
+def test_a_parse_past_its_deadline_stops(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(st_mod, "PARSE_SECONDS", -1.0)
+    for data in (_workbook([VTB_HEADER]), PDF, CSV):
+        with pytest.raises(StatementError) as raised:
+            parse_statement(data)
+        assert raised.value.code == "statement_too_large"
+        assert "too long" in raised.value.message
 
 
 def test_too_many_rows(monkeypatch: pytest.MonkeyPatch) -> None:

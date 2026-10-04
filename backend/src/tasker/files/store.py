@@ -126,9 +126,15 @@ class DiskFileStore:
         removed = 0
         cutoff = time.time() - older_than_seconds
         for path in self._walk():
-            if path.name.endswith(TEMP_SUFFIX) and path.stat().st_mtime < cutoff:
-                _unlink(path)
-                removed += 1
+            if not path.name.endswith(TEMP_SUFFIX):
+                continue
+            try:
+                if path.stat().st_mtime >= cutoff:
+                    continue
+                path.unlink()
+            except FileNotFoundError:
+                continue  # an upload finished (``os.replace``) or was cleaned up meanwhile
+            removed += 1
         return removed
 
 

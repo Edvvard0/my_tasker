@@ -99,3 +99,35 @@ async def test_keys_and_stale_temporaries(tmp_path: Path) -> None:
     assert not old.exists()
     assert fresh.exists()
     assert sorted(await store.keys()) == sorted(keys)  # temporaries and strangers are not keys
+
+
+async def test_a_temporary_that_vanishes_during_the_sweep_is_not_an_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``os.replace`` of a finished upload can take a ``*.part`` away between the walk and the
+    ``stat`` (or between the ``stat`` and the ``unlink``): the sweep carries on and counts only
+    what it really removed."""
+    store = DiskFileStore(tmp_path)
+    key = uuid.uuid4()
+    await store.put(key, chunked(DATA), size=len(DATA), sha256=SHA)
+    folder = tmp_path / str(key)[:2]
+    ghost = folder / f"{key}.ghost{TEMP_SUFFIX}"  # listed by the walk, gone at the stat
+    racing = folder / f"{key}.racing{TEMP_SUFFIX}"  # gone between the stat and the unlink
+    old = folder / f"{key}.old{TEMP_SUFFIX}"
+    for path in (racing, old):
+        path.write_bytes(b"x")
+        os.utime(path, (time.time() - 7200, time.time() - 7200))
+    monkeypatch.setattr(DiskFileStore, "_walk", lambda self: iter([ghost, racing, old]))
+    real_unlink = Path.unlink
+
+    def unlink(self: Path, missing_ok: bool = False) -> None:
+        if self == racing:
+            real_unlink(self)
+            raise FileNotFoundError(str(self))
+        real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    assert await store.remove_stale_temporaries(3600) == 1  # only ``old`` counts
+    assert not old.exists()
+    assert not racing.exists()
+    assert await store.size(key) == len(DATA)

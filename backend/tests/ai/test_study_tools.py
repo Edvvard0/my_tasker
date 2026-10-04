@@ -106,6 +106,36 @@ async def test_schedule_follows_overrides_and_holidays(env: Env) -> None:
     assert days["2026-11-04"]["lessons"] == []
 
 
+async def test_schedule_says_how_far_the_holiday_file_reaches(env: Env) -> None:
+    await seeded(env)
+    covered = await call(
+        env, "get_study_schedule", {"from_date": "2027-12-27", "to_date": "2027-12-31"}
+    )
+    assert covered["holidays_covered_until"] == "2027-12-31"
+    assert "holidays_warning" not in covered
+    beyond = await call(
+        env, "get_study_schedule", {"from_date": "2027-12-30", "to_date": "2028-01-03"}
+    )
+    assert beyond["holidays_covered_until"] == "2027-12-31"
+    assert "2028" in beyond["holidays_warning"]
+    assert "2027" not in beyond["holidays_warning"]
+    before = await call(
+        env, "get_study_schedule", {"from_date": "2025-12-30", "to_date": "2026-01-02"}
+    )
+    assert "2025" in before["holidays_warning"]
+
+
+async def test_absences_say_how_far_the_holiday_file_reaches(env: Env) -> None:
+    await seeded(env)
+    inside = await call(env, "get_study_absences", {"through_date": "2026-09-30"})
+    assert inside["holidays_covered_until"] == "2027-12-31"
+    assert "holidays_warning" not in inside
+    beyond = await call(env, "get_study_absences", {"through_date": "2029-01-01"})
+    assert "2028, 2029" in beyond["holidays_warning"]
+    empty = await call(env, "get_study_absences", {"through_date": "2020-01-01"})
+    assert "holidays_warning" not in empty  # nothing is expanded before the semester
+
+
 async def test_schedule_argument_errors(env: Env) -> None:
     await seeded(env)
     for bad in (

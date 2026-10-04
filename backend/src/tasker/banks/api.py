@@ -7,6 +7,7 @@ import sqlalchemy as sa
 from fastapi import APIRouter, Depends, Query, Request
 
 from tasker.auth.deps import DeviceDep, RuntimeDep, require_schema_version
+from tasker.banks import statements
 from tasker.banks.statements import StatementError, parse_statement
 from tasker.banks.tables import merchant_category_rules
 from tasker.db import SessionDep
@@ -54,9 +55,14 @@ async def parse_bank_statement(
         raise ApiError(400, "empty_file", "The file is empty")
     rules = await _user_rules(session)
     try:
-        result: dict[str, Any] = await asyncio.to_thread(
-            parse_statement, data, file_format, bank, rules
+        # The thread stops itself at ``PARSE_SECONDS``; the hard wait covers what cannot be
+        # interrupted (one huge PDF page) so a request never hangs behind a parser.
+        result: dict[str, Any] = await asyncio.wait_for(
+            asyncio.to_thread(parse_statement, data, file_format, bank, rules),
+            timeout=statements.PARSE_HARD_SECONDS,
         )
     except StatementError as exc:
         raise ApiError(422, exc.code, exc.message) from exc
+    except TimeoutError as exc:
+        raise ApiError(422, "statement_too_large", "The file takes too long to read") from exc
     return result

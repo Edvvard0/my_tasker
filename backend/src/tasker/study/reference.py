@@ -241,6 +241,24 @@ def _on_cycle_week(item: Row, number: int) -> bool:
     return item.get("cycle_week") is None or item["cycle_week"] == number
 
 
+def _move_arrives(original: str, new_date: str, semester: Row, slot: Row, semesters: Rows) -> bool:
+    """Does a ``move`` of ``slot`` from ``original`` to ``new_date`` take effect?
+
+    Only if the pair really exists on ``original`` (its weekday, its cycle week, and ``original``
+    belongs to the pair's own semester) and ``new_date`` is a day of that same semester: otherwise
+    a ghost lesson would appear on ``new_date``, or the lesson would be lost on a day that shows
+    another semester or none. An ineffective move is ignored (the lesson stays where it is).
+    """
+    owner = semester["id"]
+    for day in (original, new_date):
+        found = semester_for(day, semesters)
+        if found is None or found["id"] != owner:
+            return False
+    return _day(original).isoweekday() == slot["weekday"] and _on_cycle_week(
+        slot, week_number(original, semester)
+    )
+
+
 def _item_lesson(day: str, semester: Row, rule: Row, item: Row, bells: Rows) -> dict[str, Any]:
     start, end = _times(
         item.get("number"), item.get("start_time"), item.get("end_time"), semester["id"], day, bells
@@ -350,6 +368,12 @@ def expand_day(
         if slot["weekday"] != weekday or not _on_cycle_week(slot, week):
             continue
         override = by_slot_date.get((slot["id"], day))
+        if (
+            override
+            and override["action"] == "move"
+            and not _move_arrives(day, override["new_date"], semester, slot, semesters)
+        ):
+            override = None  # a move that cannot arrive is ignored: the lesson stays today
         if shows_regular:
             moved_to = override["new_date"] if override and override["action"] == "move" else None
             lessons.append(
@@ -371,7 +395,11 @@ def expand_day(
             if _on_cycle_week(item, week)
         )
     for (slot_id, original), override in by_slot_date.items():
-        if override["action"] == "move" and override["new_date"] == day:
+        if (
+            override["action"] == "move"
+            and override["new_date"] == day
+            and _move_arrives(original, day, semester, my_slots[slot_id], semesters)
+        ):
             lessons.append(
                 _lesson(
                     day,
@@ -466,10 +494,12 @@ def attendance_summary(
         if semester.get("archived"):
             continue
         last = min(through, semester["end_date"])
+        # Days are expanded with *all* semesters: where semesters overlap, a date belongs to the
+        # one that wins there (3.1), so it is counted once, in that semester only.
         for entry in expand_range(
             semester["start_date"],
             last,
-            [semester],
+            semesters,
             subjects,
             bells,
             slots,
@@ -477,6 +507,8 @@ def attendance_summary(
             overrides,
             holidays,
         ):
+            if entry["semester_id"] != semester["id"]:
+                continue
             for lesson in entry["lessons"]:
                 if lesson["source"] != "slot" or lesson["moved_to"] is not None:
                     continue

@@ -539,6 +539,55 @@ EXPAND: list[Case] = [
 ]
 
 
+OVERLAP_SEMESTERS = [
+    sem(),
+    sem("sem2", start_date="2026-10-01", end_date="2026-12-31", week1_start="2026-10-05"),
+]
+
+EXPAND += [
+    (
+        "a_move_of_a_lesson_on_the_wrong_cycle_week_shows_nothing_ghostly",
+        scene(
+            ["2026-09-07", "2026-09-11"],
+            overrides=[override("o-1", "s-mon-2", "2026-09-07", "move", new_date="2026-09-11")],
+        ),
+    ),
+    (
+        "a_move_from_a_weekday_the_lesson_does_not_have_shows_nothing_ghostly",
+        scene(
+            ["2026-09-08", "2026-09-11"],
+            overrides=[override("o-1", "s-wed-1", "2026-09-08", "move", new_date="2026-09-11")],
+        ),
+    ),
+    (
+        "a_move_from_a_date_before_the_semester_shows_nothing_ghostly",
+        scene(
+            ["2026-08-26", "2026-09-04"],
+            overrides=[override("o-1", "s-wed-1", "2026-08-26", "move", new_date="2026-09-04")],
+        ),
+    ),
+    (
+        "a_move_to_a_date_after_the_semester_is_ignored_and_the_lesson_stays",
+        scene(
+            ["2026-12-30", "2027-01-02"],
+            overrides=[override("o-1", "s-wed-1", "2026-12-30", "move", new_date="2027-01-02")],
+        ),
+    ),
+    (
+        "a_move_into_another_overlapping_semester_is_ignored_and_the_lesson_stays",
+        scene(
+            ["2026-09-30", "2026-10-02"],
+            semesters=OVERLAP_SEMESTERS,
+            slots=[
+                *base()["slots"],
+                {**slot("s-new", 1, 2, None, title="Новая"), "semester_id": "sem2"},
+            ],
+            overrides=[override("o-1", "s-wed-1", "2026-09-30", "move", new_date="2026-10-02")],
+        ),
+    ),
+]
+
+
 def run_expand(given: dict[str, Any]) -> Any:
     return [
         ref.expand_day(
@@ -696,6 +745,43 @@ ATTENDANCE: list[Case] = [
                     "sem2", start_date="2027-02-01", end_date="2027-06-30", week1_start="2027-02-01"
                 ),
             ],
+            subjects=[
+                *base()["subjects"],
+                {**subject("hist", "История", None, None, 2), "semester_id": "sem2"},
+            ],
+            slots=[
+                *base()["slots"],
+                {**slot("s-new", 1, 1, "hist"), "semester_id": "sem2"},
+            ],
+            bells=[*base()["bells"], bell(1, "09:00", "10:30", semester="sem2")],
+        ),
+    ),
+]
+
+
+ATTENDANCE += [
+    (
+        "a_ghost_move_is_not_a_lesson_and_not_counted",
+        attended(
+            "2026-09-14",
+            [],
+            overrides=[override("o-1", "s-wed-1", "2026-09-08", "move", new_date="2026-09-11")],
+        ),
+    ),
+    (
+        "a_move_beyond_the_semester_leaves_the_lesson_counted_where_it_was",
+        attended(
+            "2027-01-05",
+            [att("s-wed-1", "2026-12-30", "absent")],
+            overrides=[override("o-1", "s-wed-1", "2026-12-30", "move", new_date="2027-01-02")],
+        ),
+    ),
+    (
+        "overlapping_semesters_count_a_date_in_the_winning_semester_only",
+        attended(
+            "2026-10-12",
+            [att("s-mon-1", "2026-10-05", "absent"), att("s-new", "2026-10-05", "absent")],
+            semesters=OVERLAP_SEMESTERS,
             subjects=[
                 *base()["subjects"],
                 {**subject("hist", "История", None, None, 2), "semester_id": "sem2"},

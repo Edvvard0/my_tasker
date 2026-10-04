@@ -114,6 +114,21 @@ def _holidays(first: str, last: str) -> dict[str, str]:
     return reference.holidays_between(load_json(HOLIDAYS_FILE), first, last)
 
 
+def _coverage(first: str, last: str) -> dict[str, Any]:
+    """What the holiday file knows: ``holidays_covered_until`` always, and ``holidays_warning`` when
+    a year of ``first``..``last`` is not in the file (its days all count as teaching days, so the
+    answer may show lessons on public holidays)."""
+    years = sorted(int(year) for year in load_json(HOLIDAYS_FILE)["years"])
+    info: dict[str, Any] = {"holidays_covered_until": f"{years[-1]}-12-31" if years else None}
+    missing = [y for y in range(int(first[:4]), int(max(first, last)[:4]) + 1) if y not in years]
+    if missing:
+        info["holidays_warning"] = (
+            "no holiday data for " + ", ".join(str(y) for y in missing) + ": public holidays of "
+            "these years are unknown, every day is treated as a teaching day"
+        )
+    return info
+
+
 def _today(ctx: ToolContext) -> str:
     return datetime.now(ctx.timezone).date().isoformat()
 
@@ -187,6 +202,7 @@ async def get_study_schedule(ctx: ToolContext, args: BaseModel) -> str:
         "period": {"from": args.from_date, "to": args.to_date},
         "count": len(shown),
         "truncated": False,
+        **_coverage(args.from_date, args.to_date),
         "days": shown,
     }
     return _clip(payload, "days")
@@ -245,7 +261,13 @@ async def get_study_absences(ctx: ToolContext, args: BaseModel) -> str:
         }
         for c in counts
     ]
-    payload = {"through": through, "count": len(lines), "truncated": False, "subjects": lines}
+    payload = {
+        "through": through,
+        "count": len(lines),
+        "truncated": False,
+        **_coverage(first, through),
+        "subjects": lines,
+    }
     return _clip(payload, "subjects")
 
 
@@ -308,7 +330,8 @@ GET_STUDY_SCHEDULE = TOOLS.register(
             "The user's class schedule for a period (dates YYYY-MM-DD, at most 31 days): lessons "
             "per day with times, subject, type, room (e.g. 'к1 28'), teacher, cancellations, "
             "changes and moves; holidays and special days (e.g. Thursday olympiad preparation, "
-            "when regular classes are off) are marked by the day's kind."
+            "when regular classes are off) are marked by the day's kind. Public holidays are known "
+            "only up to holidays_covered_until; holidays_warning says when the period goes beyond."
         ),
         parameters={
             "type": "object",

@@ -19,6 +19,7 @@ KINDS = ("expense", "income", "ignore")
 GROUP_NAMES = ("amount", "currency", "merchant", "card_last4", "balance", "time")
 _SPACES = " \u00a0\u202f\u2009\u2007\t\r\n\u2028\u2029\u000b\u000c"
 _ESCAPABLE = set(".*+?()[]{}|^$\\-/")
+_BRACES = re.compile(r"\{[0-9]+(?:,[0-9]*)?\}")
 _CARD = re.compile(r"[0-9]{4}")
 _TIME = re.compile(r"([0-9]{2}):([0-9]{2})")
 
@@ -38,23 +39,57 @@ def normalize_text(text: str) -> str:
 def pattern_problem(pattern: str) -> str | None:
     """Why ``pattern`` is outside the portable subset (works the same in Python and Dart), or None.
 
-    Allowed: literals, ``.``, character classes, ``( )`` and ``(?: )`` groups, ``| ? * + {m,n}``
-    (also lazy), anchors ``^ $`` and escapes of punctuation. Not allowed: ``\\d \\w \\s \\b`` and
-    other letter escapes (their meaning differs between runtimes), look-around, named groups,
-    back references, inline flags.
+    Allowed: literals, ``.``, character classes, ``( )`` and ``(?: )`` groups, ``| ? * + {m} {m,}
+    {m,n}`` (each optionally lazy with one ``?``), anchors ``^ $`` and escapes of punctuation. Not
+    allowed: ``\\d \\w \\s \\b`` and other letter escapes (their meaning differs between runtimes),
+    look-around, named groups, back references, inline flags, possessive quantifiers (``a*+``,
+    ``a{1,2}+``: Python 3.11+ reads them, Dart does not), a ``{`` that is not a quantifier
+    (``a{,3}`` is a quantifier in Python and plain text in Dart), nested or empty character classes
+    (``[[a]``, ``[]a]``).
     """
     i = 0
+    in_class = False
+    quantified = 0  # 1: the previous token is a quantifier (one lazy ``?`` may follow), 2: lazy
     while i < len(pattern):
         char = pattern[i]
         if char == "\\":
             if i + 1 >= len(pattern) or pattern[i + 1] not in _ESCAPABLE:
                 return f"escape at {i} is not allowed"
+            quantified = 0
             i += 2
+            continue
+        if in_class:
+            if char == "[":
+                return f"nested character class at {i} is not allowed (escape the bracket)"
+            in_class = char != "]"
+            i += 1
+            continue
+        if char == "[":
+            start = i + 2 if pattern[i + 1 : i + 2] == "^" else i + 1
+            if pattern[start : start + 1] == "]":
+                return f"empty character class at {i} is not allowed (escape the bracket)"
+            in_class, quantified, i = True, 0, start
             continue
         if char == "(" and pattern[i + 1 : i + 2] == "?" and pattern[i + 2 : i + 3] != ":":
             return f"group construct at {i} is not allowed"
+        if char in "*+?{":
+            width = 1
+            if char == "{":
+                braces = _BRACES.match(pattern, i)
+                if braces is None:
+                    return f"brace at {i} is not a {{m}}, {{m,}} or {{m,n}} quantifier"
+                width = braces.end() - i
+            if quantified == 1 and char == "?":
+                quantified = 2  # lazy
+            elif quantified:
+                return f"quantifier at {i} follows another quantifier (possessive or repeated)"
+            else:
+                quantified = 1
+            i += width
+            continue
+        quantified = 0
         i += 1
-    return None
+    return "character class is not closed" if in_class else None
 
 
 def rules_problems(doc: Mapping[str, Any]) -> list[str]:

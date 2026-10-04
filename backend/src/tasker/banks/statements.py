@@ -9,6 +9,7 @@ for the duration of the call.
 import csv
 import io
 import re
+import time
 import warnings
 import zipfile
 from collections.abc import Mapping, Sequence
@@ -29,6 +30,11 @@ MAX_ROWS = 20_000
 MAX_PDF_PAGES = 100
 PDF_TITLE_LINES = 5
 MAX_UNPACKED_BYTES = 64 * 1024 * 1024
+MAX_XLSX_SHEETS = 20
+MAX_XLSX_COLUMNS = 60  # a statement is a narrow table; wider cells are cut off
+MAX_CELLS = 200_000  # all cells of all XLSX sheets together (trailing empty cells do not count)
+PARSE_SECONDS = 20.0  # cooperative deadline of one parse: the worker thread stops itself
+PARSE_HARD_SECONDS = 30.0  # what the api waits for the thread before it answers without it
 MAX_CELL = 500
 HEADER_SEARCH_ROWS = 60
 MAX_MERCHANT = 200
@@ -122,7 +128,26 @@ def _csv_rows(data: bytes) -> list[list[str]]:
     return rows
 
 
-def _xlsx_sheets(data: bytes) -> list[list[list[str]]]:
+def _expired(deadline: float | None) -> None:
+    """Stops a parse that has run past its deadline (a thread cannot be cancelled from outside)."""
+    if deadline is not None and time.monotonic() > deadline:
+        raise StatementError("statement_too_large", "the file takes too long to read")
+
+
+def _xlsx_row(raw: tuple[object, ...]) -> list[str]:
+    """Cleaned cells of a row without the empty tail (``None`` padding of a forged width)."""
+    end = len(raw)
+    if raw.count(None) == end:
+        return []
+    while raw[end - 1] is None:
+        end -= 1
+    row = [_clean_cell(cell) for cell in raw[:end]]
+    while row and not row[-1]:
+        row.pop()
+    return row
+
+
+def _xlsx_sheets(data: bytes, deadline: float | None = None) -> list[list[list[str]]]:
     import openpyxl  # noqa: PLC0415 - heavy import only when a workbook arrives
 
     try:
@@ -134,12 +159,23 @@ def _xlsx_sheets(data: bytes) -> list[list[list[str]]]:
             book = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
         sheets: list[list[list[str]]] = []
         try:
+            if len(book.worksheets) > MAX_XLSX_SHEETS:
+                raise StatementError("statement_too_large", f"more than {MAX_XLSX_SHEETS} sheets")
+            cells = 0
             for sheet in book.worksheets:
+                # The <dimension> of a sheet is only a claim of the file; openpyxl pads every row
+                # to it, so a forged ``A1:XFD1048576`` would cost seconds and memory per row.
+                sheet.reset_dimensions()
                 rows = []
-                for raw in sheet.iter_rows(values_only=True):
-                    rows.append([_clean_cell(cell) for cell in raw])
+                for raw in sheet.iter_rows(max_col=MAX_XLSX_COLUMNS, values_only=True):
+                    _expired(deadline)
+                    row = _xlsx_row(raw)
+                    rows.append(row)
+                    cells += len(row)
                     if len(rows) > MAX_ROWS:
                         raise StatementError("statement_too_large", f"more than {MAX_ROWS} rows")
+                    if cells > MAX_CELLS:
+                        raise StatementError("statement_too_large", f"more than {MAX_CELLS} cells")
                 sheets.append(rows)
         finally:
             book.close()
@@ -150,7 +186,7 @@ def _xlsx_sheets(data: bytes) -> list[list[list[str]]]:
     return sheets
 
 
-def _pdf_rows(data: bytes) -> list[list[str]]:
+def _pdf_rows(data: bytes, deadline: float | None = None) -> list[list[str]]:
     """The ruled tables of every page, preceded by the lines around them that matter: the first
     lines of the document (the bank's name), the period and the closing balance."""
     import pdfplumber  # noqa: PLC0415 - heavy import only when a PDF arrives
@@ -162,6 +198,7 @@ def _pdf_rows(data: bytes) -> list[list[str]]:
             if len(pdf.pages) > MAX_PDF_PAGES:
                 raise StatementError("statement_too_large", f"more than {MAX_PDF_PAGES} pages")
             for number, page in enumerate(pdf.pages):
+                _expired(deadline)
                 for table in page.extract_tables():
                     rows.extend([_clean_cell(cell) for cell in row] for row in table)
                 lines = [_clean_cell(line) for line in (page.extract_text() or "").splitlines()]
@@ -181,14 +218,15 @@ def _pdf_rows(data: bytes) -> list[list[str]]:
     return [*notes, *rows]
 
 
-def extract_tables(fmt: str, data: bytes) -> list[list[list[str]]]:
-    """The tables of a file as rows of text cells (an XLSX gives one table per sheet)."""
+def extract_tables(fmt: str, data: bytes, deadline: float | None = None) -> list[list[list[str]]]:
+    """The tables of a file as rows of text cells (an XLSX gives one table per sheet).
+    ``deadline`` is a ``time.monotonic()`` moment after which a workbook or a PDF stops."""
     if fmt == "csv":
         return [_csv_rows(data)]
     if fmt == "xlsx":
-        return _xlsx_sheets(data)
+        return _xlsx_sheets(data, deadline)
     if fmt == "pdf":
-        return [_pdf_rows(data)]
+        return [_pdf_rows(data, deadline)]
     raise StatementError("statement_unsupported", f"unknown format {fmt!r}")
 
 
@@ -477,7 +515,9 @@ def parse_statement(
 ) -> dict[str, Any]:
     """Parse the bytes of a statement. Raises :class:`StatementError`."""
     fmt = detect_format(data, declared_format)
-    for table in extract_tables(fmt, data):
+    deadline = time.monotonic() + PARSE_SECONDS
+    for table in extract_tables(fmt, data, deadline):
+        _expired(deadline)
         result = parse_table(table, bank, user_rules)
         if result is not None:
             return {"format": fmt, **result}

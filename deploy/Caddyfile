@@ -21,9 +21,18 @@
 https://{$SERVER_IP} {
 	tls internal
 
-	# Attachments are up to 25 MiB (stage 7); the api enforces its own, tighter limits per endpoint.
-	request_body {
-		max_size 26MB
+	# Attachments (PUT /files/*) are up to 25 MiB = 26 214 400 bytes (stage 7). Caddy's "MB" is
+	# the SI megabyte (1 000 000 bytes), so 27MB leaves room for a full-size file; every other
+	# endpoint keeps the tight 10MB. The matchers are mutually exclusive on purpose: with two
+	# overlapping request_body directives the smaller limit would win for /files/* as well.
+	# The api enforces its own, tighter limits per endpoint on top of this.
+	@files path /files/*
+	@not_files not path /files/*
+	request_body @files {
+		max_size 27MB
+	}
+	request_body @not_files {
+		max_size 10MB
 	}
 
 	import common_headers

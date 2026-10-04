@@ -2,12 +2,15 @@
 
 import os
 import tempfile
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from tasker.banks import api as banks_api
+from tasker.banks import statements
 from tasker.banks.tables import rule_id
 from tasker.ids import uuid7
 from tests.api_support import SCHEMA, DeviceClient, Env, make_env
@@ -102,6 +105,19 @@ async def test_the_file_is_not_stored_anywhere(
     after = {name: await env.scalar(f"SELECT count(*) FROM {name}") for name in SYNC_TABLES}  # noqa: S608
     assert after == before == dict.fromkeys(SYNC_TABLES, 0)
     assert await env.scalar("SELECT count(*) FROM sync_ops") == 0
+
+
+async def test_a_parser_that_hangs_does_not_hang_the_request(
+    phone: DeviceClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def slow(*_args: object) -> dict[str, Any]:
+        time.sleep(1.0)
+        return {}
+
+    monkeypatch.setattr(banks_api, "parse_statement", slow)
+    monkeypatch.setattr(statements, "PARSE_HARD_SECONDS", 0.05)
+    response = await upload(phone, CSV)
+    assert (response.status_code, response.json()["error"]["code"]) == (422, "statement_too_large")
 
 
 async def test_the_users_own_rules_feed_the_suggestions(phone: DeviceClient) -> None:

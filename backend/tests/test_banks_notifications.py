@@ -102,7 +102,40 @@ def test_text_is_cleaned_before_matching() -> None:
 
 @pytest.mark.parametrize(
     "bad",
-    [r"\d+", r"\w", r"\s", r"\b", r"(?=x)", r"(?<n>x)", r"(?P<n>x)", r"(?i)x", "x" + chr(92)],
+    [
+        r"\d+",
+        r"\w",
+        r"\s",
+        r"\b",
+        r"(?=x)",
+        r"(?<n>x)",
+        r"(?P<n>x)",
+        r"(?i)x",
+        "x" + chr(92),
+        # possessive quantifiers (Python 3.11+ only)
+        "a*+",
+        "a++",
+        "a?+",
+        "a{1,2}+",
+        "(?:ab)*+c",
+        "[0-9]++",
+        # a quantifier after a quantifier, a lazy one after a lazy one
+        "a+*",
+        "a*??",
+        "a{2}{3}",
+        "a+{2}",
+        # braces that Dart reads as text
+        "a{,3}",
+        "a{x}",
+        "a{",
+        "a{1,2",
+        # nested, empty and unclosed classes
+        "[[a]",
+        "[a[b]]",
+        "[]a]",
+        "[^]a]",
+        "[abc",
+    ],
 )
 def test_the_pattern_subset_rejects_runtime_dependent_constructs(bad: str) -> None:
     assert notif.pattern_problem(bad) is not None
@@ -110,7 +143,16 @@ def test_the_pattern_subset_rejects_runtime_dependent_constructs(bad: str) -> No
 
 @pytest.mark.parametrize(
     "good",
-    [r"^Оплата ([0-9]+) ₽\.$", r"(?:a|b)+?c{1,2}", r"\*\(\)\[\]\{\}\|\^\$\.\\", r"[0-9 ]*"],
+    [
+        r"^Оплата ([0-9]+) ₽\.$",
+        r"(?:a|b)+?c{1,2}",
+        r"\*\(\)\[\]\{\}\|\^\$\.\\",
+        r"[0-9 ]*",
+        r"a??b*?c+?d{2}e{2,}f{1,3}?",
+        r"[+*?{}(]+",  # specials are plain inside a class
+        r"[^\]\[]x\{,3\}",
+        r"a+(?:b?)*",  # a quantifier after a closing parenthesis is a new quantifier
+    ],
 )
 def test_the_pattern_subset_accepts_the_portable_forms(good: str) -> None:
     assert notif.pattern_problem(good) is None

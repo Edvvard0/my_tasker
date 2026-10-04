@@ -2,10 +2,12 @@
 
 import asyncio
 import os
+import re
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 import pytest
 
@@ -98,6 +100,57 @@ async def test_upload_and_download(phone: DeviceClient, seed: StudySeed, root: P
     )
     assert headers["content-disposition"].startswith('attachment; filename="')
     assert headers["cache-control"] == "private, no-cache"
+
+
+ODD_NAMES = [
+    "Отчёт по ЛР №3.jpg",
+    'say "hi".jpg',
+    "semi;colon, comma.jpg",
+    "100%.jpg",
+    "a%20b%2Fc.jpg",
+    "emoji \U0001f600 \u202e.jpg",
+    "line\u2028sep\u0085nel.jpg",
+    "  spaced  .jpg",
+    ".hidden.jpg",
+    "quote'single.jpg",
+    "$(rm -rf x) `id` {a}.jpg",
+    "я" * 120 + ".jpg",
+]
+
+
+@pytest.mark.parametrize("name", ODD_NAMES)
+async def test_content_disposition_survives_odd_file_names(
+    phone: DeviceClient, seed: StudySeed, name: str
+) -> None:
+    attachment = await attach(phone, seed, file_name=name)
+    assert (await put(phone, attachment, JPEG)).status_code == 201
+    response = await get(phone, attachment)
+    assert response.status_code == 200
+    raw = response.headers["content-disposition"]
+    assert "\r" not in raw
+    assert "\n" not in raw
+    parts = re.fullmatch(
+        r"attachment; filename=\"([^\"]*)\"; filename\*=UTF-8''([A-Za-z0-9%_.~-]*)", raw
+    )
+    assert parts is not None, raw  # a quote or a semicolon of the name cannot break out of it
+    fallback, encoded = parts.groups()
+    assert fallback.isascii()
+    assert not set(fallback) & set('";\\')
+    assert all(c.isprintable() for c in fallback)
+    assert unquote(encoded) == name  # the real name is carried whole by filename*
+    assert response.content == JPEG
+
+
+@pytest.mark.parametrize(
+    "name", ["a\r\nSet-Cookie: x=1.jpg", "a\nb.jpg", "a\x00b.jpg", "a\x7fb.jpg"]
+)
+async def test_a_file_name_with_control_characters_never_reaches_a_header(
+    phone: DeviceClient, seed: StudySeed, name: str
+) -> None:
+    fields = attachment_fields(phone, JPEG, subject=seed.math, file_name=name)
+    (result,) = await phone.push_ok([phone.op("attachments", uuid7(), fields=fields)])
+    assert result["status"] == "rejected", result
+    assert result["code"] in ("validation_failed", "invalid_field"), result  # NUL: type check
 
 
 async def test_a_debt_attachment_is_served_too(phone: DeviceClient, seed: StudySeed) -> None:
