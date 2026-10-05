@@ -289,3 +289,28 @@ def test_every_starter_keyword_is_found_by_the_suggester() -> None:
             found = ref.suggest_category(word, None, kind)
             # an earlier entry may own the word (file order is the priority)
             assert found["source"] == "keyword", word
+
+
+@pytest.mark.parametrize("amount", ["0", "0,00", "00"])
+def test_a_zero_amount_is_not_an_operation(amount: str) -> None:
+    result = notif.parse_notification(
+        "com.idamob.tinkoff.android", "Покупка", f"Покупка на {amount} ₽, Магнит. Карта *1234"
+    )
+    assert result["status"] == "unrecognized"
+    assert result["reason"] == "bad_amount"
+    assert result["rule_id"] is not None
+
+
+def test_a_zero_balance_is_allowed() -> None:
+    result = notif.parse_notification(
+        "ru.vtb24.mobilebanking.android", "ВТБ", "Оплата 5 RUB. Карта *5678. Магнит. Баланс 0 RUB"
+    )
+    assert (result["status"], result["balance"]) == ("parsed", 0)
+
+
+def test_edge_spaces_are_an_explicit_set_the_same_in_python_and_dart() -> None:
+    # Python's strip() also cuts U+001C..U+001F, Dart's trim() also cuts U+FEFF: neither is cut.
+    for kept in ("\u001c", "\u001f", "﻿"):
+        assert ref.strip_edges(f"{kept}x{kept}") == f"{kept}x{kept}"
+    for cut in ("\u0009", "\u0085", " ", " ", " ", " ", " ", "　"):
+        assert ref.strip_edges(f"{cut}x{cut}") == "x"

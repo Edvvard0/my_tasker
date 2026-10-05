@@ -3,7 +3,7 @@
 import io
 import re
 import zipfile
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -461,3 +461,30 @@ def test_similarity_is_symmetric_and_bounded(a: str, b: str) -> None:
     assert value == ref.similarity(nb, na)
     if na:
         assert ref.similarity(na, na) == 100
+
+
+def test_a_closing_balance_is_never_later_than_now() -> None:
+    """A statement "up to today" would hang its checkpoint at the end of today, in the future."""
+    rows = [
+        ["Период с 01.10.2026 по 05.10.2026"],
+        ["Остаток на конец периода: 1 234,50 RUB"],
+        ["Дата", "Сумма", "Описание", "Валюта"],
+        ["03.10.2026", "-100", "Кофе", "RUB"],
+    ]
+    noon = datetime(2026, 10, 5, 9, 15, 30, 999, tzinfo=UTC)
+    parsed = st_mod.parse_table(rows, now=noon)
+    assert parsed is not None
+    assert parsed["closing_balance"] == {"amount": 123_450, "at": "2026-10-05T09:15:30Z"}
+    # An earlier period is untouched, and without a clock nothing is limited.
+    later = st_mod.parse_table(rows, now=datetime(2026, 10, 9, tzinfo=UTC))
+    assert later is not None
+    assert later["closing_balance"]["at"] == "2026-10-05T20:59:59Z"
+    free = st_mod.parse_table(rows)
+    assert free is not None
+    assert free["closing_balance"]["at"] == "2026-10-05T20:59:59Z"
+    csv_bytes = (
+        "Период с 01.10.2026 по 05.10.2026\nОстаток на конец периода: 1 234,50 RUB\n"
+        "Дата;Сумма;Описание;Валюта\n03.10.2026;-100;Кофе;RUB\n"
+    ).encode()
+    result = parse_statement(csv_bytes, now=noon)
+    assert result["closing_balance"]["at"] == "2026-10-05T09:15:30Z"

@@ -434,7 +434,12 @@ def _is_repeated_header(row: Sequence[str], keys: Sequence[str]) -> bool:
     return [header_key(c) for c in row[: len(keys)]] == list(keys)
 
 
-def _closing_balance(rows: Sequence[Sequence[str]], last_day: str | None, period: Any) -> Any:
+def _closing_balance(
+    rows: Sequence[Sequence[str]], last_day: str | None, period: Any, now: datetime | None
+) -> Any:
+    """The closing balance and the moment it is true. That moment is the end of the last day of
+    the period, but never later than ``now``: a statement "up to today" would otherwise hang a
+    checkpoint in the future that swallows every operation entered after the statement."""
     for row in rows:
         found = _CLOSING.search(" ".join(row))
         if found is None:
@@ -445,12 +450,18 @@ def _closing_balance(rows: Sequence[Sequence[str]], last_day: str | None, period
         day = (period or {}).get("to") or last_day
         if day is None:
             return None
-        return {"amount": amount, "at": end_of_day(day).strftime("%Y-%m-%dT%H:%M:%SZ")}
+        at = end_of_day(day)
+        if now is not None:
+            at = min(at, now.astimezone(UTC).replace(microsecond=0))
+        return {"amount": amount, "at": at.strftime("%Y-%m-%dT%H:%M:%SZ")}
     return None
 
 
 def parse_table(
-    rows: Sequence[Sequence[str]], bank: str = "auto", user_rules: Sequence[Mapping[str, Any]] = ()
+    rows: Sequence[Sequence[str]],
+    bank: str = "auto",
+    user_rules: Sequence[Mapping[str, Any]] = (),
+    now: datetime | None = None,
 ) -> dict[str, Any] | None:
     """Candidates of one table, or ``None`` when it has no recognisable header."""
     header = find_header(rows, bank)
@@ -495,7 +506,7 @@ def parse_table(
     return {
         "bank": header.profile,
         "period": period,
-        "closing_balance": _closing_balance(text_rows, days[-1] if days else None, period),
+        "closing_balance": _closing_balance(text_rows, days[-1] if days else None, period, now),
         "cards": sorted({item["card_last4"] for item in items if item["card_last4"]}),
         "candidates": items,
         "skipped": skipped,
@@ -512,13 +523,15 @@ def parse_statement(
     declared_format: str | None = None,
     bank: str = "auto",
     user_rules: Sequence[Mapping[str, Any]] = (),
+    now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Parse the bytes of a statement. Raises :class:`StatementError`."""
+    """Parse the bytes of a statement. Raises :class:`StatementError`. ``now``: the moment a
+    closing balance may not pass (the API gives the server clock; ``None`` means no limit)."""
     fmt = detect_format(data, declared_format)
     deadline = time.monotonic() + PARSE_SECONDS
     for table in extract_tables(fmt, data, deadline):
         _expired(deadline)
-        result = parse_table(table, bank, user_rules)
+        result = parse_table(table, bank, user_rules, now)
         if result is not None:
             return {"format": fmt, **result}
     raise StatementError("statement_unrecognized", "no table with a date and an amount was found")

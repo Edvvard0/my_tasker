@@ -10,7 +10,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from tasker.banks.reference import HOME_CURRENCY
+from tasker.banks.reference import HOME_CURRENCY, strip_edges
 from tasker.datafiles import load_json
 from tasker.money import AmountError, parse_amount
 
@@ -191,12 +191,14 @@ def _result(
     def group(name: str) -> str | None:
         index = groups.get(name)
         found = match.group(index) if index is not None else None
-        return found.strip() if found is not None else None
+        return strip_edges(found) if found is not None else None
 
     try:
         amount = parse_amount(group("amount") or "")
         raw_balance = group("balance")
         balance = parse_amount(raw_balance) if raw_balance is not None else None
+        if amount <= 0:
+            raise AmountError("an operation amount must be positive")
     except AmountError:
         return {"status": "unrecognized", **base, "reason": "bad_amount"}
     symbol = group("currency")

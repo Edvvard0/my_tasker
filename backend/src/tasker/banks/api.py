@@ -58,7 +58,7 @@ async def parse_bank_statement(
         # The thread stops itself at ``PARSE_SECONDS``; the hard wait covers what cannot be
         # interrupted (one huge PDF page) so a request never hangs behind a parser.
         result: dict[str, Any] = await asyncio.wait_for(
-            asyncio.to_thread(parse_statement, data, file_format, bank, rules),
+            asyncio.to_thread(parse_statement, data, file_format, bank, rules, rt.clock.now()),
             timeout=statements.PARSE_HARD_SECONDS,
         )
     except StatementError as exc:

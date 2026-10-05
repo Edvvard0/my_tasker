@@ -215,6 +215,13 @@ MATCHING: list[Case] = [
         scene([_BUY_DAY], [ex("e1", "expense", 123_456, T0, "Пятёрочка 1234")]),
     ),
     (
+        "refined_merchant_keeps_a_byte_order_mark_and_loses_a_no_break_space",
+        scene(
+            [cand("expense", 123_456, "2026-10-03T11:30:00Z", "\u00a0\ufeffПятёрочка\u00a0")],
+            [ex("e1", "expense", 123_456, T0, "Пятёрочка 1234")],
+        ),
+    ),
+    (
         "statement_line_with_a_time_refines_the_moment",
         scene(
             [cand("expense", 123_456, "2026-10-03T11:33:10Z", "Пятёрочка")],
@@ -746,6 +753,54 @@ def _notification_cases() -> list[Case]:
                 },
             ),
             ("empty_text", {"package": first, "title": "", "text": ""}),
+            (
+                "zero_amount_is_not_an_operation",
+                {
+                    "package": first,
+                    "title": "Покупка",
+                    "text": "Покупка на 0 ₽, Магнит. Карта *1234",
+                },
+            ),
+            (
+                "zero_kopecks_amount_is_not_an_operation",
+                {
+                    "package": second,
+                    "title": "ВТБ",
+                    "text": "Оплата 0,00 RUB. Карта *5678. Магнит. Баланс 5 RUB",
+                },
+            ),
+            (
+                "zero_balance_is_fine",
+                {
+                    "package": second,
+                    "title": "ВТБ",
+                    "text": "Оплата 5 RUB. Карта *5678. Магнит. Баланс 0 RUB",
+                },
+            ),
+            (
+                "merchant_keeps_a_leading_byte_order_mark",
+                {
+                    "package": first,
+                    "title": "Покупка",
+                    "text": "Покупка на 100 ₽, \ufeffМагнит. Карта *1234",
+                },
+            ),
+            (
+                "merchant_keeps_a_trailing_information_separator",
+                {
+                    "package": first,
+                    "title": "Покупка",
+                    "text": "Покупка на 100 ₽, Магнит\u001f. Карта *1234",
+                },
+            ),
+            (
+                "merchant_loses_an_ideographic_space_at_the_edge",
+                {
+                    "package": first,
+                    "title": "Покупка",
+                    "text": "Покупка на 100 ₽, \u3000Магнит\u3000. Карта *1234",
+                },
+            ),
         ]
     )
     return cases

@@ -100,6 +100,52 @@
       ]
     },
     {
+      "name": "refined_merchant_keeps_a_byte_order_mark_and_loses_a_no_break_space",
+      "input": {
+        "account_id": "00000000-0000-7000-8000-0000000000a1",
+        "candidates": [
+          {
+            "kind": "expense",
+            "amount": 123456,
+            "currency": "RUB",
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "date_only": false,
+            "merchant": " ﻿Пятёрочка ",
+            "external_id": null
+          }
+        ],
+        "existing": [
+          {
+            "id": "e1",
+            "account_id": "00000000-0000-7000-8000-0000000000a1",
+            "kind": "expense",
+            "amount": 123456,
+            "occurred_at": "2026-10-03T11:30:00Z",
+            "merchant": "Пятёрочка 1234",
+            "source": "notification",
+            "status": "draft",
+            "external_id": null,
+            "dedup_hash": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "index": 0,
+          "action": "merge",
+          "existing_id": "e1",
+          "reason": "fuzzy",
+          "similarity": 100,
+          "dedup_hash": "27d9e12dbd47902efbf9cdad6968fee5",
+          "needs_review": false,
+          "review_reason": null,
+          "refine": {
+            "merchant": "﻿Пятёрочка"
+          }
+        }
+      ]
+    },
+    {
       "name": "statement_line_with_a_time_refines_the_moment",
       "input": {
         "account_id": "00000000-0000-7000-8000-0000000000a1",

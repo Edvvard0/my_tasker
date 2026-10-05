@@ -4,6 +4,7 @@ import os
 import tempfile
 import time
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,21 @@ async def test_parse_a_pdf_with_the_format_given(phone: DeviceClient) -> None:
     response = await upload(phone, PDF, format="pdf", bank="vtb")
     assert response.status_code == 200, response.text
     assert response.json()["closing_balance"]["amount"] == 10_201_545
+
+
+async def test_the_closing_balance_is_not_later_than_the_server_clock(
+    env: Env, phone: DeviceClient
+) -> None:
+    today = (
+        "Период с 01.10.2026 по 01.10.2026\nОстаток на конец периода: 1 234,50 RUB\n"
+        "Дата;Сумма;Описание;Валюта\n01.10.2026;-100;Кофе;RUB\n"
+    ).encode()
+    response = await upload(phone, today)
+    assert response.status_code == 200, response.text
+    closing = response.json()["closing_balance"]
+    assert closing["amount"] == 123_450
+    assert closing["at"] == env.clock.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert env.clock.now().date() == datetime(2026, 10, 1, tzinfo=UTC).date()
 
 
 async def test_authentication_is_required(env: Env, phone: DeviceClient) -> None:

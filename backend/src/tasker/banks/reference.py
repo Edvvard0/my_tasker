@@ -31,6 +31,24 @@ HASH_LENGTH = 32
 HOME_CURRENCY = "RUB"
 
 
+# ------------------------------------------------------------------ edge trimming
+
+# The characters cut from the ends of a value: Unicode White_Space only (tab..CR, space, NEL,
+# NBSP, Ogham space mark, U+2000..U+200A, line/paragraph separators, narrow NBSP, medium
+# mathematical space, ideographic space). ``str.strip()`` (Python also cuts U+001C..U+001F) and
+# Dart's ``trim()`` (also cuts U+FEFF) differ, so both sides use this explicit set.
+EDGE_SPACES = (
+    "\u0009\u000a\u000b\u000c\u000d\u0020\u0085\u00a0\u1680"
+    "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+    "\u2028\u2029\u202f\u205f\u3000"
+)
+
+
+def strip_edges(text: str) -> str:
+    """``text`` without the :data:`EDGE_SPACES` at both ends (same result as in Dart)."""
+    return text.strip(EDGE_SPACES)
+
+
 # ------------------------------------------------------------------ merchant normalization
 
 
@@ -260,7 +278,7 @@ def _refinement(candidate: Row, row: Row) -> dict[str, str]:
         row["occurred_at"]
     ):
         refine["occurred_at"] = candidate["occurred_at"]
-    merchant = (candidate.get("merchant") or "").strip()
+    merchant = strip_edges(candidate.get("merchant") or "")
     if merchant and merchant != (row.get("merchant") or ""):
         refine["merchant"] = merchant
     return refine
