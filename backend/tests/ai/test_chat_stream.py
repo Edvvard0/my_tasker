@@ -261,6 +261,77 @@ async def test_profile_tools_decide_and_unknown_future_tools_are_skipped(
     assert "tools" not in fake.chat_requests[1].json
 
 
+FINANCE_NAMES = ["get_accounts", "get_finance_summary", "get_goals", "get_debts"]
+
+
+async def _finance_tool_names(aienv: AiEnv, fake: FakeUpstream, **overrides: object) -> list[str]:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    boot = (await phone.post("/ai/bootstrap")).json()
+    finance = next(a for a in boot["agents"] if a["seed_key"] == "finance")
+    fake.queue(text_reply(["ок"]))
+    sse = await run_chat(phone, chat_body(conversation, agent_id=finance["id"], **overrides))
+    assert sse.status == 200
+    return [t["function"]["name"] for t in fake.chat_requests[-1].json.get("tools", [])]
+
+
+async def test_finance_tools_are_not_offered_without_consent(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    names = await _finance_tool_names(aienv, fake)
+    assert names == ["get_tasks", "get_events", "create_task"]
+
+
+async def test_finance_tools_are_not_offered_when_the_consent_is_false_or_not_a_bool(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    assert await _finance_tool_names(aienv, fake, sensitive_tools_consent=False) == [
+        "get_tasks",
+        "get_events",
+        "create_task",
+    ]
+    # an explicit request for the tools does not replace the consent either
+    explicit = await _finance_tool_names(aienv, fake, tools=["get_accounts", "get_tasks"])
+    assert explicit == ["get_tasks"]
+
+
+async def test_finance_tools_are_offered_with_the_consent(aienv: AiEnv, fake: FakeUpstream) -> None:
+    names = await _finance_tool_names(aienv, fake, sensitive_tools_consent=True)
+    assert names == ["get_tasks", "get_events", "create_task", *FINANCE_NAMES]
+
+
+async def test_the_system_message_says_so_when_finance_tools_are_withheld(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    await _finance_tool_names(aienv, fake)
+    without = fake.chat_requests[-1].json["messages"][0]["content"]
+    assert "не разрешил передавать данные раздела «Финансы»" in without
+    await _finance_tool_names(aienv, fake, sensitive_tools_consent=True)
+    with_consent = fake.chat_requests[-1].json["messages"][0]["content"]
+    assert "не разрешил" not in with_consent
+
+
+async def test_a_non_boolean_consent_is_rejected(aienv: AiEnv, fake: FakeUpstream) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    sse = await run_chat(phone, chat_body(conversation, sensitive_tools_consent="yes"))
+    assert sse.status == 422
+
+
+async def test_without_a_profile_the_sensitive_tools_also_need_the_consent(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    fake.queue(text_reply(["ок"]), text_reply(["ок"]))
+    await run_chat(phone, chat_body(conversation))
+    plain = [t["function"]["name"] for t in fake.chat_requests[0].json["tools"]]
+    await run_chat(phone, chat_body(conversation, sensitive_tools_consent=True))
+    allowed = [t["function"]["name"] for t in fake.chat_requests[1].json["tools"]]
+    assert not set(FINANCE_NAMES) & set(plain)
+    assert set(FINANCE_NAMES) <= set(allowed)
+
+
 async def test_builtin_profiles_take_their_tools_from_code_not_from_storage(
     aienv: AiEnv, fake: FakeUpstream
 ) -> None:

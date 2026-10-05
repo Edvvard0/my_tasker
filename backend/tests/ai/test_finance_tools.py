@@ -1,15 +1,19 @@
 """The Finance read tools on seeded data: balances, summary, goals (Excel case), debts."""
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
 
 import tasker.ai.builtin  # noqa: F401 - registers the tools
+import tasker.finance.tools as finance_tools
 from tasker.ai.agents import FINANCE_TOOLS, builtin_tools
 from tasker.ai.tools import TOOLS, ToolArgumentError, ToolContext
+from tasker.finance.tools import _amount_text
 from tasker.ids import uuid7
+from tasker.money import MAX_KOPECKS
 from tests.api_support import DeviceClient, Env
 from tests.finance_support import (
     ExcelSeed,
@@ -53,6 +57,9 @@ def test_the_tools_are_registered_as_read_tools_of_the_finance_profile() -> None
         spec = TOOLS.get(name)
         assert spec is not None
         assert spec.kind == "read"
+        assert spec.sensitive is True  # offered to the cloud model only with consent
+        assert spec.public()["sensitive"] is True
+    assert TOOLS.get("get_tasks") is not None and TOOLS.get("get_tasks").sensitive is False  # type: ignore[union-attr]
     assert builtin_tools("finance")[-4:] == FINANCE_TOOLS
     assert "get_accounts" not in builtin_tools("work")
     assert "get_projects" not in builtin_tools("finance")
@@ -312,3 +319,35 @@ async def test_tools_see_nothing_before_the_first_sync(env: Env) -> None:
         env, "get_finance_summary", {"from_date": "2026-10-01", "to_date": "2026-10-31"}
     )
     assert summary["categories"] == [] and summary["months"] == []
+
+
+def test_amount_text_never_raises_for_huge_sums() -> None:
+    assert _amount_text(MAX_KOPECKS) != "≈ ∞"
+    assert _amount_text(MAX_KOPECKS + 1) == "≈ ∞"
+    assert _amount_text(-MAX_KOPECKS - 1) == "≈ -∞"
+    assert _amount_text(150_000) == "1\u00a0500\u00a0₽"
+
+
+async def test_get_debts_overdue_uses_the_moscow_date_of_the_server(
+    env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> "FrozenDatetime":
+            # 21:30Z on the 9th is already the 10th in Moscow, whatever zone the request has
+            return cls(2026, 10, 9, 21, 30, tzinfo=UTC)
+
+    monkeypatch.setattr(finance_tools, "datetime", FrozenDatetime)
+    phone = await env.login()
+    debt_id = uuid7()
+    await phone.push_ok(
+        [
+            phone.op(
+                "debts",
+                debt_id,
+                fields=debt_fields(phone, direction="owed_to_me", due_date="2026-10-09"),
+            )
+        ]
+    )
+    result = await call(env, "get_debts", {})
+    assert result["debts"][0]["overdue"] is True

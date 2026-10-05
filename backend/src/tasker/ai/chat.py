@@ -89,6 +89,7 @@ class ChatRequest(BaseModel):
     context: ContextIn = Field(default_factory=ContextIn)
     messages: list[MessageIn] = Field(min_length=1, max_length=MAX_MESSAGES)
     tools: list[str] | None = Field(default=None, max_length=64)
+    sensitive_tools_consent: StrictBool = False
     timezone: str = "UTC"
     params: ParamsIn = Field(default_factory=ParamsIn)
 
@@ -165,6 +166,11 @@ async def prepare(rt: Runtime, ai: AiRuntime, request: ChatRequest) -> ChatInput
             system_prompt, prompt_version, profile_tools = await _agent(session, request.agent_id)
             week_cycle = await _week_cycle(session)
     names = _tool_names(request.tools, profile_tools)
+    withheld = False
+    if not request.sensitive_tools_consent:  # Finance data goes to the cloud only with consent
+        allowed = [name for name in names if not _is_sensitive(name)]
+        withheld = len(allowed) != len(names)
+        names = allowed
 
     info, known = await ai.catalog.find(request.model)
     if known and info is None:
@@ -201,6 +207,7 @@ async def prepare(rt: Runtime, ai: AiRuntime, request: ChatRequest) -> ChatInput
     parts = [
         system_prompt,
         context.render(context.ContextRequest(now, zone, week_cycle)),
+        agents.SENSITIVE_WITHHELD_NOTE if withheld else None,
         request.context.text.strip() or None,
     ]
     return ChatInput(
@@ -256,6 +263,11 @@ def _tool_names(requested: list[str] | None, profile_tools: Any) -> list[str]:
     if isinstance(profile_tools, list):
         return [name for name in dict.fromkeys(profile_tools) if TOOLS.get(str(name)) is not None]
     return TOOLS.names()
+
+
+def _is_sensitive(name: str) -> bool:
+    spec = TOOLS.get(name)
+    return spec is not None and spec.sensitive
 
 
 async def _exists_any(session: Any, message_id: uuid.UUID) -> bool:

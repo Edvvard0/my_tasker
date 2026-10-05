@@ -40,6 +40,10 @@ class ToolSpec:
     kind: Literal["read", "write"]
     handler: ToolHandler | None = None
     entity_type: str | None = None
+    # A sensitive tool reads data the user keeps private (Finance). In a cloud chat it is
+    # offered to the model only when the request carries the user's explicit consent
+    # (``sensitive_tools_consent``, spec stage3 5.1).
+    sensitive: bool = False
 
     def __post_init__(self) -> None:
         if self.kind == "read" and self.handler is None:
@@ -64,6 +68,7 @@ class ToolSpec:
         return {
             "name": self.name,
             "kind": self.kind,
+            "sensitive": self.sensitive,
             "description": self.description,
             "parameters": self.parameters,
         }

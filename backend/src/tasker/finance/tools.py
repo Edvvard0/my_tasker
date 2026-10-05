@@ -5,7 +5,7 @@
 
 import json
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 import sqlalchemy as sa
@@ -23,7 +23,7 @@ from tasker.finance.tables import (
     goals,
     transactions,
 )
-from tasker.money import format_amount
+from tasker.money import MAX_KOPECKS, format_amount
 from tasker.work import tools as work_tools
 from tasker.work.reference import in_period, moscow_date
 
@@ -31,10 +31,17 @@ MAX_PERIOD_DAYS = 366
 Day = Annotated[str, StringConstraints(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")]
 
 
+def _amount_text(value: int) -> str:
+    """``format_amount`` raises beyond ``MAX_KOPECKS``; a tool result must never fail on it."""
+    if abs(value) > MAX_KOPECKS:
+        return "≈ ∞" if value > 0 else "≈ -∞"
+    return format_amount(value)
+
+
 def _money(name: str, value: int | None) -> dict[str, Any]:
     return {
         f"{name}_kopecks": value,
-        f"{name}_text": None if value is None else format_amount(value),
+        f"{name}_text": None if value is None else _amount_text(value),
     }
 
 
@@ -327,7 +334,9 @@ class GetDebtsArgs(BaseModel):
 async def get_debts(ctx: ToolContext, args: BaseModel) -> str:
     assert isinstance(args, GetDebtsArgs)  # noqa: S101 - the registry pairs handler and model
     data = await load(ctx, with_work=True)
-    today = datetime.now(ctx.timezone).date().isoformat()
+    # "today" is the Moscow date of the server, as the contract says (stage5, 9), not the
+    # time zone of the request.
+    today = moscow_date(format_utc(datetime.now(UTC)))
     summary = reference.debts_summary(data.debts, data.repayments, today)
     by_id = {d["id"]: d for d in data.debts}
     found = []
@@ -380,6 +389,7 @@ GET_ACCOUNTS = TOOLS.register(
         },
         args_model=GetAccountsArgs,
         kind="read",
+        sensitive=True,
         handler=get_accounts,
     )
 )
@@ -405,6 +415,7 @@ GET_FINANCE_SUMMARY = TOOLS.register(
         },
         args_model=GetFinanceSummaryArgs,
         kind="read",
+        sensitive=True,
         handler=get_finance_summary,
     )
 )
@@ -426,6 +437,7 @@ GET_GOALS = TOOLS.register(
         },
         args_model=GetGoalsArgs,
         kind="read",
+        sensitive=True,
         handler=get_goals,
     )
 )
@@ -448,6 +460,7 @@ GET_DEBTS = TOOLS.register(
         },
         args_model=GetDebtsArgs,
         kind="read",
+        sensitive=True,
         handler=get_debts,
     )
 )

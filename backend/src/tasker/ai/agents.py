@@ -18,6 +18,13 @@ from tasker.tables import app_meta
 
 SEED_PROMPT_VERSION = 1
 SEED_MARKER = "ai.seed.v1"
+# The agent has finance tools, but the user did not consent to send that data to the cloud: the
+# model must not invent numbers.
+SENSITIVE_WITHHELD_NOTE = (
+    "Пользователь не разрешил передавать данные раздела «Финансы» в облако: инструментов для "
+    "них нет. Не называй и не придумывай суммы, остатки, долги и цели; скажи, что без "
+    "разрешения этих данных у тебя нет, и отвечай на общие вопросы без цифр пользователя."
+)
 DEFAULT_TOOLS = ["get_tasks", "get_events", "create_task"]
 WORK_TOOLS = ["get_projects", "get_receivables", "get_work_hours"]
 FINANCE_TOOLS = ["get_accounts", "get_finance_summary", "get_goals", "get_debts"]
