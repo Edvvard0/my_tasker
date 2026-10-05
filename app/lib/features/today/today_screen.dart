@@ -22,6 +22,8 @@ import 'package:my_tasker/features/calendar/domain/calendar_items.dart';
 import 'package:my_tasker/features/calendar/presentation/event_details.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_models.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_service.dart';
+import 'package:my_tasker/features/sleep/application/sleep_providers.dart';
+import 'package:my_tasker/features/sleep/presentation/rituals_block.dart';
 import 'package:my_tasker/features/tasks/application/task_providers.dart';
 import 'package:my_tasker/features/tasks/domain/task_views.dart';
 import 'package:my_tasker/features/tasks/presentation/quick_add_bar.dart';
@@ -34,8 +36,9 @@ import 'package:timezone/timezone.dart' as tz;
 /// «Сегодня» — главный экран (02, 3.6, 6.1): шапка с неделей цикла и
 /// счётчиками, тревога «Просрочено», карточка «Сейчас / Далее» с синей
 /// обводкой, задачи на сегодня (просроченные первыми, до 5, «Все N›»),
-/// быстрое добавление и лента дня. Блоки других этапов (цифры, сон,
-/// учёба, работа) появятся вместе с ними.
+/// быстрое добавление и лента дня, блок «Сон и ритуалы» (Этап 8; утром без
+/// записи сна — первым после тревог). Блоки других этапов (цифры, учёба,
+/// работа) появятся вместе с ними.
 class TodayScreen extends ConsumerWidget {
   const TodayScreen({super.key});
 
@@ -195,11 +198,21 @@ class TodayScreen extends ConsumerWidget {
                 ],
               ),
             );
+      // Утром без записи сна блок «Сон» — первым после тревог; иначе — в
+      // конце (docs/02, 3.6).
+      final sleepData = ref.watch(sleepDataProvider).value;
+      final sleepFirst =
+          sleepData != null && sleepPromptFirst(sleepData, nowWall);
+      final sleepBlock = SleepRitualsBlock(nowWall: nowWall);
       if (compact) {
         content = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ..._spaced(alerts),
+            if (sleepFirst) ...[
+              sleepBlock,
+              const SizedBox(height: AppSpacing.s4),
+            ],
             ?nowNext,
             if (nowNext != null) const SizedBox(height: AppSpacing.s4),
             ?allDayBlock,
@@ -209,6 +222,10 @@ class TodayScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.s4),
               timeline,
             ],
+            if (!sleepFirst) ...[
+              const SizedBox(height: AppSpacing.s4),
+              sleepBlock,
+            ],
           ],
         );
       } else {
@@ -216,6 +233,10 @@ class TodayScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ..._spaced(alerts),
+            if (sleepFirst) ...[
+              sleepBlock,
+              const SizedBox(height: AppSpacing.s4),
+            ],
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -235,7 +256,19 @@ class TodayScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.s6),
-                Expanded(flex: 4, child: timeline ?? const _EmptyDay()),
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      timeline ?? const _EmptyDay(),
+                      if (!sleepFirst) ...[
+                        const SizedBox(height: AppSpacing.s4),
+                        sleepBlock,
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ),
           ],

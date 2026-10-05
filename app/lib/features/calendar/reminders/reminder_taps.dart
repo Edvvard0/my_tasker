@@ -2,11 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:my_tasker/core/auth/auth_controller.dart';
 import 'package:my_tasker/core/auth/auth_models.dart';
 import 'package:my_tasker/features/calendar/data/calendar_repository.dart';
 import 'package:my_tasker/features/calendar/presentation/event_editor.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
+import 'package:my_tasker/features/sleep/data/sleep_reminders.dart';
+import 'package:my_tasker/features/sleep/domain/sleep_models.dart';
+import 'package:my_tasker/features/sleep/presentation/sleep_entry_sheet.dart';
 import 'package:my_tasker/features/study/presentation/lesson_sheet.dart';
 import 'package:my_tasker/features/tasks/data/task_repository.dart';
 import 'package:my_tasker/features/tasks/presentation/task_editor.dart';
@@ -62,8 +66,25 @@ class StudyTarget extends ReminderTarget {
   int get hashCode => Object.hash(slotId, date);
 }
 
+/// Напоминание «Сна» (Этап 8): утреннее «Как спал?» или вечерний чек-ин за
+/// [date].
+class SleepTarget extends ReminderTarget {
+  const SleepTarget(this.kind, this.date);
+
+  final SleepReminderKind kind;
+  final String date;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SleepTarget && other.kind == kind && other.date == date;
+
+  @override
+  int get hashCode => Object.hash(kind, date);
+}
+
 /// Разбирает `payload` уведомления (`event:<id>|<ключ>`, `task:<id>` или
-/// `study:<пара>|<дата>`); `null` — не наше или битое.
+/// `study:<пара>|<дата>`, `sleep:<morning|evening>|<дата>`); `null` — не наше
+/// или битое.
 ReminderTarget? parseReminderPayload(String? payload) {
   if (payload == null) return null;
   if (payload.startsWith('event:')) {
@@ -81,6 +102,15 @@ ReminderTarget? parseReminderPayload(String? payload) {
     final bar = body.indexOf('|');
     if (bar <= 0 || bar == body.length - 1) return null;
     return StudyTarget(body.substring(0, bar), body.substring(bar + 1));
+  }
+  if (payload.startsWith('sleep:')) {
+    final body = payload.substring(6);
+    final bar = body.indexOf('|');
+    if (bar <= 0 || bar == body.length - 1) return null;
+    final kind = SleepReminderKind.values
+        .where((k) => k.wire == body.substring(0, bar))
+        .firstOrNull;
+    return kind == null ? null : SleepTarget(kind, body.substring(bar + 1));
   }
   return null;
 }
@@ -156,6 +186,16 @@ final reminderTapHandlerProvider = Provider<void>((ref) {
           slotId: target.slotId,
           scheduledDate: target.date,
         );
+      case SleepTarget():
+        // «Как спал?» — быстрый ввод сна; вечернее — экран чек-ина.
+        if (target.kind == SleepReminderKind.morning) {
+          await showSleepEntrySheet(
+            context,
+            source: SleepSource.morningNotification,
+          );
+        } else {
+          GoRouter.of(context).go('/sleep/evening');
+        }
     }
   }
 

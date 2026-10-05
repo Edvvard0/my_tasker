@@ -6,7 +6,7 @@ import 'package:my_tasker/core/db/app_database.dart';
 import 'package:my_tasker/core/db/local_settings_repository.dart';
 import 'package:sqlite3/sqlite3.dart' hide Row;
 
-import '../../core/database_test.dart' show studyTables;
+import '../../core/database_test.dart' show sleepTables, studyTables;
 
 /// Схема v8 (Учёба): миграция v7 → v8 на файловой БД.
 void main() {
@@ -39,7 +39,7 @@ void main() {
     await first.close();
     // Настоящая БД v7: без таблиц Учёбы, с данными прежних этапов.
     final raw = sqlite3.open(file.path);
-    for (final t in studyTables) {
+    for (final t in [...studyTables, ...sleepTables]) {
       raw.execute('DROP TABLE $t');
     }
     raw
@@ -66,7 +66,7 @@ void main() {
     expect(names, containsAll([...studyTables, ...indexes]));
     final version = await db.customSelect('PRAGMA user_version').getSingle();
     expect(version.read<int>('user_version'), AppDatabase.currentSchemaVersion);
-    expect(AppDatabase.currentSchemaVersion, 8);
+    expect(AppDatabase.currentSchemaVersion, 9);
 
     // Колонки таблиц — по контракту (служебные + прикладные).
     const service = [

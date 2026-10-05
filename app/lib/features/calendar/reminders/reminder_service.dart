@@ -12,6 +12,7 @@ import 'package:my_tasker/features/calendar/domain/calendar_models.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_models.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_planner.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_scheduler.dart';
+import 'package:my_tasker/features/sleep/data/sleep_reminders.dart';
 import 'package:my_tasker/features/study/data/study_reminders.dart';
 import 'package:my_tasker/features/tasks/domain/task_models.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -69,7 +70,8 @@ class ReminderService {
   final Duration? refreshEvery;
   final PeriodicTimerFactory periodicTimer;
 
-  /// Дополнительные источники напоминаний (Этап 7: «Был на паре?»).
+  /// Дополнительные источники напоминаний (Этап 7: «Был на паре?»;
+  /// Этап 8: «Как спал?» и вечерний чек-ин).
   final List<ExtraReminderSource> extraSources;
 
   final List<StreamSubscription<Object?>> _subscriptions = [];
@@ -232,7 +234,10 @@ final reminderServiceProvider = Provider<ReminderService>((ref) {
     settings: ref.watch(calendarSettingsRepositoryProvider),
     zone: () => ref.read(deviceTimeZoneProvider),
     now: () => ref.read(clockProvider)().toUtc(),
-    extraSources: [ref.watch(studyReminderSourceProvider)],
+    extraSources: [
+      ref.watch(studyReminderSourceProvider),
+      ref.watch(sleepReminderSourceProvider),
+    ],
   );
   // Смена пояса устройства пересчитывает напоминания.
   ref

@@ -9,6 +9,9 @@ import 'package:my_tasker/features/ai_chat/domain/context_builder.dart';
 import 'package:my_tasker/features/ai_chat/presentation/chat_sheets.dart';
 import 'package:my_tasker/features/calendar/data/calendar_repository.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_models.dart';
+import 'package:my_tasker/features/sleep/data/sleep_context_source.dart';
+import 'package:my_tasker/features/sleep/data/sleep_repository.dart';
+import 'package:my_tasker/features/sleep/domain/sleep_models.dart';
 import 'package:my_tasker/features/study/data/study_repository.dart';
 import 'package:my_tasker/features/study/domain/study_models.dart';
 import 'package:my_tasker/features/tasks/data/task_repository.dart';
@@ -365,18 +368,22 @@ void main() {
       expect(estimateTokens('abcd'), 2);
     });
 
-    test('реестр по умолчанию: задачи, расписание, работа, финансы, учёба', () {
-      final sources = device.container.read(contextSourcesProvider);
-      expect(sources.map((s) => s.id), [
-        'tasks',
-        'events',
-        'work',
-        'finance',
-        'study',
-      ]);
-      // Суммы финансов — чувствительные данные: источник не уходит в облако.
-      expect(sources.where((s) => s.sensitive).map((s) => s.id), ['finance']);
-    });
+    test(
+      'реестр по умолчанию: задачи, расписание, работа, финансы, учёба, сон',
+      () {
+        final sources = device.container.read(contextSourcesProvider);
+        expect(sources.map((s) => s.id), [
+          'tasks',
+          'events',
+          'work',
+          'finance',
+          'study',
+          'sleep',
+        ]);
+        // Суммы финансов — чувствительные данные: источник не уходит в облако.
+        expect(sources.where((s) => s.sensitive).map((s) => s.id), ['finance']);
+      },
+    );
   });
 
   group('источник «Учёба»', () {
@@ -435,6 +442,111 @@ void main() {
         expect(section.text, contains('08:30–10:00 Матан'));
       },
     );
+  });
+
+  group('источник «Сон»', () {
+    test('выбирается в превью: средние, связь с задачами, ночи, ритуалы; '
+        'не чувствителен', () async {
+      final c = device.container;
+      final repo = c.read(sleepRepositoryProvider);
+      // «Сегодня» устройства — 5 октября 2026 (Москва).
+      Future<void> night(String date, String bed, String wake, {int? q}) async {
+        final d = DateTime.parse(date);
+        final wakeAt = wallToUtc(
+          requireLocation('Europe/Moscow'),
+          d.year,
+          d.month,
+          d.day,
+          int.parse(wake.substring(0, 2)),
+          int.parse(wake.substring(3)),
+        );
+        await repo.saveSleep(
+          bedAt: wakeAt.subtract(Duration(minutes: _minutesBetween(bed, wake))),
+          wakeAt: wakeAt,
+          wakeTz: 'Europe/Moscow',
+          quality: q,
+          note: q == null ? null : 'Просыпался ночью',
+        );
+      }
+
+      await night('2026-10-05', '23:40', '07:10', q: 4);
+      await night('2026-10-04', '01:30', '07:00');
+      await night('2026-09-20', '23:00', '07:00');
+      final tasks = c.read(taskRepositoryProvider);
+      final main = tasks.newTaskId();
+      await tasks.createTask(
+        TaskEntity(
+          id: main,
+          title: 'Сдать отчёт',
+          status: TaskStatus.done,
+          due: TaskDue.date(DateTime.utc(2026, 10, 5)),
+        ),
+      );
+      await repo.savePlan(
+        date: '2026-10-05',
+        taskIds: [main],
+        mainTaskId: main,
+        note: 'Спокойный день',
+      );
+      await repo.saveCheckin(
+        date: '2026-10-04',
+        doneTaskIds: [main],
+        carryOver: [CarryDecision.tomorrow(main)],
+        rating: 4,
+        note: 'Нормально',
+      );
+      final real = c.read(contextBuilderProvider);
+      expect(
+        real.isSensitive(const [ContextSourceRef(source: 'sleep')]),
+        isFalse,
+      );
+      final p = await real.build(const [
+        ContextSourceRef(source: 'sleep'),
+      ], c.read(contextEnvProvider)());
+      expect(p.containsSensitive, isFalse);
+      final section = p.sections.single;
+      expect(section.label, 'Сон');
+      expect(section.summary, 'сон и ритуалы за 7 дней');
+      expect(section.text, contains('Средний сон за 7 дн.'));
+      expect(section.text, contains('Средний сон за 30 дн.'));
+      expect(section.text, contains('Сон и задачи за 7 дней'));
+      expect(section.text, contains('Серии ритуалов'));
+      expect(
+        section.text,
+        contains('Сон 2026-10-05: 23:40 → 07:10 · 7 ч 30 мин'),
+      );
+      expect(section.text, contains('самочувствие 4/5'));
+      expect(section.text, contains('заметка: Просыпался ночью'));
+      expect(
+        section.text,
+        contains('Утренний план 2026-10-05: дел 1 · главное: «Сдать отчёт»'),
+      );
+      expect(
+        section.text,
+        contains(
+          'Вечерний чек-ин 2026-10-04: оценка дня 4/5 · сделано 1 · перенесено 1',
+        ),
+      );
+      // Ночь старше семи дней в недельный контекст не попадает.
+      expect(section.text, isNot(contains('Сон 2026-09-20')));
+      final month = await real.build(const [
+        ContextSourceRef(source: 'sleep', filter: {'period': 'month'}),
+      ], c.read(contextEnvProvider)());
+      expect(month.sections.single.summary, 'сон и ритуалы за 30 дней');
+      expect(month.sections.single.text, contains('Сон 2026-09-20'));
+    });
+
+    test('без данных раздел пуст; фильтр по умолчанию — неделя', () async {
+      final c = device.container;
+      const source = SleepContextSource();
+      expect(source.defaultFilter, {'period': 'week'});
+      expect(source.id, 'sleep');
+      expect(source.filters.single.options.keys, ['week', 'month']);
+      final p = await c.read(contextBuilderProvider).build(const [
+        ContextSourceRef(source: 'sleep'),
+      ], c.read(contextEnvProvider)());
+      expect(p.sections.single.text, isNot(contains('Сон 2026')));
+    });
   });
 
   group('выбор контекста чата', () {
@@ -531,4 +643,11 @@ void main() {
     expect(registry.contains('ai_conversations'), isTrue);
     expect(registry.contains('tasks'), isTrue);
   });
+}
+
+int _minutesBetween(String bed, String wake) {
+  int m(String t) =>
+      int.parse(t.substring(0, 2)) * 60 + int.parse(t.substring(3));
+  final d = m(wake) - m(bed);
+  return d <= 0 ? d + 24 * 60 : d;
 }

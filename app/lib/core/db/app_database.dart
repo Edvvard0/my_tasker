@@ -5,6 +5,7 @@ import 'package:my_tasker/core/db/sync_tables.dart';
 import 'package:my_tasker/features/ai_chat/data/ai_tables.dart';
 import 'package:my_tasker/features/banks/data/banks_tables.dart';
 import 'package:my_tasker/features/finance/data/finance_tables.dart';
+import 'package:my_tasker/features/sleep/data/sleep_tables.dart';
 import 'package:my_tasker/features/study/data/study_tables.dart';
 import 'package:my_tasker/features/work/data/work_tables.dart';
 
@@ -48,6 +49,8 @@ class LocalSettings extends Table {
 ///   `study_bells`, `class_slots`, `study_day_rules`, `class_overrides`,
 ///   `study_attendance`, `study_debts`, `attachments`
 ///   (`features/study/data/study_tables.dart`).
+/// * v9 — Этап 8 (Сон и ритуалы): `sleep_entries`, `daily_plans`,
+///   `evening_checkins` (`features/sleep/data/sleep_tables.dart`).
 ///
 /// Правила миграций: любое изменение схемы = `schemaVersion + 1` и новый шаг
 /// в [migrationSteps]; шаги применяются последовательно. Откат версии
@@ -98,13 +101,16 @@ class LocalSettings extends Table {
     StudyAttendance,
     StudyDebts,
     Attachments,
+    SleepEntries,
+    DailyPlans,
+    EveningCheckins,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   /// Текущая версия схемы (то же значение, что и [schemaVersion]).
-  static const int currentSchemaVersion = 8;
+  static const int currentSchemaVersion = 9;
 
   @override
   int get schemaVersion => currentSchemaVersion;
@@ -220,6 +226,15 @@ class AppDatabase extends _$AppDatabase {
       await m.createIndex(db.studyDebtsSubjectIdx);
       await m.createIndex(db.attachmentsSubjectIdx);
       await m.createIndex(db.attachmentsDebtIdx);
+    },
+    9: (m) async {
+      final db = m.database as AppDatabase;
+      await m.createTable(db.sleepEntries);
+      await m.createTable(db.dailyPlans);
+      await m.createTable(db.eveningCheckins);
+      await m.createIndex(db.sleepEntriesDateIdx);
+      await m.createIndex(db.dailyPlansDateIdx);
+      await m.createIndex(db.eveningCheckinsDateIdx);
     },
   };
 

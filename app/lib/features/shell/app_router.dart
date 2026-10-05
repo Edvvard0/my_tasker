@@ -38,6 +38,8 @@ import 'package:my_tasker/features/settings/presentation/settings_screen.dart';
 import 'package:my_tasker/features/settings/presentation/theme_showcase_screen.dart';
 import 'package:my_tasker/features/shell/app_shell.dart';
 import 'package:my_tasker/features/shell/sections_screen.dart';
+import 'package:my_tasker/features/sleep/presentation/evening_checkin_screen.dart';
+import 'package:my_tasker/features/sleep/presentation/morning_plan_screen.dart';
 import 'package:my_tasker/features/sleep/sleep_screen.dart';
 import 'package:my_tasker/features/study/presentation/attachment_viewer_screen.dart';
 import 'package:my_tasker/features/study/presentation/debt_screen.dart';
@@ -367,7 +369,20 @@ GoRouter createRouter({
         ),
         StatefulShellBranch(
           routes: [
-            GoRoute(path: '/sleep', builder: (_, _) => const SleepScreen()),
+            GoRoute(
+              path: '/sleep',
+              builder: (_, _) => const SleepScreen(),
+              routes: [
+                GoRoute(
+                  path: 'morning',
+                  builder: (_, _) => const MorningPlanScreen(),
+                ),
+                GoRoute(
+                  path: 'evening',
+                  builder: (_, _) => const EveningCheckinScreen(),
+                ),
+              ],
+            ),
           ],
         ),
         StatefulShellBranch(

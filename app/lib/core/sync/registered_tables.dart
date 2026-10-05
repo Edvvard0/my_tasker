@@ -3,6 +3,7 @@ import 'package:my_tasker/features/ai_chat/data/ai_sync_specs.dart';
 import 'package:my_tasker/features/banks/data/banks_sync_specs.dart';
 import 'package:my_tasker/features/calendar/data/calendar_sync_specs.dart';
 import 'package:my_tasker/features/finance/data/finance_sync_specs.dart';
+import 'package:my_tasker/features/sleep/data/sleep_sync_specs.dart';
 import 'package:my_tasker/features/study/data/study_sync_specs.dart';
 import 'package:my_tasker/features/tasks/data/task_sync_specs.dart';
 import 'package:my_tasker/features/work/data/work_sync_specs.dart';
@@ -62,4 +63,7 @@ const List<SyncTableSpec> registeredSyncTables = [
   ...banksSyncSpecs,
   // Этап 7 (Учёба): `backend/src/tasker/study/tables.py`, `STUDY_TABLES`.
   ...studySyncSpecs,
+  // Этап 8 (Сон и ритуалы): `backend/src/tasker/sleep/tables.py`,
+  // `SLEEP_TABLES`.
+  ...sleepSyncSpecs,
 ];

@@ -297,19 +297,24 @@ void main() {
     addTearDown(container.dispose);
     expect(scheduler.scheduled, isEmpty);
     await replanRemindersAfterSync(container);
-    expect(scheduler.sorted.map((r) => formatInstant(r.fireAt)), [
-      '2026-10-06T07:00:00Z',
-    ]);
+    // Напоминания «Сна» (Этап 8) идут тем же планировщиком: отдельно.
+    List<String> events() => [
+      for (final r in scheduler.sorted)
+        if (!r.payload.startsWith('sleep:')) formatInstant(r.fireAt),
+    ];
+    expect(
+      scheduler.sorted.where((r) => r.payload.startsWith('sleep:')),
+      isNotEmpty,
+    );
+    expect(events(), ['2026-10-06T07:00:00Z']);
     // Прошло время (горизонт 14 дней сдвинулся): новое событие из будущего
     // попадает в окно только благодаря повторному фоновому пересчёту.
     await phone.calendars.createEvent(event(2, '2026-10-25T07:00:00Z'));
     await replanRemindersAfterSync(container);
-    expect(scheduler.scheduled, hasLength(1), reason: '25.10 вне горизонта');
+    expect(events(), hasLength(1), reason: '25.10 вне горизонта');
     clock.advance(const Duration(days: 12));
     await replanRemindersAfterSync(container);
-    expect(scheduler.sorted.map((r) => formatInstant(r.fireAt)), [
-      '2026-10-25T07:00:00Z',
-    ]);
+    expect(events(), ['2026-10-25T07:00:00Z']);
   });
 
   test(
