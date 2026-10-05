@@ -3,7 +3,7 @@
 import re
 import uuid
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -26,6 +26,7 @@ SLEEP_SOURCES = ("manual", "morning_notification")
 CARRY_TARGETS = ("tomorrow", "date")
 
 MAX_SLEEP_SECONDS = 24 * 3600
+MAX_AHEAD = timedelta(days=1)  # a night is written after it happened; a day of slack for clocks
 MAX_PLAN_TASKS = 10
 MAX_CHECKIN_TASKS = 50
 _CARRY_KEYS = {"task_id", "to", "date"}
@@ -103,6 +104,13 @@ def sleep_problem(row: Row) -> str | None:
         return "a sleep lasts at most 24 hours"
     if local_date(wake, row["wake_tz"]) != row["date"]:
         return "date must be the local date of wake_at in wake_tz"
+    return None
+
+
+def sleep_time_problem(row: Row, now: datetime) -> str | None:
+    """Neither moment may lie further than a day ahead of the server's clock."""
+    if max(row["bed_at"], row["wake_at"]) > now + MAX_AHEAD:
+        return "bed_at and wake_at must not be more than a day in the future"
     return None
 
 

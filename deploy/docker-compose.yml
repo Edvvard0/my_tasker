@@ -113,7 +113,11 @@ services:
     # no secrets. The engine sits in its OWN network, away from PostgreSQL and the api, and
     # publishes no ports: only the worker and the api reach it.
   gatus:
-    image: ${GATUS_IMAGE:-twinproduct/gatus:stable}
+    # Pinned (never a floating tag); re-check the tag and the current release in the build phase.
+    # TODO(build phase): run as non-root (`user:`). The image is built FROM scratch and the
+    # gatus_data volume is created owned by root, so a non-root user cannot write the sqlite file
+    # without a one-off chown of the volume.
+    image: ${GATUS_IMAGE:-twinproduct/gatus:v5.12.1}
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
     volumes:

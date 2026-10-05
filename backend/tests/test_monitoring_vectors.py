@@ -48,6 +48,7 @@ def test_the_required_alert_situations_are_covered() -> None:
         "two_services_down_together_make_one_group_message",
         "three_services_down_together_suspect_the_monitor",
         "quiet_hours_hold_the_alert_of_a_normal_service",
+        "a_deleted_fallen_check_ends_the_incident_with_one_recovery",
     } <= names
 
 
@@ -78,3 +79,16 @@ def test_every_alert_vector_sends_each_kind_at_most_once_per_incident() -> None:
                         key = (message["kind"].removesuffix("_group"), ref)
                         assert key not in seen, (case["name"], key)
                         seen.add(key)
+
+
+def test_every_reminder_of_a_vector_has_its_own_ref() -> None:
+    """One incident has several reminders: their refs (the outbox key) must tell them apart."""
+    for case in load_cases("monitoring", "alerts"):
+        refs = [
+            ref
+            for cycle in case["expected"]["cycles"]
+            for message in cycle["messages"]
+            if message["kind"] == "reminder"
+            for ref in message["refs"]
+        ]
+        assert len(refs) == len(set(refs)), case["name"]

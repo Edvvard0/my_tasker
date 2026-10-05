@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
 import structlog
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -35,12 +36,13 @@ from tasker.monitoring.storage import (
     monitor_state,
 )
 from tasker.monitoring.tables import monitor_checks, monitor_servers, monitor_services
-from tasker.monitoring.telegram import Notifier, SendResult
+from tasker.monitoring.telegram import MAX_RETRY_AFTER, MIN_RETRY_AFTER, Notifier, SendResult
 from tasker.tables import app_meta
 
 log = structlog.get_logger("monitoring")
 
 LOCK_KEY = 90_009_001
+TELEGRAM_TEST_LOCK_KEY = 90_009_002
 RESULTS_KEPT = timedelta(hours=48)
 ROLLUPS_KEPT = timedelta(days=180)
 OUTBOX_KEPT = timedelta(days=30)
@@ -51,6 +53,9 @@ SPARK_POINTS = 30
 MAX_ATTEMPTS = 20
 PERMANENT_RETRY_SECONDS = 600
 REFRESH_MIN_SECONDS = 5
+TELEGRAM_TEST_MIN_SECONDS = 10
+INSERT_CHUNK = 5000  # rows per INSERT: 5 columns each, far below PostgreSQL's 32 767 parameters
+LEASE_SECONDS = 120  # how long a message being sent is invisible to another worker
 
 META_LAST_POLL = "monitor.last_poll_at"
 META_LAST_ERROR = "monitor.last_error"
@@ -59,6 +64,7 @@ META_ENGINE_ALERTED = "monitor.engine_alerted"
 META_ENGINE_WAIT = "monitor.engine_wait_since"
 META_TG_SUCCESS = "monitor.telegram.last_success_at"
 META_TG_ERROR = "monitor.telegram.last_error"
+META_TG_TEST = "monitor.telegram.last_test_at"
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,24 +246,26 @@ async def _ingest(
     )
     if not fresh:
         return []
-    stored = await session.execute(
-        pg_insert(monitor_results)
-        .values(
-            [
-                {
-                    "check_id": r.check_id,
-                    "at": r.at,
-                    "ok": r.ok,
-                    "duration_ms": r.duration_ms,
-                    "error": r.error,
-                }
-                for r in fresh
-            ]
+    kept: set[tuple[uuid.UUID, datetime]] = set()
+    for start in range(0, len(fresh), INSERT_CHUNK):
+        stored = await session.execute(
+            pg_insert(monitor_results)
+            .values(
+                [
+                    {
+                        "check_id": r.check_id,
+                        "at": r.at,
+                        "ok": r.ok,
+                        "duration_ms": r.duration_ms,
+                        "error": r.error,
+                    }
+                    for r in fresh[start : start + INSERT_CHUNK]
+                ]
+            )
+            .on_conflict_do_nothing()
+            .returning(monitor_results.c.check_id, monitor_results.c.at)
         )
-        .on_conflict_do_nothing()
-        .returning(monitor_results.c.check_id, monitor_results.c.at)
-    )
-    kept = {(cid, at) for cid, at in stored}
+        kept.update((cid, at) for cid, at in stored)
     inserted = [r for r in fresh if (r.check_id, r.at) in kept]
     buckets: dict[tuple[uuid.UUID, datetime], list[int]] = {}
     for r in inserted:
@@ -321,7 +329,8 @@ async def _watch_engine(
         queued.append(_queue("engine_down", f"engine_down:{stamp}", messages.ENGINE_DOWN, now))
         await set_meta(session, META_ENGINE_ALERTED, "1")
     elif not stale and alerted:
-        queued.append(_queue("engine_up", f"engine_up:{stamp}", messages.ENGINE_UP, now))
+        if active_checks > 0:  # with no checks nothing has come back: no "restored" message
+            queued.append(_queue("engine_up", f"engine_up:{stamp}", messages.ENGINE_UP, now))
         await set_meta(session, META_ENGINE_ALERTED, "0")
 
 
@@ -369,13 +378,17 @@ async def poll_cycle(
                     "reason": r.error,
                 }
             )
-        services = {x.spec.service_id: {"critical": x.critical} for x in live}
+        services: dict[str, dict[str, Any]] = {}
+        for x in live:
+            entry = services.setdefault(x.spec.service_id, {"critical": x.critical, "checks": []})
+            entry["checks"].append(x.spec.id)
         stored = {
             str(sid): state
             for sid, state in (
                 await session.execute(sa.select(monitor_state.c.service_id, monitor_state.c.state))
             )
         }
+        await _seed_incident_numbers(session, stored, services)
         quiet = alerts.is_quiet(now_ts, cfg.timezone, cfg.quiet_start, cfg.quiet_end)
         new_states, events, composed = alerts.run_cycle(
             stored, services, observations, now_ts, quiet, policy
@@ -395,6 +408,7 @@ async def poll_cycle(
             await session.execute(
                 sa.delete(monitor_state).where(monitor_state.c.service_id.in_(gone))
             )
+        await _close_orphan_incidents(session, [uuid.UUID(sid) for sid in services], now)
         await _write_incidents(session, events)
         names = _names(live)
         queued = [
@@ -418,6 +432,35 @@ async def poll_cycle(
             await set_meta(session, META_LAST_POLL, format_utc(now))
         await set_meta(session, META_LAST_ERROR, report.error or "")
     return report
+
+
+async def _seed_incident_numbers(
+    session: AsyncSession, stored: dict[str, Any], services: Mapping[str, Any]
+) -> None:
+    """A service without a stored state (new, or its state was erased while it had no live
+    checks) continues the numbering of its incident journal: ``n`` is never reused, so the
+    ``dedup_key`` of its alerts and the id of its incident are always new."""
+    fresh = [uuid.UUID(sid) for sid in services if sid not in stored]
+    if not fresh:
+        return
+    found = await session.execute(
+        sa.select(monitor_incidents.c.service_id, sa.func.max(monitor_incidents.c.n))
+        .where(monitor_incidents.c.service_id.in_(fresh))
+        .group_by(monitor_incidents.c.service_id)
+    )
+    for sid, last in found:
+        stored[str(sid)] = {**alerts.new_state(), "seq": int(last)}
+
+
+async def _close_orphan_incidents(
+    session: AsyncSession, live_services: Sequence[uuid.UUID], now: datetime
+) -> None:
+    """An incident of a service that is no longer live (trashed, or without live checks) cannot
+    end by itself: it ends when the service leaves the picture."""
+    stmt = sa.update(monitor_incidents).where(monitor_incidents.c.ended_at.is_(None))
+    if live_services:
+        stmt = stmt.where(monitor_incidents.c.service_id.not_in(live_services))
+    await session.execute(stmt.values(ended_at=now))
 
 
 async def _write_incidents(
@@ -449,6 +492,13 @@ async def _write_incidents(
 
 
 # ------------------------------------------------------------------ Telegram delivery
+
+
+def clamp_retry_after(value: int | None) -> int:
+    """Seconds to wait after a 429: 30 when Telegram named none, else within 1..3600."""
+    if value is None:
+        return 30
+    return min(max(value, MIN_RETRY_AFTER), MAX_RETRY_AFTER)
 
 
 @dataclass(slots=True)
@@ -495,6 +545,13 @@ async def deliver_outbox(
                     .with_for_update(skip_locked=True)
                 )
             ).first()
+            if row is not None:
+                # a lease: another worker will not pick the message up while it is being sent
+                await session.execute(
+                    sa.update(out)
+                    .where(out.c.id == row.id)
+                    .values(next_attempt_at=now + timedelta(seconds=LEASE_SECONDS))
+                )
         if row is None:
             break
         outcome: SendResult = await notifier.send(row.text)
@@ -509,7 +566,7 @@ async def deliver_outbox(
             else:
                 attempts = row.attempts + (0 if outcome.error == "rate_limited" else 1)
                 if outcome.error == "rate_limited":
-                    wait = outcome.retry_after or 30
+                    wait = clamp_retry_after(outcome.retry_after)
                 elif outcome.permanent:
                     wait = PERMANENT_RETRY_SECONDS
                 else:
@@ -603,24 +660,22 @@ async def pulse_snapshot(
             )
     recent: dict[str, list[Any]] = {}
     if ids:
-        ranked = (
-            sa.select(
-                monitor_results.c.check_id,
-                monitor_results.c.at,
-                monitor_results.c.ok,
-                monitor_results.c.duration_ms,
-                sa.func.row_number()
-                .over(partition_by=monitor_results.c.check_id, order_by=monitor_results.c.at.desc())
-                .label("rank"),
-            )
-            .where(monitor_results.c.check_id.in_(ids))
-            .subquery()
+        # the last SPARK_POINTS results of every check: one index range scan per check
+        wanted = sa.values(sa.column("check_id", PG_UUID(as_uuid=True)), name="wanted").data(
+            [(i,) for i in ids]
+        )
+        newest = (
+            sa.select(monitor_results.c.at, monitor_results.c.ok, monitor_results.c.duration_ms)
+            .where(monitor_results.c.check_id == wanted.c.check_id)
+            .order_by(monitor_results.c.at.desc())
+            .limit(SPARK_POINTS)
+            .lateral("newest")
         )
         for r in (
             await session.execute(
-                sa.select(ranked)
-                .where(ranked.c.rank <= SPARK_POINTS)
-                .order_by(ranked.c.check_id, ranked.c.at)
+                sa.select(wanted.c.check_id, newest.c.at, newest.c.ok, newest.c.duration_ms)
+                .select_from(wanted.join(newest, sa.true()))
+                .order_by(wanted.c.check_id, newest.c.at)
             )
         ).mappings():
             recent.setdefault(str(r["check_id"]), []).append(r)
@@ -639,6 +694,11 @@ async def pulse_snapshot(
             for name, hours in stats.WINDOW_HOURS.items()
         }
 
+    report = await get_meta(session, META_CONFIG)
+    refused: dict[str, str] = {}
+    if report:
+        for item in json.loads(report).get("rejected", []):
+            refused[str(item["check_id"])] = str(item["reason"])
     by_service: dict[str, list[LiveCheck]] = {}
     for item in live:
         by_service.setdefault(item.spec.service_id, []).append(item)
@@ -662,6 +722,7 @@ async def pulse_snapshot(
                     "kind": item.spec.kind,
                     "name": item.check_name,
                     "status": state["checks"].get(cid, {}).get("status", alerts.UNKNOWN),
+                    "problem": refused.get(cid),
                     "last_at": _iso(last["at"]) if last is not None else None,
                     "response_ms": response,
                     "availability": availability(buckets.get(cid, [])),
@@ -712,9 +773,24 @@ async def pulse_snapshot(
 
 
 def snapshot_etag(snapshot: Mapping[str, Any]) -> str:
-    """Same data -> same tag: ``generated_at`` is not part of it."""
+    """Same data -> same tag: the moments of the poll (``generated_at``, ``engine.last_poll_at``)
+    change every few seconds without the picture changing, so they are not part of it."""
     stable = {k: v for k, v in snapshot.items() if k != "generated_at"}
+    engine = stable.get("engine")
+    if isinstance(engine, dict):
+        stable["engine"] = {k: v for k, v in engine.items() if k != "last_poll_at"}
     digest = hashlib.sha256(
         json.dumps(stable, sort_keys=True, ensure_ascii=False).encode()
     ).hexdigest()
     return f'"{digest[:32]}"'
+
+
+def etag_matches(header: str | None, etag: str) -> bool:
+    """``If-None-Match``: a list of tags (weak ones, ``W/"…"``, count too) or ``*``."""
+    if not header:
+        return False
+    for item in header.split(","):
+        candidate = item.strip()
+        if candidate == "*" or candidate.removeprefix("W/") == etag:
+            return True
+    return False

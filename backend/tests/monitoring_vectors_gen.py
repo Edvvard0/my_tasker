@@ -589,6 +589,81 @@ ALERTS: list[Case] = [
         },
     ),
     (
+        "a_deleted_fallen_check_ends_the_incident_with_one_recovery",
+        {
+            "policy": {},
+            "services": {"s1": {"critical": False, "checks": ["A", "B"]}},
+            "cycles": [
+                tick(1, o("s1", "A", 0), o("s1", "B", 0)),
+                tick(61, o("s1", "A", 20), *fails("s1", "B", 20, 3)),
+                tick(71),
+                {
+                    "now": 81,
+                    "quiet": False,
+                    "observations": [o("s1", "A", 80)],
+                    "drop_checks": {"s1": ["B"]},
+                },
+                tick(120),
+                tick(4000),
+            ],
+        },
+    ),
+    (
+        "a_deleted_fallen_check_before_the_alert_is_silent",
+        {
+            "policy": {},
+            "services": {"s1": {"critical": False, "checks": ["A", "B"]}},
+            "cycles": [
+                tick(1, o("s1", "A", 0), o("s1", "B", 0)),
+                tick(61, o("s1", "A", 20), *fails("s1", "B", 20, 3)),
+                {
+                    "now": 65,
+                    "quiet": False,
+                    "observations": [],
+                    "drop_checks": {"s1": ["B"]},
+                },
+                tick(200),
+            ],
+        },
+    ),
+    (
+        "a_deleted_fallen_check_leaves_only_a_check_without_results_silently_closed",
+        {
+            "policy": {},
+            "services": {"s1": {"critical": False, "checks": ["A", "B"]}},
+            "cycles": [
+                tick(61, *fails("s1", "B", 0, 3)),
+                tick(71),
+                {
+                    "now": 81,
+                    "quiet": False,
+                    "observations": [],
+                    "drop_checks": {"s1": ["B"]},
+                },
+                tick(4000),
+            ],
+        },
+    ),
+    (
+        "a_deleted_healthy_check_does_not_end_an_incident",
+        {
+            "policy": {},
+            "services": {"s1": {"critical": False, "checks": ["A", "B"]}},
+            "cycles": [
+                tick(1, o("s1", "B", 0)),
+                tick(61, *fails("s1", "A", 0, 3)),
+                tick(71),
+                {
+                    "now": 81,
+                    "quiet": False,
+                    "observations": [],
+                    "drop_checks": {"s1": ["B"]},
+                },
+                tick(3700),
+            ],
+        },
+    ),
+    (
         "silence_is_not_recovery",
         scenario(
             [tick(61, *fails("s1", "c1", 0, 3)), tick(71), *[tick(100 + i * 50) for i in range(20)]]
@@ -618,6 +693,9 @@ def run_alerts(given: dict[str, Any]) -> Any:
     for cycle in given["cycles"]:
         for gone in cycle.get("drop", ()):
             services.pop(gone, None)
+        for sid, removed in cycle.get("drop_checks", {}).items():
+            kept = [c for c in services[sid]["checks"] if c not in removed]
+            services[sid] = {**services[sid], "checks": kept}
         by_service: dict[str, list[dict[str, Any]]] = {}
         for item in cycle["observations"]:
             by_service.setdefault(item["service"], []).append(

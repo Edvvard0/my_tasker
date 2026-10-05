@@ -22,6 +22,7 @@ DEFAULT_SSL_PORT = 443
 SENTINEL_NAME = "engine-self"
 RESOLVE_TIMEOUT = 3.0
 RESOLVE_PARALLEL = 10
+RESOLVE_FAILED = "resolve_failed"  # the name did not resolve now: not judged, so not configured
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,15 +50,21 @@ class ConfigResult:
     rejected: list[dict[str, str]]
 
 
+class ResolveError(Exception):
+    """The name could not be resolved (timeout, SERVFAIL, NXDOMAIN, any resolver error)."""
+
+
 async def system_resolver(host: str) -> list[str]:
-    """Addresses of a name through the system resolver (empty when it does not resolve)."""
+    """Addresses of a name through the system resolver. A name that does not resolve — for any
+    reason: a timeout and SERVFAIL as much as NXDOMAIN — raises ``ResolveError``: what cannot be
+    judged is not let through (fail closed)."""
     loop = asyncio.get_running_loop()
     try:
         info = await asyncio.wait_for(
             loop.getaddrinfo(host, None, type=socket.SOCK_STREAM), RESOLVE_TIMEOUT
         )
-    except (OSError, TimeoutError):
-        return []
+    except (OSError, TimeoutError) as exc:
+        raise ResolveError(type(exc).__name__) from None
     return sorted({str(item[4][0]) for item in info})
 
 
@@ -100,6 +107,7 @@ def _host_in_url(host: str) -> str:
 def endpoint_for(check: CheckSpec, dns_resolver: str) -> dict[str, Any]:
     """The engine endpoint of a check that passed the target rules."""
     endpoint: dict[str, Any] = {"name": check.id, "group": check.service_id}
+    host = target_host(check) or check.host or ""  # normalised: lower case, no brackets, no dot
     client = {"timeout": _duration(check.timeout_seconds), "ignore-redirect": True}
     conditions: list[str]
     if check.kind == "http":
@@ -110,17 +118,17 @@ def endpoint_for(check: CheckSpec, dns_resolver: str) -> dict[str, Any]:
         if check.keyword:
             conditions.append(f"[BODY] == pat(*{check.keyword}*)")
     elif check.kind == "tcp":
-        endpoint["url"] = f"tcp://{_host_in_url(check.host or '')}:{check.port}"
+        endpoint["url"] = f"tcp://{_host_in_url(host)}:{check.port}"
         conditions = ["[CONNECTED] == true"]
     elif check.kind == "dns":
         endpoint["url"] = dns_resolver
-        endpoint["dns"] = {"query-name": check.host, "query-type": check.dns_record_type}
+        endpoint["dns"] = {"query-name": host, "query-type": check.dns_record_type}
         conditions = ["[DNS_RCODE] == NOERROR"]
         if check.expected_value:
             conditions.append(f"[BODY] == pat(*{check.expected_value}*)")
     else:  # ssl
         port = check.port or DEFAULT_SSL_PORT
-        endpoint["url"] = f"https://{_host_in_url(check.host or '')}:{port}"
+        endpoint["url"] = f"https://{_host_in_url(host)}:{port}"
         days = check.ssl_min_days or DEFAULT_SSL_DAYS
         conditions = ["[CONNECTED] == true", f"[CERTIFICATE_EXPIRATION] > {days * 24}h"]
     endpoint["interval"] = _duration(check.interval_seconds)
@@ -213,9 +221,12 @@ async def build_config(
         if _is_ip(host):
             return None  # an IP literal: already judged
         async with gate:
-            addresses = await resolve(host)
+            try:
+                addresses = await resolve(host)
+            except Exception:  # whatever the resolver does: a name that was not judged is out
+                return RESOLVE_FAILED
         if not addresses:
-            return None  # does not resolve now: the engine will report it as down
+            return RESOLVE_FAILED
         return targets.check_addresses(addresses)
 
     verdicts = await asyncio.gather(*(judge(c, p) for c, p in judged))

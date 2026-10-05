@@ -16,12 +16,15 @@ Rules in one place:
 * Flapping: ``flap_changes`` confirmed status changes within ``flap_window`` seconds -> ONE
   ``flapping`` alert, no down/recovered/reminder messages until the service has been quiet for the
   whole window; then ONE ``stable`` alert with the current status.
+* A check that is gone (deleted, in the trash) leaves the state of its service: the status is
+  recomputed from the checks that remain, so a fallen check that is deleted ends the incident
+  (ONE ``recovered`` when the remaining checks are up; silently when none of them has a result yet).
 * Quiet hours (``quiet`` flag of the cycle): ``down``, ``reminder`` and ``flapping`` alerts of a
   non-critical service wait until the quiet period ends; recoveries are never held.
 """
 
 import copy
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -135,6 +138,26 @@ def _transition(state: State, new: str, at: int, policy: Policy, events: list[Ev
             }
         state["incident"] = None
         _flip(state, at, policy)
+    elif new == UNKNOWN and old == DOWN:
+        # the fallen checks are gone and the rest has no result yet: the incident ends, nothing is
+        # known to be well, so no "recovered" is sent
+        events.append({"type": "closed", "n": state["incident"]["n"], "ended_at": at})
+        state["incident"] = None
+        state["recover_pending"] = None
+
+
+def _prune(
+    state: State, live: Collection[str], at: int, policy: Policy, events: list[Event]
+) -> None:
+    """Forget the checks that are gone and recompute the service status."""
+    gone = [cid for cid in state["checks"] if cid not in live]
+    if not gone:
+        return
+    for cid in gone:
+        del state["checks"][cid]
+    new = _service_status(state)
+    if new != state["status"]:
+        _transition(state, new, at, policy, events)
 
 
 def _observe(state: State, obs: Mapping[str, Any], policy: Policy, events: list[Event]) -> None:
@@ -231,12 +254,18 @@ def step(
     now: int,
     quiet: bool,
     policy: Policy,
+    live_checks: Collection[str] | None = None,
 ) -> tuple[State, list[Event]]:
-    """Feed one service the new check results (``{check, at, ok, reason}``) and the clock."""
+    """Feed one service the new check results (``{check, at, ok, reason}``) and the clock.
+    ``live_checks``: the ids of the checks the service has now (``None``: not known, nothing is
+    forgotten); a check that is not among them is dropped from the state first."""
     updated = copy.deepcopy(state)
     events: list[Event] = []
+    if live_checks is not None:
+        _prune(updated, live_checks, now, policy, events)
     for obs in sorted(observations, key=lambda o: (o["at"], o["check"])):
-        _observe(updated, obs, policy, events)
+        if live_checks is None or obs["check"] in live_checks:
+            _observe(updated, obs, policy, events)
     _tick(updated, critical, now, quiet, policy, events)
     return updated, events
 
@@ -249,6 +278,8 @@ KIND_ORDER = ("down", "recovered", "flapping", "stable", "reminder")
 def _ref(service: str, alert: Event, now: int) -> str:
     if alert["kind"] in ("flapping", "stable"):
         return f"{service}@{now}"
+    if alert["kind"] == "reminder":  # one incident has many reminders: the moment tells them apart
+        return f"{service}#{alert['n']}@{now}"
     return f"{service}#{alert['n']}"
 
 
@@ -290,8 +321,9 @@ def run_cycle(
     quiet: bool,
     policy: Policy,
 ) -> tuple[dict[str, State], dict[str, list[Event]], list[dict[str, Any]]]:
-    """One worker cycle over every live service (``services``: id -> ``{critical}``). A service
-    that is gone (not in ``services``) loses its state and raises nothing."""
+    """One worker cycle over every live service (``services``: id -> ``{critical, checks?}``;
+    ``checks`` lists the ids of the service's live checks, see ``step``). A service that is gone
+    (not in ``services``) loses its state and raises nothing."""
     new_states: dict[str, State] = {}
     all_events: dict[str, list[Event]] = {}
     alerts: dict[str, list[Event]] = {}
@@ -303,6 +335,7 @@ def run_cycle(
             now,
             quiet,
             policy,
+            services[sid].get("checks"),
         )
         new_states[sid] = state
         all_events[sid] = events

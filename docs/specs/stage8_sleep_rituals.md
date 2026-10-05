@@ -21,7 +21,7 @@
 |---|---|---|
 | `date` | date, **неизменяема** | обяз.; «дата сна» = локальная дата `wake_at` в `wake_tz` (иначе `validation_failed`) |
 | `bed_at` | datetime | обяз.; когда лёг (UTC-момент) |
-| `wake_at` | datetime | обяз.; когда встал; строго позже `bed_at`, не позже чем через 24 часа |
+| `wake_at` | datetime | обяз.; когда встал; строго позже `bed_at`, не позже чем через 24 часа; ни `bed_at`, ни `wake_at` не позже **часов сервера + 1 сутки** (ночь записывают после того, как она прошла; сутки — запас на расхождение часов устройства; иначе `validation_failed`) |
 | `bed_tz` | text, null | зона, в которой лёг; `null` — та же, что `wake_tz` |
 | `wake_tz` | text 1–64 | обяз.; зона, где проснулся; имя IANA (иначе `validation_failed`) |
 | `source` | enum | обяз.: `manual` — ввод вручную; `morning_notification` — быстрый ввод из утреннего уведомления |
@@ -61,7 +61,7 @@
 
 Колонки проверяются по типам (`invalid_field`: неверный тип, диапазон, длина, перечисление), межполевые правила — `validation_failed`, чужой id — `invalid_id`, правка неизменяемой `date` — `immutable_field`. Сводка межполевых правил:
 
-- `sleep_entries`: `date` — реальная дата; `wake_at > bed_at`; `wake_at − bed_at ≤ 24 ч`; обе зоны известны; `date == локальная дата wake_at в wake_tz`.
+- `sleep_entries`: `date` — реальная дата; `wake_at > bed_at`; `wake_at − bed_at ≤ 24 ч`; `max(bed_at, wake_at) ≤ now_сервера + 1 сутки` (проверка зависит от часов сервера, поэтому в общих векторах её нет); обе зоны известны; `date == локальная дата wake_at в wake_tz`.
 - `daily_plans`: `date` — реальная; `task_ids` — список ≤ 10 канонических uuid без повторов.
 - `evening_checkins`: `date` — реальная; `done_task_ids` — как выше (≤ 50); `carry_over` — раздел 1.3.
 

@@ -1,6 +1,8 @@
 """Server-side validation of the Stage 8 tables, driven through the real push endpoint."""
 
+from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -24,7 +26,10 @@ async def phone(env: Env) -> DeviceClient:
     return await env.login()
 
 
-async def test_sleep_columns(phone: DeviceClient) -> None:
+async def test_sleep_columns(phone: DeviceClient, env: Env) -> None:
+    env.clock.advance(days=60)  # the nights below are in the past of the server's clock
+    await phone.refresh()
+
     def case(label: str, expected: str | None, date: str = "2026-10-02", **over: Any) -> Case:
         fields = sleep_fields(phone, date, **over)
         return (label, "sleep_entries", sleep_row_id(fields), fields, expected)
@@ -86,6 +91,64 @@ async def test_sleep_columns(phone: DeviceClient) -> None:
             case("bed_at missing", "invalid_field", "2026-10-22", bed_at=None),
         ],
     )
+
+
+async def test_sleep_moments_may_not_lie_more_than_a_day_ahead(
+    phone: DeviceClient, env: Env
+) -> None:
+    now = env.clock.current
+    limit = now + timedelta(days=1)
+
+    def case(label: str, expected: str | None, wake: datetime, bed: datetime) -> Case:
+        date = wake.astimezone(ZoneInfo("Europe/Moscow")).date().isoformat()
+        fields = sleep_fields(phone, date, wake_at=moment(wake), bed_at=moment(bed))
+        return (label, "sleep_entries", sleep_row_id(fields), fields, expected)
+
+    def moment(value: datetime) -> str:
+        return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    night = timedelta(hours=8)
+    await run_cases(
+        phone,
+        [
+            case("a night that has just ended", None, now, now - night),
+            case("wake exactly a day ahead", None, limit, limit - night),
+            case(
+                "wake a second past the day",
+                "validation_failed",
+                limit + timedelta(seconds=1),
+                limit + timedelta(seconds=1) - night,
+            ),
+            case(
+                "bed a day ahead too",
+                "validation_failed",
+                limit + timedelta(hours=8),
+                limit + timedelta(seconds=1),
+            ),
+            case(
+                "a year ahead",
+                "validation_failed",
+                now + timedelta(days=365),
+                now + timedelta(days=365) - night,
+            ),
+        ],
+    )
+    # a later edit of a stored night cannot move it into the far future either
+    fields = sleep_fields(phone, "2026-10-02")
+    row_id = sleep_row_id(fields)
+    await phone.push_ok([phone.op("sleep_entries", row_id, fields=fields)])
+    head = int((await phone.pull_ok(0))["head_version"])
+    (late,) = await phone.push_ok(
+        [
+            phone.op(
+                "sleep_entries",
+                row_id,
+                fields={"wake_at": moment(now + timedelta(days=30))},
+                base=head,
+            )
+        ]
+    )
+    assert (late["status"], late["code"]) == ("rejected", "validation_failed")
 
 
 async def test_sleep_ids_are_the_date(phone: DeviceClient, env: Env) -> None:

@@ -14,6 +14,7 @@ from tasker.sleep.schema import (
     plan_problem,
     sleep_entry_id_rule,
     sleep_problem,
+    sleep_time_problem,
 )
 from tasker.sync.registry import SyncTableSpec, define_sync_table
 from tasker.tables import metadata
@@ -24,6 +25,7 @@ sleep_entries: SyncTableSpec = define_sync_table(
     SLEEP_COLUMNS,
     id_rule=sleep_entry_id_rule,
     validators=(sleep_problem,),
+    timed_validators=(sleep_time_problem,),
 )
 daily_plans: SyncTableSpec = define_sync_table(
     metadata,

@@ -44,7 +44,7 @@ async def pulse(request: Request, _: DeviceDep, session: SessionDep, rt: Runtime
     snapshot = await _snapshot(session, request, rt)
     etag = service.snapshot_etag(snapshot)
     headers = {"ETag": etag, "Cache-Control": "private, no-cache"}
-    if request.headers.get("if-none-match") == etag:
+    if service.etag_matches(request.headers.get("if-none-match"), etag):
         return Response(status_code=304, headers=headers)
     return Response(
         json.dumps(snapshot, ensure_ascii=False), media_type="application/json", headers=headers
@@ -75,12 +75,16 @@ async def incidents(
     session: SessionDep,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     before: Annotated[str | None, Query(pattern=UTC_PATTERN)] = None,
+    before_id: uuid.UUID | None = None,
     service_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    """Incidents, newest first; ``next_before`` pages back in time."""
+    """Incidents, newest first. The next page is asked with ``next_before`` and ``next_before_id``
+    (the pair is the cursor: several incidents can start in the same second)."""
     start = parse_utc(before) if before else None
     if before and start is None:
         raise ApiError(422, "validation_error", "before must be a real UTC moment")
+    if before_id is not None and start is None:
+        raise ApiError(422, "validation_error", "before_id needs before")
     i, s = monitor_incidents, monitor_services.table
     query = (
         sa.select(i, s.c.name.label("service_name"))
@@ -88,7 +92,9 @@ async def incidents(
         .order_by(i.c.started_at.desc(), i.c.id.desc())
         .limit(limit + 1)
     )
-    if start is not None:
+    if start is not None and before_id is not None:
+        query = query.where(sa.tuple_(i.c.started_at, i.c.id) < sa.tuple_(start, before_id))
+    elif start is not None:
         query = query.where(i.c.started_at < start)
     if service_id is not None:
         query = query.where(i.c.service_id == service_id)
@@ -112,9 +118,11 @@ async def incidents(
         }
 
     more = len(rows) > limit
+    last = page[-1] if more and page else None
     return {
         "incidents": [card(r) for r in page],
-        "next_before": format_utc(page[-1]["started_at"]) if more and page else None,
+        "next_before": format_utc(last["started_at"]) if last is not None else None,
+        "next_before_id": str(last["id"]) if last is not None else None,
     }
 
 
@@ -162,8 +170,23 @@ async def self_check(
 
 
 @router.post("/monitoring/telegram/test")
-async def telegram_test(request: Request, _: DeviceDep) -> dict[str, Any]:
-    """Send one test message (the "Self-check" button). The answer says whether it went through,
-    with an error code, never the reason text of the provider."""
+async def telegram_test(
+    request: Request, _: DeviceDep, session: SessionDep, rt: RuntimeDep
+) -> dict[str, Any]:
+    """Send one test message (the "Self-check" button), at most once per
+    ``TELEGRAM_TEST_MIN_SECONDS`` (too soon: ``rate_limited``, nothing is sent). The answer says
+    whether it went through, with an error code, never the reason text of the provider."""
+    now = rt.clock.now()
+    async with session.begin():
+        # the lock serialises two requests at once; the stamp is written before sending
+        await session.execute(
+            sa.select(sa.func.pg_advisory_xact_lock(service.TELEGRAM_TEST_LOCK_KEY))
+        )
+        last = await service.get_meta(session, service.META_TG_TEST)
+        parsed = parse_utc(last) if last else None
+        wait = service.TELEGRAM_TEST_MIN_SECONDS
+        if parsed is not None and (now - parsed).total_seconds() < wait:
+            return {"ok": False, "error": "rate_limited"}
+        await service.set_meta(session, service.META_TG_TEST, format_utc(now))
     result = await _monitoring(request).notifier.send(messages.TEST_MESSAGE)
     return {"ok": result.ok, "error": result.error}

@@ -309,9 +309,13 @@ async def _deleted_parent(
     return found
 
 
-def _validate_row(spec: SyncTableSpec, row: Mapping[str, Any]) -> None:
+def _validate_row(spec: SyncTableSpec, row: Mapping[str, Any], now: datetime) -> None:
     for validator in spec.validators:
         problem = validator(row)
+        if problem:
+            raise Reject("validation_failed", problem)
+    for timed in spec.timed_validators:
+        problem = timed(row, now)
         if problem:
             raise Reject("validation_failed", problem)
 
@@ -446,7 +450,7 @@ async def _apply_create(ctx: SyncContext, op: ParsedOp) -> OpOutcome:
     if problem:
         raise Reject("invalid_id", problem)
     values = {c.name: op.values.get(c.name) for c in spec.columns}
-    _validate_row(spec, values)
+    _validate_row(spec, values, ctx.now)
     parent = await _deleted_parent(ctx, spec, values, [c.name for c in spec.parents()])
 
     version = ctx.next_version()
@@ -557,7 +561,7 @@ async def _apply_update(ctx: SyncContext, op: ParsedOp, row: dict[str, Any]) -> 
     updates, touched, drafts = _merge_fields(op, row)
     merged = {**row, **updates}
     if updates:
-        _validate_row(spec, {c.name: merged[c.name] for c in spec.columns})
+        _validate_row(spec, {c.name: merged[c.name] for c in spec.columns}, ctx.now)
     parent = await _deleted_parent(ctx, spec, merged, [n for n in updates if n in spec.by_name])
     restore_from = await _plan_restore(ctx, op, row, merged, drafts)
 

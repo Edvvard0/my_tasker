@@ -34,6 +34,9 @@ async def call(env: Env, name: str, args: dict[str, Any]) -> dict[str, Any]:
 
 
 async def nights(dc: DeviceClient, spec: dict[str, int | None]) -> None:
+    # a night is written after it happened: the server refuses moments more than a day ahead
+    dc.env.clock.advance(days=30)
+    await dc.refresh()
     ops = []
     for day, minutes in spec.items():
         if minutes is None:

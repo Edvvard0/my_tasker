@@ -2,6 +2,7 @@
 self-check and the Telegram test. No secret ever appears in an answer or a log line."""
 
 import json
+import uuid
 from collections.abc import AsyncIterator
 from datetime import timedelta
 from typing import Any
@@ -162,14 +163,21 @@ async def test_incidents_page_back_in_time(menv: Env) -> None:
     assert newest["started_at"] > older["started_at"]
     assert newest["service_name"] == "Сайт" and newest["reason"] == "HTTP 502"
     assert newest["duration_seconds"] == 80 and newest["check_ids"] == [str(check)]
-    rest = (await phone.get("/monitoring/incidents", limit=2, before=first["next_before"])).json()
+    rest = (
+        await phone.get(
+            "/monitoring/incidents",
+            limit=2,
+            before=first["next_before"],
+            before_id=first["next_before_id"],
+        )
+    ).json()
     assert len(rest["incidents"]) == 1 and rest["next_before"] is None
     only = (await phone.get("/monitoring/incidents", service_id=str(graph.service))).json()
     assert len(only["incidents"]) == 3
     none = (
         await phone.get("/monitoring/incidents", service_id="0192d5a0-0000-7000-8000-00000000ffff")
     ).json()
-    assert none == {"incidents": [], "next_before": None}
+    assert none == {"incidents": [], "next_before": None, "next_before_id": None}
     for bad in (
         {"before": "yesterday"},
         {"before": "2026-13-45T00:00:00Z"},
@@ -266,6 +274,7 @@ async def test_the_telegram_test_message_answers_with_a_code_only(menv: Env) -> 
     use(menv, handler=handler)
     assert (await phone.post("/monitoring/telegram/test")).json() == {"ok": True, "error": None}
     assert sent[0]["chat_id"] == CHAT and "Проверка связи" in sent[0]["text"]
+    menv.clock.advance(seconds=service.TELEGRAM_TEST_MIN_SECONDS)
 
     use(
         menv,
@@ -275,6 +284,7 @@ async def test_the_telegram_test_message_answers_with_a_code_only(menv: Env) -> 
     )
     failed = await phone.post("/monitoring/telegram/test")
     assert failed.json() == {"ok": False, "error": "unauthorized"}
+    menv.clock.advance(seconds=service.TELEGRAM_TEST_MIN_SECONDS)
 
     def boom(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError(f"no route to {request.url}", request=request)
@@ -312,3 +322,113 @@ async def test_no_answer_and_no_log_line_contains_the_token_or_the_chat_id(
         assert TOKEN not in text and CHAT not in text
         assert "987654" not in text and "4242424242" not in text
     assert repr(menv.settings).count(TOKEN) == 0 and repr(menv.settings).count(CHAT) == 0
+
+
+async def test_the_telegram_test_is_limited_to_once_in_ten_seconds(menv: Env) -> None:
+    phone = await menv.login()
+    sent: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(1)
+        return httpx.Response(200, json={"ok": True})
+
+    use(menv, handler=handler)
+    assert (await phone.post("/monitoring/telegram/test")).json() == {"ok": True, "error": None}
+    menv.clock.advance(seconds=service.TELEGRAM_TEST_MIN_SECONDS - 1)
+    assert (await phone.post("/monitoring/telegram/test")).json() == {
+        "ok": False,
+        "error": "rate_limited",
+    }
+    assert len(sent) == 1  # nothing was sent for the second press
+    menv.clock.advance(seconds=1)
+    assert (await phone.post("/monitoring/telegram/test")).json() == {"ok": True, "error": None}
+    assert len(sent) == 2
+
+
+@pytest.mark.parametrize(
+    ("header", "matches"),
+    [
+        ('"abc"', True),
+        ('W/"abc"', True),
+        ('"x", "abc"', True),
+        ('"x" , W/"abc" ,"y"', True),
+        ("*", True),
+        ('"abcd"', False),
+        ('"x", "y"', False),
+        ("abc", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_if_none_match_is_a_list_of_possibly_weak_tags(header: str | None, matches: bool) -> None:
+    assert service.etag_matches(header, '"abc"') is matches
+
+
+async def test_an_unchanged_pulse_stays_304_while_the_poll_moves_on(menv: Env) -> None:
+    phone = await menv.login()
+    engine = use(menv)
+    _, (check,) = await make_graph(phone)
+    engine.results = [result(check, 0), result(check, 20)]
+    await cycle(menv, engine, 21)
+    first = await phone.get("/monitoring/pulse")
+    etag = first.headers["etag"]
+    for seconds in (31, 41, 51):  # the poll runs every 10 s: last_poll_at moves, the picture not
+        await cycle(menv, engine, seconds)
+    again = await phone.get("/monitoring/pulse")
+    assert again.json()["engine"]["last_poll_at"] != first.json()["engine"]["last_poll_at"]
+    assert again.headers["etag"] == etag
+    for header in (etag, f"W/{etag}", f'"other", {etag}'):
+        cached = await menv.client.get(
+            "/monitoring/pulse", headers={**phone.headers, "If-None-Match": header}
+        )
+        assert cached.status_code == 304, header
+
+
+async def test_incidents_that_started_in_the_same_second_are_all_paged(menv: Env) -> None:
+    phone = await menv.login()
+    graph, _ = await make_graph(phone)
+    for n in range(1, 8):
+        await menv.execute(
+            "INSERT INTO monitor_incidents (id, service_id, n, started_at, check_ids) "
+            "VALUES (:id, :s, :n, :t, '[]')",
+            id=uuid.uuid4(),
+            s=graph.service,
+            n=n,
+            t=T0,
+        )
+    seen: list[str] = []
+    cursor: dict[str, Any] = {}
+    for _ in range(10):
+        page = (await phone.get("/monitoring/incidents", limit=3, **cursor)).json()
+        seen += [i["id"] for i in page["incidents"]]
+        if page["next_before"] is None:
+            break
+        assert page["next_before_id"] is not None
+        cursor = {"before": page["next_before"], "before_id": page["next_before_id"]}
+    assert len(seen) == 7 and len(set(seen)) == 7
+    assert (
+        await phone.get("/monitoring/incidents", before_id=str(uuid.uuid4()))
+    ).status_code == 422
+
+
+async def test_the_pulse_trims_the_spark_and_names_a_refused_check(menv: Env) -> None:
+    phone = await menv.login()
+    engine = use(menv)
+    _, (check, other) = await make_graph(phone, checks=2)
+    engine.results = [result(check, s * 5, ms=s + 1) for s in range(45)]
+    await cycle(menv, engine, 300)
+    await menv.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('monitor.config', :v)",
+        v=json.dumps(
+            {
+                "synced_at": "2026-10-01T12:00:00Z",
+                "active": [str(check)],
+                "rejected": [{"check_id": str(other), "reason": "resolve_failed"}],
+            }
+        ),
+    )
+    body = (await phone.get("/monitoring/pulse")).json()
+    cards = {c["id"]: c for c in body["services"][0]["checks"]}
+    assert cards[str(check)]["spark"] == list(range(16, 46))  # the last 30, oldest first
+    assert cards[str(check)]["problem"] is None
+    assert cards[str(other)]["problem"] == "resolve_failed" and cards[str(other)]["spark"] == []

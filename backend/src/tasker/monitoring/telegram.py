@@ -11,6 +11,7 @@ import httpx
 
 SEND_TIMEOUT = 10.0
 MAX_TEXT = 4096
+MIN_RETRY_AFTER, MAX_RETRY_AFTER = 1, 3600  # a 429 asks for a wait; the wait is kept sane
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,15 +90,18 @@ def _json(response: httpx.Response) -> dict[str, object]:
 
 def interpret(status: int, payload: dict[str, object]) -> SendResult:
     """Telegram's answer -> result. ``{"ok": true}`` is success; ``parameters.retry_after`` of a 429
-    says how long to wait; 401/403 mean a wrong token or a bot that may not write; 400 with
-    ``chat not found`` a wrong chat id."""
+    says how long to wait (kept within 1..3600 s); 401/403 mean a wrong token or a bot that may
+    not write; 400 with ``chat not found`` a wrong chat id."""
     if status == 200 and payload.get("ok") is True:
         return SendResult(True)
     description = str(payload.get("description", "")).lower()
     parameters = payload.get("parameters")
     if status == 429:
         wait = parameters.get("retry_after") if isinstance(parameters, dict) else None
-        return SendResult(False, "rate_limited", retry_after=wait if type(wait) is int else 30)
+        seconds = 30
+        if isinstance(wait, int) and not isinstance(wait, bool):
+            seconds = min(max(wait, MIN_RETRY_AFTER), MAX_RETRY_AFTER)
+        return SendResult(False, "rate_limited", retry_after=seconds)
     if status in (401, 403):
         return SendResult(False, "unauthorized", permanent=True)
     if status == 400 and "chat not found" in description:

@@ -46,6 +46,9 @@ def parse_datetime(value: str) -> datetime:
 
 # Returns an error message, or None when the value is fine.
 RowValidator = Callable[[Mapping[str, Any]], str | None]
+# A validator that also needs the moment the server processes the operation (e.g. "not in the far
+# future"); gets the row and the server's ``now``.
+TimedRowValidator = Callable[[Mapping[str, Any], datetime], str | None]
 # ``values`` holds only the declared columns the client *sent* in the creating operation (all
 # required ones, but optional columns it left out are absent): never index into it blindly.
 IdRule = Callable[[uuid.UUID, Mapping[str, Any]], str | None]
@@ -238,6 +241,7 @@ class SyncTableSpec:
     table: sa.Table
     id_rule: IdRule = uuid7_id_rule
     validators: tuple[RowValidator, ...] = ()
+    timed_validators: tuple[TimedRowValidator, ...] = ()
     by_name: dict[str, ColumnSpec] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -254,6 +258,7 @@ def define_sync_table(
     *,
     id_rule: IdRule = uuid7_id_rule,
     validators: tuple[RowValidator, ...] = (),
+    timed_validators: tuple[TimedRowValidator, ...] = (),
     tombstone_index: bool = True,
 ) -> SyncTableSpec:
     """Build the SQLAlchemy table (service columns + declared columns) and its spec.
@@ -294,7 +299,7 @@ def define_sync_table(
             table.c.deleted_at,
             postgresql_where=table.c.deleted_at.is_not(None),
         )
-    return SyncTableSpec(name, tuple(columns), table, id_rule, validators)
+    return SyncTableSpec(name, tuple(columns), table, id_rule, validators, timed_validators)
 
 
 class SyncRegistry:

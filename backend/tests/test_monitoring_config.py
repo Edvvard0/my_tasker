@@ -2,10 +2,12 @@
 
 import asyncio
 import json
+import socket
 import uuid
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 from tasker.monitoring import config_gen
@@ -124,14 +126,67 @@ async def test_rows_that_break_the_rules_are_left_out_with_a_reason() -> None:
     assert yaml.safe_load(text)["endpoints"][0]["name"] == fine.id
 
 
-async def test_a_name_that_does_not_resolve_is_kept_and_ip_literals_are_not_resolved() -> None:
+async def test_a_name_that_does_not_resolve_is_left_out_and_ip_literals_are_not_resolved() -> None:
     resolver = Resolver({"gone.example.org": []})
     names = spec("tcp", host="gone.example.org", port=22)
     literal = spec("tcp", host="93.184.216.34", port=22)
     dns = spec("dns", host="queried.example.org", dns_record_type="A")
     result = await build_config([names, literal, dns], resolver, "1.1.1.1:53")
-    assert sorted(result.active) == sorted([names.id, literal.id, dns.id])
+    assert sorted(result.active) == sorted([literal.id, dns.id])
+    assert result.rejected == [{"check_id": names.id, "reason": "resolve_failed"}]
+    assert "gone.example.org" not in result.text
     assert resolver.asked == ["gone.example.org"]  # not the literal, not the DNS-check's name
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        TimeoutError(),
+        OSError("SERVFAIL"),
+        socket.gaierror(socket.EAI_NONAME, "NXDOMAIN"),
+        config_gen.ResolveError("timeout"),
+        RuntimeError("a bug in the resolver"),
+    ],
+    ids=["timeout", "oserror", "nxdomain", "resolve_error", "bug"],
+)
+async def test_a_name_that_could_not_be_judged_never_reaches_the_engine(failure: Exception) -> None:
+    """Fail closed: a timeout or SERVFAIL (an attacker's own DNS server can cause both) is a
+    refusal, not a pass; the check is reported, not configured."""
+
+    async def broken(host: str) -> list[str]:
+        raise failure
+
+    fine = spec("tcp", host="93.184.216.34", port=22)
+    names = [
+        spec("http", url="https://slow.example.org/"),
+        spec("tcp", host="slow.example.org", port=22),
+        spec("ssl", host="slow.example.org"),
+    ]
+    result = await build_config([fine, *names], broken, "1.1.1.1:53")
+    assert result.active == [fine.id]
+    assert {r["check_id"]: r["reason"] for r in result.rejected} == {
+        n.id: "resolve_failed" for n in names
+    }
+    assert "slow.example.org" not in result.text
+
+
+async def test_tcp_ssl_and_dns_use_the_normalised_host() -> None:
+    """``Example.COM.`` and ``[2606:…]`` as typed must not reach the engine as typed."""
+    upper = spec("tcp", host="Example.COM.", port=22)
+    bracketed = spec("tcp", host="[2606:4700:4700::1111]", port=53)
+    ssl_upper = spec("ssl", host="WWW.Example.com.", port=8443)
+    ssl_bracketed = spec("ssl", host="[2606:4700:4700::1111]")
+    dns = spec("dns", host="Example.COM.", dns_record_type="A")
+    checks = [upper, bracketed, ssl_upper, ssl_bracketed, dns]
+    result = await build_config(checks, Resolver(), "1.1.1.1:53")
+    assert result.rejected == []
+    found = {e["name"]: e for e in yaml.safe_load(result.text)["endpoints"]}
+    assert found[upper.id]["url"] == "tcp://example.com:22"
+    assert found[bracketed.id]["url"] == "tcp://[2606:4700:4700::1111]:53"
+    assert found[ssl_upper.id]["url"] == "https://www.example.com:8443"
+    assert found[ssl_bracketed.id]["url"] == "https://[2606:4700:4700::1111]:443"
+    assert found[dns.id]["dns"]["query-name"] == "example.com"
+    assert "[[" not in result.text
 
 
 async def test_resolutions_run_in_parallel_but_bounded() -> None:
@@ -185,6 +240,19 @@ async def test_sync_config_writes_atomically_once_and_reports(tmp_path: Path) ->
     assert json.loads(json.dumps({"x": 1})) == {"x": 1}
 
 
-async def test_the_system_resolver_answers_with_addresses_or_nothing() -> None:
+async def test_the_system_resolver_answers_with_addresses_or_refuses() -> None:
     assert "127.0.0.1" in await config_gen.system_resolver("localhost")
-    assert await config_gen.system_resolver("no-such-name.invalid") == []
+    with pytest.raises(config_gen.ResolveError):
+        await config_gen.system_resolver("no-such-name.invalid")
+
+
+async def test_the_system_resolver_treats_a_timeout_as_a_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def hang(*_: Any, **__: Any) -> None:
+        await asyncio.sleep(5)
+
+    monkeypatch.setattr(config_gen, "RESOLVE_TIMEOUT", 0.01)
+    monkeypatch.setattr(asyncio.get_running_loop(), "getaddrinfo", hang)
+    with pytest.raises(config_gen.ResolveError):
+        await config_gen.system_resolver("slow.example.org")
