@@ -110,7 +110,7 @@ void main() {
   test('ошибки сервера: код и понятный русский текст', () async {
     for (final (code, status, text) in [
       ('empty_file', 400, 'Файл пустой.'),
-      ('payload_too_large', 413, 'Файл слишком большой'),
+      ('payload_too_large', 413, 'Файл больше 10 МБ'),
       ('statement_unrecognized', 422, 'таблицы с датами'),
       ('statement_unreadable', 422, 'повреждён'),
       ('statement_format_mismatch', 422, 'Формат файла'),
@@ -133,6 +133,17 @@ void main() {
       expect(caught, isNotNull, reason: code);
       expect(statementErrorText(caught!), contains(text), reason: code);
     }
+  });
+
+  test('413 без кода в JSON (отказ прокси) — то же сообщение о размере', () {
+    expect(
+      statementErrorText(
+        const ApiException(kind: ApiErrorKind.http, status: 413),
+      ),
+      statementTooBigText,
+    );
+    expect(statementTooBigText, contains('10 МБ'));
+    expect(maxStatementBytes, 10000000);
   });
 
   test('нет сети, сервер не настроен, ответ не по контракту', () async {

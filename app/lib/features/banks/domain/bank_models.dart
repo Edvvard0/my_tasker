@@ -11,6 +11,8 @@ class RawNotification {
     required this.title,
     required this.text,
     required this.postedAt,
+    this.key,
+    this.whenMs,
   });
 
   factory RawNotification.fromMap(Map<Object?, Object?> map) => RawNotification(
@@ -21,12 +23,22 @@ class RawNotification {
       (map['posted_at_ms'] as int?) ?? 0,
       isUtc: true,
     ),
+    key: map['key'] as String?,
+    whenMs: map['when_ms'] as int?,
   );
 
   final String package;
   final String title;
   final String text;
   final DateTime postedAt;
+
+  /// Ключ уведомления в системе (`StatusBarNotification.key`): одно и то же
+  /// уведомление, опубликованное повторно, сохраняет его.
+  final String? key;
+
+  /// `Notification.when` (мс от эпохи), если задан: время самого события;
+  /// при повторной публикации обычно не меняется, в отличие от `postTime`.
+  final int? whenMs;
 }
 
 /// Состояние сохранённого уведомления.
@@ -39,6 +51,10 @@ enum NotificationState {
 
   /// Операция создана (или уже была).
   processed('processed'),
+
+  /// Черновик создан, но очень похож на уже внесённую операцию (выписка,
+  /// ручная): ждёт решения «дубль / отдельная покупка».
+  possibleDuplicate('possible_duplicate'),
 
   /// Пользователь убрал.
   dismissed('dismissed');
@@ -95,6 +111,8 @@ String reviewReasonLabel(String? reason) => switch (reason) {
   'no_account' => 'Нужен счёт',
   'ambiguous_account' => 'Несколько счетов',
   'foreign_currency' => 'Чужая валюта',
+  'possible_duplicate' => 'Возможный дубль',
+  'error' => 'Сбой обработки',
   _ => 'Нужна проверка',
 };
 
@@ -106,5 +124,8 @@ String reviewReasonText(String? reason) => switch (reason) {
   'no_account' => 'Не найден счёт с такими последними цифрами карты',
   'ambiguous_account' => 'Карте подходит несколько счетов',
   'foreign_currency' => 'Операция в иностранной валюте',
+  'possible_duplicate' =>
+    'Похожая операция уже есть: дубль или отдельная покупка?',
+  'error' => 'Не удалось обработать уведомление: создайте операцию вручную',
   _ => 'Нужна проверка',
 };

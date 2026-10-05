@@ -51,9 +51,7 @@ class FinanceBuilder extends ConsumerWidget {
             actions: [
               FilledButton(
                 key: const Key('finance-retry'),
-                onPressed: () => ref
-                  ..invalidate(accountsProvider)
-                  ..invalidate(transactionsProvider),
+                onPressed: () => retryFailedFinanceStreams(ref),
                 child: const Text('Повторить'),
               ),
             ],

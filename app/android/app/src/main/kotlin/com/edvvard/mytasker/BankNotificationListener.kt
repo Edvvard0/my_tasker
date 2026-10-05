@@ -27,7 +27,11 @@ class BankNotificationListener : NotificationListenerService() {
         val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
             ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString() ?: ""
         if (title.isEmpty() && text.isEmpty()) return
-        BankNotificationQueue.push(applicationContext, pkg, title, text, sbn.postTime)
+        // Ключ и `when` не меняются, когда банк повторно публикует то же уведомление
+        // (postTime меняется): по ним Dart отличает повтор от новой операции.
+        BankNotificationQueue.push(
+            applicationContext, pkg, title, text, sbn.postTime, sbn.key, notification.`when`
+        )
     }
 
     override fun onListenerDisconnected() {

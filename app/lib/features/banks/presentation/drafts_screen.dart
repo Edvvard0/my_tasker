@@ -9,6 +9,7 @@ import 'package:my_tasker/core/widgets/confirm_dialog.dart';
 import 'package:my_tasker/core/widgets/empty_state.dart';
 import 'package:my_tasker/core/widgets/screen_scaffold.dart';
 import 'package:my_tasker/core/widgets/status_pill.dart';
+import 'package:my_tasker/features/banks/application/bank_providers.dart';
 import 'package:my_tasker/features/banks/data/bank_drafts.dart';
 import 'package:my_tasker/features/banks/domain/bank_operations.dart';
 import 'package:my_tasker/features/banks/domain/bank_rules.dart';
@@ -84,6 +85,13 @@ class _DraftsBodyState extends ConsumerState<DraftsBody> {
     if (mounted) setState(() => _selected.remove(tx.id));
   }
 
+  /// «Это дубль»: черновик уходит в корзину без лишних вопросов — формулировка
+  /// кнопки сама называет действие.
+  Future<void> _rejectDuplicate(FinTransaction tx) async {
+    await ref.read(bankDraftsProvider).reject(tx.id);
+    if (mounted) setState(() => _selected.remove(tx.id));
+  }
+
   Future<void> _pickCategory(FinTransaction tx) async {
     final kind = tx.kind == TxKind.income
         ? CategoryKind.income
@@ -115,6 +123,8 @@ class _DraftsBodyState extends ConsumerState<DraftsBody> {
     final drafts = _drafts;
     final dismissed = ref.watch(dismissedTransfersProvider).value ?? const {};
     final pairs = transferSuggestions(data.transactions, dismissed: dismissed);
+    final possible =
+        ref.watch(possibleDuplicateTxIdsProvider).value ?? const <String>{};
     final confirmable = [
       for (final t in drafts)
         if (t.status == TxStatus.draft) t,
@@ -158,6 +168,7 @@ class _DraftsBodyState extends ConsumerState<DraftsBody> {
             data: data,
             tx: tx,
             selected: _selected.contains(tx.id),
+            possibleDuplicate: possible.contains(tx.id),
             remember: _remember[tx.id] ?? false,
             onSelect: tx.status != TxStatus.draft
                 ? null
@@ -173,6 +184,7 @@ class _DraftsBodyState extends ConsumerState<DraftsBody> {
             onConfirm: () => _confirm(tx),
             onEdit: () => showTransactionEditor(context, txId: tx.id),
             onReject: () => _reject(tx),
+            onDuplicate: () => _rejectDuplicate(tx),
           ),
           const SizedBox(height: AppSpacing.s2),
         ],
@@ -227,6 +239,7 @@ class _DraftCard extends StatelessWidget {
     required this.data,
     required this.tx,
     required this.selected,
+    required this.possibleDuplicate,
     required this.remember,
     required this.onSelect,
     required this.onRemember,
@@ -234,11 +247,15 @@ class _DraftCard extends StatelessWidget {
     required this.onConfirm,
     required this.onEdit,
     required this.onReject,
+    required this.onDuplicate,
   });
 
   final FinanceData data;
   final FinTransaction tx;
   final bool selected;
+
+  /// Похоже на уже внесённую операцию (дубль выписки или ручной записи).
+  final bool possibleDuplicate;
   final bool remember;
   final ValueChanged<bool>? onSelect;
   final ValueChanged<bool> onRemember;
@@ -246,6 +263,7 @@ class _DraftCard extends StatelessWidget {
   final VoidCallback onConfirm;
   final VoidCallback onEdit;
   final VoidCallback onReject;
+  final VoidCallback onDuplicate;
 
   @override
   Widget build(BuildContext context) {
@@ -327,8 +345,23 @@ class _DraftCard extends StatelessWidget {
                 tone: needsReview ? StatusTone.warning : StatusTone.info,
               ),
               StatusPill(label: tx.source.label, tone: StatusTone.neutral),
+              if (possibleDuplicate)
+                StatusPill(
+                  key: Key('draft-possible-duplicate-${tx.id}'),
+                  label: 'Возможный дубль',
+                  tone: StatusTone.warning,
+                ),
             ],
           ),
+          if (possibleDuplicate) ...[
+            const SizedBox(height: AppSpacing.s2),
+            Text(
+              'Похожая операция (из выписки или внесённая вручную) уже есть. '
+              'Это повтор или отдельная покупка?',
+              key: Key('draft-possible-duplicate-text-${tx.id}'),
+              style: t.caption.copyWith(color: c.textSecondary),
+            ),
+          ],
           if (tx.comment != null && tx.comment!.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.s2),
             Text(
@@ -410,7 +443,9 @@ class _DraftCard extends StatelessWidget {
                 FilledButton(
                   key: Key('draft-confirm-${tx.id}'),
                   onPressed: onConfirm,
-                  child: const Text('Подтвердить'),
+                  child: Text(
+                    possibleDuplicate ? 'Отдельная покупка' : 'Подтвердить',
+                  ),
                 ),
               if (!needsReview)
                 OutlinedButton(
@@ -420,9 +455,9 @@ class _DraftCard extends StatelessWidget {
                 ),
               TextButton(
                 key: Key('draft-reject-${tx.id}'),
-                onPressed: onReject,
+                onPressed: possibleDuplicate ? onDuplicate : onReject,
                 style: TextButton.styleFrom(foregroundColor: c.danger),
-                child: const Text('Отклонить'),
+                child: Text(possibleDuplicate ? 'Это дубль' : 'Отклонить'),
               ),
             ],
           ),

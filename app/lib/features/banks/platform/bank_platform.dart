@@ -26,9 +26,16 @@ abstract interface class BankPlatform {
   /// Открывает системные настройки оптимизации батареи.
   Future<void> openBatterySettings();
 
-  /// Забирает накопленные уведомления (и очищает очередь на устройстве):
-  /// слушатель мог получить их, пока приложение не было запущено.
+  /// Забирает накопленные уведомления: слушатель мог получить их, пока
+  /// приложение не было запущено. Очередь на устройстве **не очищается**,
+  /// пока пачка не подтверждена [acknowledge]: если приложение упадёт или
+  /// обработка прервётся, следующий [drain] отдаст те же уведомления снова
+  /// (повторы отсекает отпечаток).
   Future<List<RawNotification>> drain();
+
+  /// Пачка, полученная последним [drain], обработана: её можно удалить с
+  /// устройства.
+  Future<void> acknowledge();
 
   /// Сигнал «пришли новые уведомления» (затем вызывается [drain]).
   Stream<void> get wakeups;
@@ -58,6 +65,9 @@ class NoBankPlatform implements BankPlatform {
 
   @override
   Future<List<RawNotification>> drain() async => const [];
+
+  @override
+  Future<void> acknowledge() async {}
 
   @override
   Stream<void> get wakeups => const Stream<void>.empty();

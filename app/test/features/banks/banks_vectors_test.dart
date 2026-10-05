@@ -40,7 +40,7 @@ ExistingOperation _existing(_Json e) => ExistingOperation(
 void main() {
   final data = loadBankDataSync();
 
-  test('каталог векторов: все файлы домена и не меньше 167 случаев', () {
+  test('каталог векторов: все файлы домена и не меньше 174 случаев', () {
     expect(vectorFiles('banks'), [
       'category_suggest.json',
       'dedup_hash.json',
@@ -54,7 +54,7 @@ void main() {
     for (final f in vectorFiles('banks')) {
       total += loadVectors('banks', f).length;
     }
-    expect(total, greaterThanOrEqualTo(167));
+    expect(total, greaterThanOrEqualTo(174));
   });
 
   test('merchants.json: нормализация мерчанта', () {

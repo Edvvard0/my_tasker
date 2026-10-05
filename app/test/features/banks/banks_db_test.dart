@@ -8,6 +8,8 @@ import 'package:my_tasker/features/banks/data/notification_store.dart';
 import 'package:my_tasker/features/banks/domain/bank_models.dart';
 import 'package:sqlite3/sqlite3.dart' hide Row;
 
+import '../../core/database_test.dart' show studyTables;
+
 /// Схема v7 (Банки): миграция v6 → v7 на файловой БД и локальная таблица
 /// сырых уведомлений.
 void main() {
@@ -27,7 +29,11 @@ void main() {
     await first.close();
     // Настоящая БД v6: без таблиц Банков, с данными прежних этапов.
     final raw = sqlite3.open(file.path);
-    for (final t in ['merchant_category_rules', 'bank_notifications']) {
+    for (final t in [
+      'merchant_category_rules',
+      'bank_notifications',
+      ...studyTables,
+    ]) {
       raw.execute('DROP TABLE $t');
     }
     raw
@@ -57,7 +63,7 @@ void main() {
     expect(names, hasLength(4));
     final version = await db.customSelect('PRAGMA user_version').getSingle();
     expect(version.read<int>('user_version'), AppDatabase.currentSchemaVersion);
-    expect(AppDatabase.currentSchemaVersion, 7);
+    expect(AppDatabase.currentSchemaVersion, 8);
 
     // Колонки таблицы правил — по контракту.
     final cols = await db

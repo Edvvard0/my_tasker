@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/features/banks/data/bank_pipeline.dart';
+import 'package:my_tasker/features/banks/data/notification_store.dart';
 import 'package:my_tasker/features/banks/domain/bank_models.dart';
 import 'package:my_tasker/features/banks/domain/bank_operations.dart';
 import 'package:my_tasker/features/banks/domain/bank_rules.dart';
+import 'package:my_tasker/features/banks/domain/notification_engine.dart';
 import 'package:my_tasker/features/finance/domain/finance_calc.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/domain/finance_presets.dart';
@@ -101,19 +103,69 @@ void main() {
           merchant: 'Пятёрочка',
         ),
       );
+      // Точка сверки не создаётся, пока черновик не подтверждён (он может
+      // оказаться дублем): без самой операции она давала бы ложную
+      // корректировку.
+      expect(await checkpoints(), isEmpty);
+      // Результат разбора (остаток) хранится локально; исходный текст
+      // стёрт — он больше не нужен.
+      final stored = (await d.notifications.byState(
+        NotificationState.processed,
+      )).single;
+      expect(stored.body, isEmpty);
+      expect(stored.parsed!.balance, 1000050);
+      expect(stored.txId, tx.id);
+
+      // Подтверждение создаёт точку сверки на момент операции.
+      await d.drafts.confirm(tx.id);
       final cp = (await checkpoints()).single;
       expect(cp.source, CheckpointSource.notification);
       expect(cp.accountId, tbankCard);
       expect(cp.actualBalance, 1000050);
       expect(cp.checkedAt, tx.occurredAt);
-      // Исходный текст — только в локальной таблице.
-      final stored = (await d.notifications.byState(
-        NotificationState.processed,
-      )).single;
-      expect(stored.body, purchase);
-      expect(stored.txId, tx.id);
+      expect((await d.notifications.get(stored.id))!.parsed, isNull);
     },
   );
+
+  test('отклонённый черновик не оставляет точки сверки', () async {
+    await d.pipeline.process(raw(tbankPackage, 'Покупка', purchase, at(8, 30)));
+    final tx = (await txs()).single;
+    await d.drafts.reject(tx.id);
+    expect(await txs(), isEmpty);
+    expect(await checkpoints(), isEmpty);
+    expect(
+      await d.notifications.byState(NotificationState.processed),
+      hasLength(1),
+    );
+    expect(
+      (await d.notifications.byState(NotificationState.processed))
+          .single
+          .parsed,
+      isNull,
+    );
+  });
+
+  test('точка сверки из уведомления не уходит в будущее', () async {
+    // Часы банка опережают устройство: «11:38» при публикации в 8:40 МСК-дня
+    // — не позже момента публикации.
+    await d.pipeline.process(
+      raw(
+        vtbPackage,
+        'ВТБ',
+        'Оплата 100 ₽, 11:44, карта *5678, Магнит. Остаток 900 ₽',
+        at(8, 40),
+      ),
+    );
+    final tx = (await txs()).single;
+    expect(tx.occurredAt, at(8, 40));
+    // Устройство отстаёт от банка ещё сильнее: точка — не позже «сейчас».
+    clock.ms = DateTime.utc(2026, 10, 3, 8, 30).millisecondsSinceEpoch;
+    await d.drafts.confirm(tx.id);
+    expect(
+      (await checkpoints()).single.checkedAt,
+      DateTime.utc(2026, 10, 3, 8, 30),
+    );
+  });
 
   test('черновик не попадает в суммы; подтверждение — попадает, баланс '
       'совпадает с банком', () async {
@@ -123,34 +175,87 @@ void main() {
     final draft = all.single;
     expect(effect(draft, tbankCard), 0);
     expect(countsInAnalytics(draft), isFalse);
-    // Остаток из уведомления — точка сверки: баланс равен банковскому.
-    expect(balanceAt(account, all, await checkpoints()), 1000050);
+    expect(balanceAt(account, all, await checkpoints()), 0);
 
     await d.drafts.confirm(draft.id);
     all = await txs();
     expect(all.single.status, TxStatus.confirmed);
     expect(countsInAnalytics(all.single), isTrue);
     expect(effect(all.single, tbankCard), -123456);
-    // Операция в момент точки сверки: баланс остаётся банковским.
+    // Подтверждение создало точку сверки по остатку из уведомления на момент
+    // операции: баланс равен банковскому.
     expect(balanceAt(account, all, await checkpoints()), 1000050);
   });
 
-  test('повтор того же уведомления и повторная публикация в ту же минуту — '
-      'одна операция', () async {
+  test('повтор того же уведомления — одна операция', () async {
     final first = raw(tbankPackage, 'Покупка', purchase, at(8, 30, 5));
     expect(await d.pipeline.process(first), ProcessOutcome.draftCreated);
     expect(await d.pipeline.process(first), ProcessOutcome.alreadySeen);
-    // Android переопубликовал уведомление: другое время публикации, та же минута.
-    final repost = raw(tbankPackage, 'Покупка', purchase, at(8, 30, 5));
+    expect(await txs(), hasLength(1));
+  });
+
+  test('повторная публикация в другую минуту: тот же ключ и when — повтор, '
+      'без ключа — повтор в пределах 2 минут', () async {
+    final first = raw(
+      tbankPackage,
+      'Покупка',
+      purchase,
+      at(8, 30, 5),
+      key: '0|bank|1|null|10',
+      whenMs: 1000,
+    );
+    expect(await d.pipeline.process(first), ProcessOutcome.draftCreated);
+    // Банк обновил то же уведомление через 7 минут: postTime другой.
+    final repost = raw(
+      tbankPackage,
+      'Покупка',
+      purchase,
+      at(8, 37, 5),
+      key: '0|bank|1|null|10',
+      whenMs: 1000,
+    );
     expect(await d.pipeline.process(repost), ProcessOutcome.alreadySeen);
+    expect(await txs(), hasLength(1));
+
+    // Без ключа: другая минута, но в пределах двух минут — повтор.
+    const second = 'Покупка на 77 ₽, Кофейня. Карта *1234. Доступно 9 000 ₽';
     expect(
       await d.pipeline.process(
-        raw(tbankPackage, 'Покупка', purchase, at(8, 30, 40)),
+        raw(tbankPackage, 'Покупка', second, at(9, 0, 50)),
       ),
-      ProcessOutcome.duplicate,
+      ProcessOutcome.draftCreated,
     );
-    expect(await txs(), hasLength(1));
-    expect(await checkpoints(), hasLength(1));
+    expect(
+      await d.pipeline.process(
+        raw(tbankPackage, 'Покупка', second, at(9, 2, 40)),
+      ),
+      ProcessOutcome.alreadySeen,
+    );
+    expect(await txs(), hasLength(2));
+    // Через три минуты — уже новая покупка.
+    expect(
+      await d.pipeline.process(raw(tbankPackage, 'Покупка', second, at(9, 4))),
+      ProcessOutcome.draftCreated,
+    );
+    expect(await txs(), hasLength(3));
+    // Другой ключ и другой when в разное время — новое уведомление.
+    final other = raw(
+      tbankPackage,
+      'Покупка',
+      purchase,
+      at(10, 0),
+      key: '0|bank|2|null|10',
+      whenMs: 2000,
+    );
+    expect(await d.pipeline.process(other), ProcessOutcome.draftCreated);
+  });
+
+  test('в отпечатке нет исходного текста', () {
+    final fp = NotificationStore.fingerprint(
+      raw(tbankPackage, 'Покупка', purchase, at(8, 30), key: 'k', whenMs: 5),
+    );
+    expect(fp, isNot(contains('Пятёрочка')));
+    expect(fp, matches(RegExp(r'^[0-9a-f]{32}:[0-9a-f]{16}$')));
   });
 
   test('две одинаковые покупки подряд — две операции', () async {
@@ -165,22 +270,32 @@ void main() {
   });
 
   test(
-    'уже есть ручная операция или строка выписки — черновик не создаётся',
+    'точное совпадение (тот же хеш или id) — черновик не создаётся',
     () async {
-      final manual = d.fin.finance.newId();
+      final hash = dedupHash(
+        d.data.normalization,
+        accountId: tbankCard,
+        kind: 'expense',
+        amount: 123456,
+        occurredAt: at(8, 30),
+        merchant: 'Пятёрочка',
+      );
+      final existing = d.fin.finance.newId();
       await d.fin.finance.createTransaction(
         FinTransaction(
-          id: manual,
+          id: existing,
           kind: TxKind.expense,
           accountId: tbankCard,
           amount: 123456,
-          occurredAt: at(8, 0),
-          merchant: 'Пятерочка',
+          occurredAt: at(8, 30),
+          merchant: 'Пятёрочка',
+          source: TxSource.statement,
+          dedupHash: hash,
         ),
       );
       expect(
         await d.pipeline.process(
-          raw(tbankPackage, 'Покупка', purchase, at(8, 30)),
+          raw(tbankPackage, 'Покупка', purchase, at(8, 30, 40)),
         ),
         ProcessOutcome.duplicate,
       );
@@ -188,33 +303,86 @@ void main() {
       final stored = (await d.notifications.byState(
         NotificationState.processed,
       )).single;
-      expect(stored.txId, manual);
-
-      final statementTx = d.fin.finance.newId();
-      await d.fin.finance.createTransaction(
-        FinTransaction(
-          id: statementTx,
-          kind: TxKind.expense,
-          accountId: tbankCard,
-          amount: 5000,
-          occurredAt: at(9, 0),
-          merchant: 'Кофейня',
-          source: TxSource.statement,
-        ),
-      );
-      expect(
-        await d.pipeline.process(
-          raw(
-            tbankPackage,
-            'Покупка',
-            'Покупка на 50 ₽, Кофейня. Карта *1234. Доступно 1 ₽',
-            at(9, 5),
-          ),
-        ),
-        ProcessOutcome.duplicate,
-      );
+      expect(stored.txId, existing);
     },
   );
+
+  test('нечёткое совпадение с ручной операцией или строкой выписки — не '
+      'отбрасывается: черновик «возможный дубль»', () async {
+    final manual = d.fin.finance.newId();
+    await d.fin.finance.createTransaction(
+      FinTransaction(
+        id: manual,
+        kind: TxKind.expense,
+        accountId: tbankCard,
+        amount: 123456,
+        occurredAt: at(8, 0),
+        merchant: 'Пятерочка',
+      ),
+    );
+    expect(
+      await d.pipeline.process(
+        raw(tbankPackage, 'Покупка', purchase, at(8, 30)),
+      ),
+      ProcessOutcome.possibleDuplicate,
+    );
+    final all = await txs();
+    expect(all, hasLength(2));
+    final draft = all.firstWhere((t) => t.id != manual);
+    expect(draft.status, TxStatus.draft);
+    final flagged = (await d.notifications.byState(
+      NotificationState.possibleDuplicate,
+    )).single;
+    expect(flagged.txId, draft.id);
+    expect(flagged.reason, 'possible_duplicate');
+    expect(flagged.body, isEmpty);
+    // Пока нет решения — точки сверки нет.
+    expect(await checkpoints(), isEmpty);
+
+    // «Это отдельная покупка» → подтвердить: остаток из уведомления
+    // становится точкой сверки, пометка снимается.
+    await d.drafts.confirm(draft.id);
+    expect(
+      await d.notifications.byState(NotificationState.possibleDuplicate),
+      isEmpty,
+    );
+    expect((await checkpoints()).single.actualBalance, 1000050);
+
+    // Строка выписки: тоже черновик с пометкой; «Это дубль» → отклонить.
+    final statementTx = d.fin.finance.newId();
+    await d.fin.finance.createTransaction(
+      FinTransaction(
+        id: statementTx,
+        kind: TxKind.expense,
+        accountId: tbankCard,
+        amount: 5000,
+        occurredAt: at(9, 0),
+        merchant: 'Кофейня',
+        source: TxSource.statement,
+      ),
+    );
+    expect(
+      await d.pipeline.process(
+        raw(
+          tbankPackage,
+          'Покупка',
+          'Покупка на 50 ₽, Кофейня. Карта *1234. Доступно 1 ₽',
+          at(9, 5),
+        ),
+      ),
+      ProcessOutcome.possibleDuplicate,
+    );
+    final second = (await d.notifications.byState(
+      NotificationState.possibleDuplicate,
+    )).single;
+    await d.drafts.reject(second.txId!);
+    expect(
+      await d.notifications.byState(NotificationState.possibleDuplicate),
+      isEmpty,
+    );
+    expect(await checkpoints(), hasLength(1));
+    expect((await txs()).any((t) => t.id == second.txId), isFalse);
+  });
 
   test(
     'карта не найдена: «нужен счёт», потом выбор счёта создаёт черновик',
@@ -239,6 +407,8 @@ void main() {
       final tx = (await txs()).single;
       expect(tx.accountId, vtbCard);
       expect(tx.status, TxStatus.draft);
+      expect(await checkpoints(), isEmpty);
+      await d.drafts.confirm(tx.id);
       expect((await checkpoints()).single.actualBalance, 50000);
       expect(
         await d.notifications.byState(NotificationState.needsAccount),
@@ -247,6 +417,26 @@ void main() {
       expect((await d.notifications.get(pending.id))!.txId, tx.id);
     },
   );
+
+  test('assignAccount: счёт в архиве — ошибка', () async {
+    await d.pipeline.process(
+      raw(
+        tbankPackage,
+        'Покупка',
+        'Покупка на 100 ₽, Магнит. Карта *9999. Доступно 500 ₽',
+        at(9, 1),
+      ),
+    );
+    final pending = (await d.notifications.byState(
+      NotificationState.needsAccount,
+    )).single;
+    await d.fin.finance.setAccountArchived(vtbCard, archived: true);
+    await expectLater(
+      d.pipeline.assignAccount(pending, vtbCard),
+      throwsStateError,
+    );
+    expect(await txs(), isEmpty);
+  });
 
   test('assignAccount: не разобранное и удалённый счёт — ошибка', () async {
     await d.pipeline.process(
@@ -513,34 +703,153 @@ void main() {
     );
   });
 
+  test('склейка перевода, когда доход пришёл раньше расхода: перевод не '
+      'считается второй раз на получателе', () async {
+    await d.pipeline.process(
+      raw(
+        vtbPackage,
+        'ВТБ',
+        'Поступление 5 000 ₽. Карта *5678. Перевод себе. Баланс 5 000 RUB',
+        at(9, 0),
+      ),
+    );
+    await d.pipeline.process(
+      raw(
+        tbankPackage,
+        'Перевод',
+        'Перевод 5 000 ₽ Себе. Карта *1234. Доступно 20 000 ₽',
+        at(9, 0, 40),
+      ),
+    );
+    final all = await txs();
+    final income = all.firstWhere((t) => t.kind == TxKind.income);
+    final expense = all.firstWhere((t) => t.kind == TxKind.expense);
+    expect(income.occurredAt.isBefore(expense.occurredAt), isTrue);
+    await d.drafts.confirm(income.id);
+    await d.drafts.confirm(expense.id);
+    final cps = await checkpoints();
+    expect(cps, hasLength(2));
+
+    final id = await d.drafts.mergeTransfer(
+      expenseId: expense.id,
+      incomeId: income.id,
+    );
+    final after = await txs();
+    final transfer = after.single;
+    expect(transfer.id, id);
+    // Перевод стоит в более раннем из двух моментов.
+    expect(transfer.occurredAt, income.occurredAt);
+    final vtb = (await d.fin.finance.getAccount(vtbCard))!;
+    final tbank = (await d.fin.finance.getAccount(tbankCard))!;
+    // Получатель: остаток 5 000 из банка — перевод уже в нём, второй раз
+    // он не прибавляется (раньше было 10 000).
+    expect(balanceAt(vtb, after, cps), 500000);
+    expect(balanceAt(tbank, after, cps), 2000000);
+  });
+
+  test('очистка: закрытые уведомления старше 30 дней удаляются, нерешённые '
+      'и свежие остаются', () async {
+    await d.pipeline.process(raw(tbankPackage, 'Покупка', purchase, at(9, 0)));
+    await d.pipeline.process(
+      raw(tbankPackage, 'Покупка', 'Что-то странное 1', at(9, 1)),
+    );
+    clock.advance(const Duration(days: 29));
+    await d.pipeline.process(
+      raw(tbankPackage, 'Покупка', 'Что-то странное 2', at(9, 2)),
+    );
+    expect(await d.notifications.count(), 3);
+    expect(await d.notifications.purgeExpired(), 0);
+
+    // Первому исполнилось 31 сутки: обработанное удаляется, а не
+    // распознанное остаётся — иначе настоящая операция молча пропала бы.
+    clock.advance(const Duration(days: 2));
+    expect(await d.notifications.purgeExpired(), 1);
+    final left = await d.notifications.byState(NotificationState.unrecognized);
+    expect(left.map((n) => n.body), contains('Что-то странное 1'));
+    expect(left, hasLength(2));
+
+    // Убранное пользователем теряет текст сразу и чистится по сроку.
+    await d.notifications.markDismissed(left.first.id);
+    expect((await d.notifications.get(left.first.id))!.body, isEmpty);
+    clock.advance(const Duration(days: 40));
+    final outcomes = await d.pipeline.ingest(const []);
+    expect(outcomes, isEmpty);
+    expect(await d.notifications.count(), 1);
+    expect(
+      await d.notifications.byState(NotificationState.unrecognized),
+      hasLength(1),
+    );
+  });
+
+  test('уведомление с нулевой суммой — не операция: «Не распознано»', () async {
+    expect(
+      await d.pipeline.process(
+        raw(
+          tbankPackage,
+          'Покупка',
+          'Покупка на 0 ₽, Магнит. Карта *1234',
+          at(9, 0),
+        ),
+      ),
+      ProcessOutcome.unrecognized,
+    );
+    expect(await txs(), isEmpty);
+    final n = (await d.notifications.byState(NotificationState.unrecognized))
+        .single;
+    expect(n.reason, 'bad_amount');
+    expect(n.body, contains('0 ₽'));
+  });
+
   test(
-    'очистка: сырые уведомления старше 30 дней удаляются, свежие остаются',
+    'сбой при обработке одного уведомления не теряет остаток пачки',
     () async {
-      await d.pipeline.process(
-        raw(tbankPackage, 'Покупка', 'Что-то странное 1', at(9, 0)),
+      // Подменяем загрузку данных: первое уведомление роняет конвейер.
+      var calls = 0;
+      final failing = BankPipeline(
+        loadData: () async {
+          calls++;
+          if (calls == 1) throw StateError('сбой');
+          return d.data;
+        },
+        store: d.fin.device.store,
+        finance: d.fin.finance,
+        banks: d.banks,
+        notifications: d.notifications,
       );
-      clock.advance(const Duration(days: 29));
-      await d.pipeline.process(
-        raw(tbankPackage, 'Покупка', 'Что-то странное 2', at(9, 1)),
-      );
-      expect(await d.notifications.count(), 2);
-      expect(await d.notifications.purgeExpired(), 0);
-
-      // Первому исполнилось 31 сутки, второму — 2.
-      clock.advance(const Duration(days: 2));
-      expect(await d.notifications.purgeExpired(), 1);
-      final left = await d.notifications.byState(
+      final outcomes = await failing.ingest([
+        raw(tbankPackage, 'Покупка', purchase, at(8, 30)),
+        raw(
+          tbankPackage,
+          'Покупка',
+          'Покупка на 200 ₽, Магнит. Карта *1234. Доступно 8 000 ₽',
+          at(11, 0),
+        ),
+      ]);
+      expect(outcomes, [ProcessOutcome.failed, ProcessOutcome.draftCreated]);
+      expect(await txs(), hasLength(1));
+      // Упавшее — в «Требует проверки» с исходным текстом.
+      final saved = (await d.notifications.byState(
         NotificationState.unrecognized,
-      );
-      expect(left.single.body, 'Что-то странное 2');
-
-      // ingest чистит сам.
-      clock.advance(const Duration(days: 40));
-      final outcomes = await d.pipeline.ingest(const []);
-      expect(outcomes, isEmpty);
-      expect(await d.notifications.count(), 0);
+      )).single;
+      expect(saved.reason, 'error');
+      expect(saved.body, purchase);
     },
   );
+
+  test('сбой, который нельзя сохранить: пачка не считается принятой', () async {
+    final failing = BankPipeline(
+      loadData: () async => throw StateError('сбой'),
+      store: d.fin.device.store,
+      finance: d.fin.finance,
+      banks: d.banks,
+      // Хранилище, в котором не получается записать ничего.
+      notifications: _BrokenStore(d),
+    );
+    await expectLater(
+      failing.ingest([raw(tbankPackage, 'Покупка', purchase, at(8, 30))]),
+      throwsStateError,
+    );
+  });
 
   test('ingest: пачка обрабатывается по очереди; markDismissed убирает из '
       'списка', () async {
@@ -567,4 +876,24 @@ void main() {
     );
     expect(await d.notifications.get('нет'), isNull);
   });
+}
+
+/// Хранилище уведомлений, которое всегда «видит» новое и не может писать.
+class _BrokenStore extends NotificationStore {
+  _BrokenStore(BanksDevice d) : super(d.fin.device.db);
+
+  @override
+  Future<bool> seen(RawNotification raw) async => false;
+
+  @override
+  Future<BankNotification?> insert(
+    RawNotification raw, {
+    required NotificationState state,
+    String? reason,
+    NotificationParse? parsed,
+    String? txId,
+  }) async => throw StateError('диск недоступен');
+
+  @override
+  Future<int> purgeExpired() async => 0;
 }

@@ -1,10 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:my_tasker/core/config/clock.dart';
 import 'package:my_tasker/core/db/database_providers.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/core/sync/sync_store.dart';
 import 'package:my_tasker/features/banks/data/banks_repository.dart';
+import 'package:my_tasker/features/banks/data/notification_store.dart';
 import 'package:my_tasker/features/banks/domain/bank_data.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_validation.dart'
     show ValidationError;
@@ -20,12 +22,16 @@ class BankDrafts {
     required this.store,
     required this.finance,
     required this.banks,
-  });
+    required this.notifications,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
 
   final Future<BankData> Function() loadData;
   final SyncStore store;
   final FinanceRepository finance;
   final BanksRepository banks;
+  final NotificationStore notifications;
+  final DateTime Function() _now;
 
   /// Подтверждает черновик: операция входит в суммы по своему `occurred_at`.
   /// [remember] — «запомнить для этого мерчанта»: правило категории
@@ -37,6 +43,7 @@ class BankDrafts {
     await store.transaction(() async {
       if (remember) await _remember(tx);
       await finance.confirmTransaction(txId);
+      await _settle(tx, confirmed: true);
     });
   }
 
@@ -49,6 +56,7 @@ class BankDrafts {
         final tx = await finance.getTransaction(id);
         if (tx == null || tx.status != TxStatus.draft) continue;
         await finance.confirmTransaction(id);
+        await _settle(tx, confirmed: true);
         count++;
       }
     });
@@ -56,7 +64,45 @@ class BankDrafts {
   }
 
   /// Отклоняет черновик: операция уходит в корзину.
-  Future<void> reject(String txId) => finance.deleteTransaction(txId);
+  Future<void> reject(String txId) async {
+    await store.transaction(() async {
+      await finance.deleteTransaction(txId);
+      for (final n in await notifications.pendingForTx(txId)) {
+        await notifications.settle(n.id);
+      }
+    });
+  }
+
+  /// Закрывает уведомление, по которому создан черновик [tx]. При
+  /// подтверждении остаток из уведомления становится точкой сверки
+  /// (`source = notification`) на момент операции, но не позже «сейчас»;
+  /// при отклонении точки сверки нет вовсе (черновик мог быть дублем или
+  /// ошибкой, а его остаток нельзя сверить с суммами без него).
+  Future<void> _settle(FinTransaction tx, {required bool confirmed}) async {
+    for (final n in await notifications.pendingForTx(tx.id)) {
+      final parsed = n.parsed;
+      final balance = parsed?.balance;
+      if (confirmed &&
+          balance != null &&
+          parsed != null &&
+          !parsed.needsReview &&
+          tx.status == TxStatus.draft) {
+        final now = _now().toUtc();
+        try {
+          await finance.reconcile(
+            accountId: tx.accountId,
+            actualBalance: balance,
+            checkedAt: tx.occurredAt.isAfter(now) ? now : tx.occurredAt,
+            note: 'Остаток из уведомления банка',
+            source: CheckpointSource.notification,
+          );
+        } on ValidationError {
+          // Счёт удалён или остаток вне допустимых границ: без точки.
+        }
+      }
+      await notifications.settle(n.id);
+    }
+  }
 
   Future<void> _remember(FinTransaction tx) async {
     final merchant = tx.merchant;
@@ -101,7 +147,11 @@ class BankDrafts {
           accountId: expense.accountId,
           toAccountId: income.accountId,
           amount: expense.amount,
-          occurredAt: expense.occurredAt,
+          // Раньше из двух: иначе при доходе, внесённом раньше расхода,
+          // перевод считался бы на получателе ещё и до своего прихода.
+          occurredAt: expense.occurredAt.isBefore(income.occurredAt)
+              ? expense.occurredAt
+              : income.occurredAt,
           merchant: expense.merchant ?? income.merchant,
           source: expense.source,
           externalId: expense.externalId,
@@ -110,6 +160,11 @@ class BankDrafts {
       );
       await finance.deleteTransaction(expenseId);
       await finance.deleteTransaction(incomeId);
+      for (final tx in [expense, income]) {
+        for (final n in await notifications.pendingForTx(tx.id)) {
+          await notifications.settle(n.id);
+        }
+      }
     });
     return id;
   }
@@ -121,6 +176,8 @@ final Provider<BankDrafts> bankDraftsProvider = Provider<BankDrafts>(
     store: ref.watch(syncStoreProvider),
     finance: ref.watch(financeRepositoryProvider),
     banks: ref.watch(banksRepositoryProvider),
+    notifications: ref.watch(notificationStoreProvider),
+    now: ref.watch(clockProvider),
   ),
 );
 

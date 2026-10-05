@@ -10,6 +10,7 @@ import 'package:my_tasker/features/ai_chat/data/ai_repository.dart';
 import 'package:my_tasker/features/ai_chat/domain/ai_models.dart';
 import 'package:my_tasker/features/ai_chat/domain/ai_protocol.dart';
 import 'package:my_tasker/features/calendar/application/device_timezone.dart';
+import 'package:my_tasker/features/finance/data/secret_store.dart';
 
 import 'ai_env.dart';
 import 'fake_server/fake_sync_server.dart';
@@ -63,6 +64,7 @@ Future<AiUi> pumpAi(
   Future<void> Function(AiRepository repo)? seed,
   List<Override> overrides = const [],
   bool settle = true,
+  SecretStore? secretStore,
 }) async {
   final fake = api ?? FakeAiApi();
   final clock = ManualClock(aiNow.millisecondsSinceEpoch);
@@ -75,6 +77,7 @@ Future<AiUi> pumpAi(
     now: aiNow,
     settle: false,
     defaultAiApi: false,
+    secretStore: secretStore,
     overrides: [
       aiApiProvider.overrideWithValue(fake),
       deviceTimeZoneSourceProvider.overrideWithValue(

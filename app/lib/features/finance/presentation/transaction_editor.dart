@@ -11,6 +11,7 @@ import 'package:my_tasker/core/widgets/adaptive_sheet.dart';
 import 'package:my_tasker/core/widgets/app_chips.dart';
 import 'package:my_tasker/core/widgets/confirm_dialog.dart';
 import 'package:my_tasker/core/widgets/form_text_field.dart';
+import 'package:my_tasker/features/banks/data/bank_drafts.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_validation.dart';
 import 'package:my_tasker/features/calendar/presentation/widgets/form_pickers.dart';
 import 'package:my_tasker/features/finance/application/finance_providers.dart';
@@ -20,6 +21,8 @@ import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/presentation/account_editor.dart';
 import 'package:my_tasker/features/finance/presentation/category_picker.dart';
 import 'package:my_tasker/features/finance/presentation/finance_forms.dart';
+import 'package:my_tasker/features/work/domain/work_format.dart'
+    show formatDateText;
 import 'package:my_tasker/features/work/presentation/work_forms.dart'
     show FormError, moneyFieldText, moneyInputFormatters, parseMoneyField;
 
@@ -236,7 +239,10 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
   }
 
   Future<void> _confirmDraft() async {
-    await ref.read(financeRepositoryProvider).confirmTransaction(_original!.id);
+    // Через Банки: подтверждение закрывает уведомление и создаёт точку
+    // сверки по остатку из него (для операций без уведомления — обычное
+    // подтверждение).
+    await ref.read(bankDraftsProvider).confirm(_original!.id);
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -351,6 +357,12 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
     final backdated =
         _accountId != null &&
         isBeforeLastCheckpoint(_accountId!, moment, data.checkpoints);
+    final account = data.accountById[_accountId];
+    final beforeOpening = account != null && isBeforeOpening(account, moment);
+    final future =
+        formatDate(_date)
+            .compareTo(moscowDay(ref.watch(clockProvider)().toUtc())) >
+        0;
     final original = _original;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
@@ -483,28 +495,27 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
                     ),
                   ),
                   if (backdated)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.s3),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            LucideIcons.info,
-                            size: 16,
-                            color: c.textSecondary,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Операция не позже последней сверки: баланс '
-                              'счёта она не изменит — сверка считается истиной '
-                              'на свой момент.',
-                              key: const Key('tx-backdated'),
-                              style: t.caption.copyWith(color: c.textSecondary),
-                            ),
-                          ),
-                        ],
-                      ),
+                    const _NoteLine(
+                      key: Key('tx-backdated'),
+                      text:
+                          'Операция не позже последней сверки: баланс '
+                          'счёта она не изменит — сверка считается истиной '
+                          'на свой момент.',
+                    ),
+                  if (beforeOpening && !backdated)
+                    _NoteLine(
+                      key: const Key('tx-before-opening'),
+                      text:
+                          'Дата раньше открытия счёта (${formatDateText(account.openingDate, data.now)}): '
+                          'баланс счёта операция не изменит — остаток на '
+                          'открытие уже учитывает всё, что было до него.',
+                    ),
+                  if (future)
+                    const _NoteLine(
+                      key: Key('tx-future'),
+                      text:
+                          'Дата в будущем: операция сразу войдёт в текущий '
+                          'баланс. Проверьте, что дата верна.',
                     ),
                   if (original != null && !original.isConfirmed)
                     Padding(
@@ -538,3 +549,31 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
 /// Подпись «+ Операция» для кнопок: единая точка входа в форму.
 void openNewTransaction(BuildContext context, {String? accountId}) =>
     unawaited(showTransactionEditor(context, accountId: accountId));
+
+/// Пояснение под полями формы: значок и мелкий текст.
+class _NoteLine extends StatelessWidget {
+  const _NoteLine({required this.text, super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.s3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(LucideIcons.info, size: 16, color: c.textSecondary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: context.text.caption.copyWith(color: c.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

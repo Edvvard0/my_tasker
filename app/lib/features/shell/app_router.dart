@@ -39,6 +39,14 @@ import 'package:my_tasker/features/settings/presentation/theme_showcase_screen.d
 import 'package:my_tasker/features/shell/app_shell.dart';
 import 'package:my_tasker/features/shell/sections_screen.dart';
 import 'package:my_tasker/features/sleep/sleep_screen.dart';
+import 'package:my_tasker/features/study/presentation/attachment_viewer_screen.dart';
+import 'package:my_tasker/features/study/presentation/debt_screen.dart';
+import 'package:my_tasker/features/study/presentation/schedule_editor_screen.dart';
+import 'package:my_tasker/features/study/presentation/schedule_screen.dart';
+import 'package:my_tasker/features/study/presentation/semesters_screen.dart';
+import 'package:my_tasker/features/study/presentation/stats_screen.dart';
+import 'package:my_tasker/features/study/presentation/subject_screen.dart';
+import 'package:my_tasker/features/study/presentation/subjects_screen.dart';
 import 'package:my_tasker/features/study/study_screen.dart';
 import 'package:my_tasker/features/sync/presentation/conflicts_screen.dart';
 import 'package:my_tasker/features/sync/presentation/sync_screen.dart';
@@ -312,7 +320,49 @@ GoRouter createRouter({
         ),
         StatefulShellBranch(
           routes: [
-            GoRoute(path: '/study', builder: (_, _) => const StudyScreen()),
+            GoRoute(
+              path: '/study',
+              builder: (_, _) => const StudyScreen(),
+              routes: [
+                GoRoute(
+                  path: 'subjects',
+                  builder: (_, _) => const SubjectsScreen(),
+                  routes: [
+                    GoRoute(
+                      path: ':id',
+                      builder: (_, state) =>
+                          SubjectScreen(subjectId: state.pathParameters['id']!),
+                    ),
+                  ],
+                ),
+                GoRoute(
+                  path: 'debts/:id',
+                  builder: (_, state) =>
+                      DebtScreen(debtId: state.pathParameters['id']!),
+                ),
+                GoRoute(
+                  path: 'schedule',
+                  builder: (_, _) => const ScheduleScreen(),
+                  routes: [
+                    GoRoute(
+                      path: 'edit',
+                      builder: (_, _) => const ScheduleEditorScreen(),
+                    ),
+                  ],
+                ),
+                GoRoute(path: 'stats', builder: (_, _) => const StatsScreen()),
+                GoRoute(
+                  path: 'semesters',
+                  builder: (_, _) => const SemestersScreen(),
+                ),
+                GoRoute(
+                  path: 'files/:id',
+                  builder: (_, state) => AttachmentViewerScreen(
+                    attachmentId: state.pathParameters['id']!,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
         StatefulShellBranch(

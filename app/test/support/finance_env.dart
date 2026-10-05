@@ -32,6 +32,7 @@ Future<ProviderContainer> pumpFinance(
   String location = '/finance',
   bool seed = false,
   DateTime? now,
+  DateTime Function()? clock,
   Future<void> Function(ProviderContainer container)? seedWith,
   List<Override> overrides = const [],
   SecretStore? secretStore,
@@ -41,6 +42,7 @@ Future<ProviderContainer> pumpFinance(
     size: size,
     location: location,
     now: now ?? financeNow,
+    clock: clock,
     secretStore: secretStore,
     settle: false,
     overrides: [

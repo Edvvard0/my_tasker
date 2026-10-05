@@ -332,6 +332,14 @@ class _ReflectSheetState extends ConsumerState<ReflectSheet> {
       _amount.text = moneyFieldText(unlinked == 0 ? null : unlinked);
       _accountId = accounts.isEmpty ? null : accounts.first.id;
     }
+    // Доход создаётся датой платежа: если она раньше открытия выбранного
+    // счёта или не позже его последней сверки, баланс счёта он не изменит.
+    final chosen = data.accountById[_accountId];
+    final paidAt = payment.paidAt;
+    final backdated =
+        chosen != null &&
+        (isBeforeOpening(chosen, paidAt) ||
+            isBeforeLastCheckpoint(chosen.id, paidAt, data.checkpoints));
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: Column(
@@ -372,6 +380,18 @@ class _ReflectSheetState extends ConsumerState<ReflectSheet> {
                             onSelect: (id) => setState(() => _accountId = id),
                           ),
                   ),
+                  if (backdated)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.s3),
+                      child: Text(
+                        'Платёж датирован ${formatDateText(moscowDay(paidAt), data.now)} '
+                        '— это раньше открытия счёта или его последней '
+                        'сверки: доход запишется задним числом и баланс '
+                        'счёта не изменит.',
+                        key: const Key('reflect-backdated'),
+                        style: t.caption.copyWith(color: c.textSecondary),
+                      ),
+                    ),
                   if (_error != null)
                     FormError(_error!, key: const Key('reflect-error')),
                 ],

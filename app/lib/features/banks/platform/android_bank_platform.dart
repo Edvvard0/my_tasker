@@ -58,5 +58,8 @@ class _AndroidBankPlatform implements BankPlatform {
   }
 
   @override
+  Future<void> acknowledge() => _method.invokeMethod<void>('ack');
+
+  @override
   Stream<void> get wakeups => _events.receiveBroadcastStream().map((_) {});
 }

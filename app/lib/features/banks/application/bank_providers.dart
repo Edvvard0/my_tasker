@@ -16,15 +16,34 @@ final Provider<void> bankLifecycleProvider = Provider<void>((ref) {
   final platform = ref.watch(bankPlatformProvider);
   if (!platform.isSupported) return;
   var disposed = false;
+  var draining = false;
+  var again = false;
 
+  /// Забирает очередь, обрабатывает и только потом подтверждает платформе:
+  /// до подтверждения уведомления остаются на устройстве. Выборки идут по
+  /// одной (сигнал во время работы лишь запрашивает ещё один проход).
   Future<void> drain() async {
     if (disposed) return;
+    if (draining) {
+      again = true;
+      return;
+    }
+    draining = true;
     try {
-      final items = await platform.drain();
-      await ref.read(bankPipelineProvider).ingest(items);
-    } on Object {
-      // Сбой одной выборки не должен ронять приложение: уведомления
-      // остались в очереди на устройстве и будут забраны в следующий раз.
+      do {
+        again = false;
+        try {
+          final items = await platform.drain();
+          await ref.read(bankPipelineProvider).ingest(items);
+          await platform.acknowledge();
+        } on Object {
+          // Сбой выборки не должен ронять приложение. Без подтверждения
+          // уведомления остались на устройстве: их заберёт следующая
+          // выборка (повторы отсекает отпечаток).
+        }
+      } while (again && !disposed);
+    } finally {
+      draining = false;
     }
   }
 
@@ -71,4 +90,14 @@ final StreamProvider<List<BankNotification>> needsAccountNotificationsProvider =
       (ref) => ref
           .watch(notificationStoreProvider)
           .watchByState(NotificationState.needsAccount),
+    );
+
+/// Черновики, похожие на уже внесённую операцию: по ним ждём решения
+/// «дубль / отдельная покупка» (значок в «Черновиках»).
+final StreamProvider<Set<String>> possibleDuplicateTxIdsProvider =
+    StreamProvider<Set<String>>(
+      (ref) => ref
+          .watch(notificationStoreProvider)
+          .watchByState(NotificationState.possibleDuplicate)
+          .map((list) => {for (final n in list) ?n.txId}),
     );

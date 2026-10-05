@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -8,16 +9,29 @@ import 'package:my_tasker/core/db/database_providers.dart';
 import 'package:my_tasker/features/finance/application/privacy_providers.dart';
 import 'package:my_tasker/features/finance/data/biometric.dart';
 import 'package:my_tasker/features/finance/data/pin_lock_service.dart';
+import 'package:my_tasker/features/finance/data/screen_security.dart';
 import 'package:my_tasker/features/finance/data/secret_store.dart';
 
 import '../../support/finance_env.dart';
+import '../../support/in_memory_opener.dart';
 
 /// Служба PIN с малым числом итераций: тесты не ждут настоящего хеширования.
+///
+/// Монотонные часы выводятся из того же поддельного времени, чтобы они шли
+/// вместе с ним (отдельные тесты разводят их нарочно).
 PinLockService _service(
   MemorySecretStore store, {
   DateTime Function()? now,
+  Duration Function()? monotonic,
   int iterations = 5,
-}) => PinLockService(store, iterations: iterations, now: now);
+}) => PinLockService(
+  store,
+  iterations: iterations,
+  now: now,
+  monotonic:
+      monotonic ??
+      (now == null ? null : () => now().difference(DateTime.utc(2000))),
+);
 
 void main() {
   group('PinLockService: PIN хранится как соль и хеш', () {
@@ -115,6 +129,28 @@ void main() {
       },
     );
 
+    test('монотонные часы: перевод системных часов вперёд блокировку не '
+        'снимает; монотонное время — снимает', () async {
+      var elapsed = Duration.zero;
+      final guarded = _service(store, now: () => now, monotonic: () => elapsed);
+      await guarded.setPin('4821');
+      for (var i = 0; i < 5; i++) {
+        await guarded.verify('0000');
+      }
+      expect(await guarded.blockedUntil(), isNotNull);
+
+      // Пользователь перевёл часы на сутки вперёд, монотонные не двинулись.
+      now = now.add(const Duration(days: 1));
+      final until = await guarded.blockedUntil();
+      expect(until, isNotNull, reason: 'блокировка держится по монотонным');
+      expect(await guarded.verify('4821'), isA<PinBlocked>());
+
+      // Монотонное время дошло до конца блокировки.
+      elapsed += const Duration(seconds: 31);
+      expect(await guarded.blockedUntil(), isNull);
+      expect(await guarded.verify('4821'), isA<PinAccepted>());
+    });
+
     test('допустимый PIN: 4–8 цифр', () {
       expect(PinLockService.problem('1234'), isNull);
       expect(PinLockService.problem('12345678'), isNull);
@@ -167,6 +203,8 @@ void main() {
               ref.watch(secretStoreProvider),
               iterations: 5,
               now: ref.watch(clockProvider),
+              monotonic: () =>
+                  ref.read(clockProvider)().difference(DateTime.utc(2000)),
             ),
           ),
           if (biometric != null) biometricProvider.overrideWithValue(biometric),
@@ -406,6 +444,318 @@ void main() {
         ),
         '1',
       );
+    });
+  });
+
+  group('замок раздела: путь «Забыл PIN», окна, таймер, защита экрана', () {
+    late MemorySecretStore store;
+    var current = financeNow;
+
+    Future<ProviderContainer> pump(
+      WidgetTester tester, {
+      String? pin,
+      FakeBiometric? biometric,
+      bool biometricWanted = false,
+      bool seed = false,
+      FakeScreenSecurity? screen,
+      MemorySecretStore? withStore,
+    }) async {
+      current = financeNow;
+      store = withStore ?? MemorySecretStore();
+      if (pin != null) {
+        await tester.runAsync(() => _service(store).setPin(pin));
+      }
+      return await pumpFinance(
+        tester,
+        seed: seed,
+        secretStore: store,
+        clock: () => current,
+        overrides: [
+          if (screen != null) screenSecurityProvider.overrideWithValue(screen),
+          pinLockServiceProvider.overrideWith(
+            (ref) => PinLockService(
+              ref.watch(secretStoreProvider),
+              iterations: 5,
+              now: () => current,
+              monotonic: () => current.difference(DateTime.utc(2000)),
+            ),
+          ),
+          if (biometric != null) biometricProvider.overrideWithValue(biometric),
+        ],
+        seedWith: biometricWanted
+            ? (container) => container
+                  .read(localSettingsRepositoryProvider)
+                  .write(biometricSettingKey, '1')
+            : null,
+      );
+    }
+
+    Future<void> enter(WidgetTester tester, String pin) async {
+      await tester.enterText(find.byKey(const Key('lock-pin')), pin);
+      await tester.tap(find.byKey(const Key('lock-submit')));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('экран замка оживает по окончании блокировки без нажатий', (
+      tester,
+    ) async {
+      await pump(tester, pin: '4821');
+      for (var i = 0; i < 5; i++) {
+        await enter(tester, '0000');
+      }
+      expect(find.byKey(const Key('lock-blocked')), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('lock-submit')))
+            .onPressed,
+        isNull,
+      );
+
+      // Блокировка кончилась (часы ушли на 31 с); экран перерисуется сам.
+      current = current.add(const Duration(seconds: 31));
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+      expect(find.byKey(const Key('lock-blocked')), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('lock-submit')))
+            .onPressed,
+        isNotNull,
+      );
+    });
+
+    testWidgets('биометрия не обходит блокировку после неверных PIN', (
+      tester,
+    ) async {
+      final fake = FakeBiometric();
+      final container = await pump(
+        tester,
+        pin: '4821',
+        biometric: fake,
+        biometricWanted: true,
+      );
+      for (var i = 0; i < 5; i++) {
+        await enter(tester, '0000');
+      }
+      expect(
+        tester
+            .widget<OutlinedButton>(find.byKey(const Key('lock-biometric')))
+            .onPressed,
+        isNull,
+      );
+      final ok = await tester.runAsync(
+        () =>
+            container.read(financeLockProvider.notifier).unlockWithBiometric(),
+      );
+      expect(ok, isFalse);
+      expect(fake.calls, 0);
+      expect(container.read(financeLockProvider).locked, isTrue);
+
+      // Блокировка прошла: биометрия работает.
+      current = current.add(const Duration(minutes: 1));
+      final after = await tester.runAsync(
+        () =>
+            container.read(financeLockProvider.notifier).unlockWithBiometric(),
+      );
+      expect(after, isTrue);
+      expect(fake.calls, 1);
+    });
+
+    testWidgets('«Забыл PIN»: подтверждение, замок снят, данные на месте', (
+      tester,
+    ) async {
+      final container = await pump(tester, pin: '4821', seed: true);
+      expect(find.byKey(const Key('finance-lock')), findsOneWidget);
+      await tapKey(tester, 'lock-forgot');
+      // Отмена в диалоге: замок остаётся.
+      await tapKey(tester, 'confirm-cancel');
+      expect(find.byKey(const Key('finance-lock')), findsOneWidget);
+      expect(store.values.containsKey(PinLockService.pinKey), isTrue);
+
+      await tapKey(tester, 'lock-forgot');
+      expect(find.text('Сбросить замок раздела?'), findsOneWidget);
+      await tapKey(tester, 'confirm-ok');
+      expect(find.byKey(const Key('finance-overview')), findsOneWidget);
+      expect(store.values, isEmpty, reason: 'PIN и счётчик удалены');
+      expect(container.read(financeLockProvider).hasPin, isFalse);
+      // Данные раздела не удалены.
+      expect(find.text(nb('361 000 ₽')), findsWidgets);
+    });
+
+    testWidgets('«Забыл PIN» при биометрии: сначала подтверждение владельца', (
+      tester,
+    ) async {
+      final fake = FakeBiometric(succeeds: false);
+      final container = await pump(tester, pin: '4821', biometric: fake);
+      await tapKey(tester, 'lock-forgot');
+      await tapKey(tester, 'confirm-ok');
+      expect(fake.calls, 1);
+      expect(find.byKey(const Key('finance-lock')), findsOneWidget);
+      expect(find.text('Не удалось подтвердить'), findsOneWidget);
+      expect(container.read(financeLockProvider).hasPin, isTrue);
+
+      fake.succeeds = true;
+      await tapKey(tester, 'lock-forgot');
+      await tapKey(tester, 'confirm-ok');
+      expect(fake.calls, 2);
+      expect(find.byKey(const Key('finance-overview')), findsOneWidget);
+    });
+
+    testWidgets('нечитаемое хранилище: «Сбросить замок» открывает раздел', (
+      tester,
+    ) async {
+      final broken = MemorySecretStore()..failReads = true;
+      final container = await pump(tester, withStore: broken);
+      expect(find.byKey(const Key('finance-lock')), findsOneWidget);
+      await tapKey(tester, 'lock-reset');
+      await tapKey(tester, 'confirm-ok');
+      expect(find.byKey(const Key('finance-overview')), findsOneWidget);
+      expect(container.read(financeLockProvider).error, isNull);
+      expect(container.read(financeLockProvider).hasPin, isFalse);
+    });
+
+    testWidgets('хранилище не чистится: метка сброса, затем доделывается', (
+      tester,
+    ) async {
+      final broken = MemorySecretStore()
+        ..failReads = true
+        ..failDeletes = true;
+      final container = await pump(tester, withStore: broken);
+      await tapKey(tester, 'lock-reset');
+      await tapKey(tester, 'confirm-ok');
+      expect(find.byKey(const Key('finance-overview')), findsOneWidget);
+      final settings = container.read(localSettingsRepositoryProvider);
+      expect(
+        await tester.runAsync(() => settings.read(lockResetPendingKey)),
+        '1',
+      );
+
+      // Повторное чтение состояния (новый запуск): хранилище всё ещё
+      // нечитаемо, но замок не возвращается.
+      await tester.runAsync(
+        () => container.read(financeLockProvider.notifier).load(),
+      );
+      expect(container.read(financeLockProvider).locked, isFalse);
+      expect(container.read(financeLockProvider).error, isNull);
+
+      // Хранилище починилось: метка снята, хранилище очищено.
+      broken
+        ..failReads = false
+        ..failDeletes = false
+        ..values[PinLockService.pinKey] = '{}';
+      await tester.runAsync(
+        () => container.read(financeLockProvider.notifier).load(),
+      );
+      expect(container.read(financeLockProvider).hasPin, isFalse);
+      expect(broken.values, isEmpty);
+      expect(
+        await tester.runAsync(() => settings.read(lockResetPendingKey)),
+        isNull,
+      );
+    });
+
+    testWidgets('закрытие замка закрывает листы поверх раздела', (
+      tester,
+    ) async {
+      final container = await pump(tester, pin: '4821');
+      await enter(tester, '4821');
+      await tapKey(tester, 'finance-privacy');
+      expect(find.byKey(const Key('privacy-lock-now')), findsOneWidget);
+
+      container.read(financeLockProvider.notifier).lock();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('privacy-lock-now')), findsNothing);
+      expect(find.byKey(const Key('finance-lock')), findsOneWidget);
+
+      // То же при уходе приложения в фон, с диалогом поверх раздела.
+      await enter(tester, '4821');
+      unawaited(
+        showDialog<void>(
+          context: tester.element(find.byKey(const Key('finance-overview'))),
+          builder: (_) => const AlertDialog(
+            key: Key('test-dialog'),
+            title: Text('Форма сверки'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('test-dialog')), findsOneWidget);
+      tester.binding
+        ..handleAppLifecycleStateChanged(AppLifecycleState.paused)
+        ..handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('test-dialog')), findsNothing);
+      expect(find.byKey(const Key('finance-lock')), findsOneWidget);
+    });
+
+    testWidgets('FLAG_SECURE: включён, пока раздел открыт', (tester) async {
+      final screen = FakeScreenSecurity();
+      final container = await pump(tester, pin: '4821', screen: screen);
+      expect(screen.secure, isFalse, reason: 'раздел закрыт замком');
+      await enter(tester, '4821');
+      await tester.pump();
+      expect(screen.secure, isTrue);
+      expect(container.read(secureScreenProvider), isNotEmpty);
+
+      container.read(financeLockProvider.notifier).lock();
+      await tester.pumpAndSettle();
+      expect(screen.secure, isFalse);
+      expect(container.read(secureScreenProvider), isEmpty);
+    });
+
+    testWidgets('FLAG_SECURE: «скрыть суммы» держит защиту и без раздела', (
+      tester,
+    ) async {
+      final screen = FakeScreenSecurity();
+      final container = await pump(tester, pin: '4821', screen: screen);
+      await tester.runAsync(
+        () => container.read(hideAmountsProvider.notifier).set(hidden: true),
+      );
+      expect(screen.secure, isTrue);
+      expect(
+        container.read(secureScreenProvider),
+        contains(secureReasonHideAmounts),
+      );
+      await tester.runAsync(
+        () => container.read(hideAmountsProvider.notifier).set(hidden: false),
+      );
+      expect(screen.secure, isFalse);
+    });
+  });
+
+  group('«скрыть суммы» до загрузки настройки', () {
+    test('считаются скрытыми, пока настройка не прочитана', () async {
+      final container = ProviderContainer(
+        overrides: [
+          databaseOpenerProvider.overrideWithValue(InMemoryDatabaseOpener()),
+          screenSecurityProvider.overrideWithValue(FakeScreenSecurity()),
+        ],
+      );
+      addTearDown(container.dispose);
+      // Первый кадр до чтения БД: суммы скрыты.
+      expect(container.read(hideAmountsProvider), isTrue);
+      expect(container.read(amountFormatProvider).hidden, isTrue);
+      expect(container.read(amountFormatProvider).full(100), AmountFormat.mask);
+      // Настройки нет — после загрузки суммы видны.
+      await pumpEventQueue(times: 200);
+      expect(container.read(hideAmountsProvider), isFalse);
+    });
+
+    test('сохранённое «скрыть» остаётся скрытым', () async {
+      final container = ProviderContainer(
+        overrides: [
+          databaseOpenerProvider.overrideWithValue(InMemoryDatabaseOpener()),
+          screenSecurityProvider.overrideWithValue(FakeScreenSecurity()),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container
+          .read(localSettingsRepositoryProvider)
+          .write(hideAmountsSettingKey, '1');
+      expect(container.read(hideAmountsProvider), isTrue);
+      await pumpEventQueue(times: 200);
+      expect(container.read(hideAmountsProvider), isTrue);
     });
   });
 

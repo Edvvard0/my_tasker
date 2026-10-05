@@ -15,6 +15,10 @@ String proposalResultText(ToolProposal p) => switch (p.status) {
     'user rejected${(p.rejectReason ?? '').isEmpty ? '' : ': ${p.rejectReason}'}',
 };
 
+/// Ответ сгенерирован локальной моделью (`ai_messages.model = local/…`).
+bool isLocalReply(ChatMessage m) =>
+    m.role == MessageRole.assistant && (m.model ?? '').startsWith('local/');
+
 /// История чата в формате OpenAI без `system` (spec 5.1).
 ///
 /// * `user` — как есть; `assistant` — текст и `tool_calls`, за которыми
@@ -22,13 +26,20 @@ String proposalResultText(ToolProposal p) => switch (p.status) {
 /// * результат читающего инструмента берётся из части `tool_result`,
 ///   результат пишущего — из предложения (его решение пользователя);
 /// * ответы со статусом `error` и пустые ответы пропускаются, частичный
-///   текст отменённого ответа остаётся.
+///   текст отменённого ответа остаётся;
+/// * [forCloud]: для запроса в облако ответы **локальной модели** опускаются.
+///   Локальный чат может работать с чувствительным контекстом (финансы), и
+///   её ответы содержат эти цифры; после переключения беседы `local` -> `cloud`
+///   они не должны уходить в polza.ai через историю. Сообщения пользователя
+///   остаются.
 List<OpenAiMessage> buildHistory(
   List<ChatMessage> messages,
-  Map<String, ToolProposal> proposals,
-) {
+  Map<String, ToolProposal> proposals, {
+  bool forCloud = false,
+}) {
   final result = <OpenAiMessage>[];
   for (final m in messages) {
+    if (forCloud && isLocalReply(m)) continue;
     if (m.role == MessageRole.user) {
       if (m.text.trim().isEmpty) continue;
       result.add({'role': 'user', 'content': m.text});

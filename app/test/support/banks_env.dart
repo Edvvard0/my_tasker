@@ -30,9 +30,23 @@ export 'finance_env.dart';
 const String tbankPackage = 'com.idamob.tinkoff.android';
 const String vtbPackage = 'ru.vtb24.mobilebanking.android';
 
-/// Уведомление банка в момент [at] (UTC).
-RawNotification raw(String package, String title, String text, DateTime at) =>
-    RawNotification(package: package, title: title, text: text, postedAt: at);
+/// Уведомление банка в момент [at] (UTC); [key] и [whenMs] — как у Android
+/// (`StatusBarNotification.key`, `Notification.when`).
+RawNotification raw(
+  String package,
+  String title,
+  String text,
+  DateTime at, {
+  String? key,
+  int? whenMs,
+}) => RawNotification(
+  package: package,
+  title: title,
+  text: text,
+  postedAt: at,
+  key: key,
+  whenMs: whenMs,
+);
 
 /// Поддельная платформа: управляемые разрешения, очередь, сигнал.
 class FakeBankPlatform implements BankPlatform {
@@ -46,6 +60,8 @@ class FakeBankPlatform implements BankPlatform {
   int openedListener = 0;
   int openedBattery = 0;
   int drains = 0;
+  int acks = 0;
+  int _delivered = 0;
   final StreamController<void> _wake = StreamController<void>.broadcast();
 
   void wake() => _wake.add(null);
@@ -72,9 +88,16 @@ class FakeBankPlatform implements BankPlatform {
   @override
   Future<List<RawNotification>> drain() async {
     drains++;
-    final out = [...queue];
-    queue.clear();
-    return out;
+    // Как на устройстве: очередь не очищается, пока пачка не подтверждена.
+    _delivered = queue.length;
+    return [...queue];
+  }
+
+  @override
+  Future<void> acknowledge() async {
+    acks++;
+    queue.removeRange(0, _delivered);
+    _delivered = 0;
   }
 
   @override
@@ -198,8 +221,14 @@ class BanksDevice {
       store: fin.device.store,
       finance: fin.finance,
       banks: banks,
+      notifications: notifications,
+      now: () => fin.device.clock.now,
     );
-    importer = StatementImporter(store: fin.device.store, finance: fin.finance);
+    importer = StatementImporter(
+      store: fin.device.store,
+      finance: fin.finance,
+      now: () => fin.device.clock.now,
+    );
   }
 
   static Future<BanksDevice> create(

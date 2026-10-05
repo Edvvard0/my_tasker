@@ -527,14 +527,59 @@ Map<String, String> _refinement(StatementCandidate c, ExistingOperation row) {
   if (!c.dateOnly && _seconds(c.occurredAt) != _seconds(row.occurredAt)) {
     refine['occurred_at'] = financeInstantText(c.occurredAt);
   }
-  final merchant = _trimSpaces(c.merchant ?? '');
+  final merchant = trimEdgeSpaces(c.merchant ?? '');
   if (merchant.isNotEmpty && merchant != (row.merchant ?? '')) {
     refine['merchant'] = merchant;
   }
   return refine;
 }
 
-String _trimSpaces(String s) => s.trim();
+/// Символы, которые обрезаются по краям значения: только Unicode White_Space
+/// (U+0009–000D, U+0020, U+0085, U+00A0, U+1680, U+2000–200A, U+2028,
+/// U+2029, U+202F, U+205F, U+3000). Свой явный набор, потому что `trim()`
+/// Dart (режет ещё U+FEFF) и `strip()` Python (режет ещё U+001C–U+001F)
+/// различаются; эталон — `strip_edges` в `reference.py`.
+const Set<int> _edgeSpaces = {
+  0x09,
+  0x0A,
+  0x0B,
+  0x0C,
+  0x0D,
+  0x20,
+  0x85,
+  0xA0,
+  0x1680,
+  0x2000,
+  0x2001,
+  0x2002,
+  0x2003,
+  0x2004,
+  0x2005,
+  0x2006,
+  0x2007,
+  0x2008,
+  0x2009,
+  0x200A,
+  0x2028,
+  0x2029,
+  0x202F,
+  0x205F,
+  0x3000,
+};
+
+/// Обрезает по краям [text] символы [_edgeSpaces] (как `strip_edges`).
+String trimEdgeSpaces(String text) {
+  final units = text.codeUnits;
+  var start = 0;
+  var end = units.length;
+  while (start < end && _edgeSpaces.contains(units[start])) {
+    start++;
+  }
+  while (end > start && _edgeSpaces.contains(units[end - 1])) {
+    end--;
+  }
+  return text.substring(start, end);
+}
 
 /// Момент строки с одной датой: 12:00 по Москве этой даты.
 DateTime dateOnlyInstant(String day) => DateTime.utc(

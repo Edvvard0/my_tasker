@@ -50,6 +50,14 @@ final Provider<StatementsApi> statementsApiProvider = Provider<StatementsApi>(
   (ref) => HttpStatementsApi(ref.read(apiClientResolverProvider)),
 );
 
+/// Предел размера файла выписки: 10 МБ в СИ (10 000 000 байт), как в Caddy и
+/// на сервере (`BANKS_STATEMENT_MAX_BYTES`).
+const int maxStatementBytes = 10000000;
+
+/// Сообщение о слишком большом файле (до загрузки и при `413`).
+const String statementTooBigText =
+    'Файл больше 10 МБ: выберите выписку поменьше.';
+
 /// Понятное сообщение об ошибке разбора выписки (коды раздела 6).
 String statementErrorText(Object error) {
   if (error is ApiException) {
@@ -57,9 +65,11 @@ String statementErrorText(Object error) {
       return 'Нет соединения с сервером. Разбор выписки идёт на сервере: '
           'подключитесь к сети и повторите.';
     }
+    // 413 может прийти и без JSON-кода (отказ прокси раньше приложения).
+    if (error.status == 413) return statementTooBigText;
     return switch (error.code) {
       'empty_file' => 'Файл пустой.',
-      'payload_too_large' => 'Файл слишком большой (лимит 10 МБ).',
+      'payload_too_large' => statementTooBigText,
       'statement_unrecognized' =>
         'В файле не нашлось таблицы с датами и суммами. Нужна выписка '
             'в CSV, XLSX или PDF.',

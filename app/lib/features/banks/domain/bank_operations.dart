@@ -63,7 +63,9 @@ List<ExistingOperation> existingOperationsFor(
 /// Момент операции по уведомлению: время публикации; если правило
 /// прочитало `HH:MM` (московское), то оно в тот же московский день. Время
 /// позже публикации больше чем на 10 минут — это «вчера» (уведомление
-/// пришло после полуночи).
+/// пришло после полуночи); позже публикации не более чем на 10 минут —
+/// расхождение часов банка и устройства, момент берётся равным публикации
+/// (операция не уходит в будущее).
 DateTime notificationMoment(DateTime postedAt, String? time) {
   if (time == null) return postedAt.toUtc();
   final day = moscowDay(postedAt);
@@ -76,8 +78,11 @@ DateTime notificationMoment(DateTime postedAt, String? time) {
     hour - 3,
     minute,
   );
-  if (moment.isAfter(postedAt.toUtc().add(const Duration(minutes: 10)))) {
+  final posted = postedAt.toUtc();
+  if (moment.isAfter(posted.add(const Duration(minutes: 10)))) {
     moment = moment.subtract(const Duration(days: 1));
+  } else if (moment.isAfter(posted)) {
+    moment = posted;
   }
   return moment;
 }

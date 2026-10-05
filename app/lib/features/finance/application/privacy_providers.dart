@@ -7,6 +7,7 @@ import 'package:my_tasker/core/db/database_providers.dart';
 import 'package:my_tasker/core/money/money.dart';
 import 'package:my_tasker/features/finance/data/biometric.dart';
 import 'package:my_tasker/features/finance/data/pin_lock_service.dart';
+import 'package:my_tasker/features/finance/data/screen_security.dart';
 import 'package:my_tasker/features/finance/data/secret_store.dart';
 import 'package:my_tasker/features/work/domain/work_format.dart';
 
@@ -29,29 +30,79 @@ final Provider<PinLockService> pinLockServiceProvider =
       ),
     );
 
+// ---- защита экрана от снимков ----------------------------------------------
+
+/// Платформенная защита экрана (Android `FLAG_SECURE`); тесты подставляют
+/// [FakeScreenSecurity].
+final Provider<ScreenSecurity> screenSecurityProvider =
+    Provider<ScreenSecurity>((ref) => const PlatformScreenSecurity());
+
+/// Причины, по которым экран должен быть защищён: «скрыть суммы» и
+/// открытый раздел «Финансы». Защита включена, пока причина есть хотя бы
+/// одна.
+class SecureScreenNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => const {};
+
+  void setReason(String reason, {required bool on}) {
+    if (state.contains(reason) == on) return;
+    state = on ? {...state, reason} : ({...state}..remove(reason));
+    unawaited(
+      ref.read(screenSecurityProvider).setSecure(secure: state.isNotEmpty),
+    );
+  }
+}
+
+final NotifierProvider<SecureScreenNotifier, Set<String>> secureScreenProvider =
+    NotifierProvider<SecureScreenNotifier, Set<String>>(
+      SecureScreenNotifier.new,
+    );
+
+/// Причина защиты экрана: включён режим «скрыть суммы».
+const String secureReasonHideAmounts = 'hide_amounts';
+
 // ---- «скрыть суммы» ----------------------------------------------------------
 
 /// Ключ локальной настройки (таблица `local_settings`, не синхронизируется).
 const String hideAmountsSettingKey = 'finance.hide_amounts';
 
 /// Режим «скрыть суммы»: суммы в разделе показываются как «••• ₽». Хранится
-/// на устройстве.
+/// на устройстве. **Пока настройка не прочитана, суммы считаются скрытыми**:
+/// иначе первый кадр после холодного старта показал бы их открытыми.
 class HideAmountsNotifier extends Notifier<bool> {
+  bool _touched = false;
+
   @override
   bool build() {
+    _touched = false;
     unawaited(_load());
-    return false;
+    return true;
   }
 
   Future<void> _load() async {
-    final value = await ref
-        .read(localSettingsRepositoryProvider)
-        .read(hideAmountsSettingKey);
-    if (ref.mounted && value != null) state = value == '1';
+    var hidden = false;
+    try {
+      final value = await ref
+          .read(localSettingsRepositoryProvider)
+          .read(hideAmountsSettingKey);
+      hidden = value == '1';
+    } on Object {
+      // Не прочиталось — безопаснее оставить суммы скрытыми.
+      hidden = true;
+    }
+    if (!ref.mounted || _touched) return;
+    state = hidden;
+    _syncSecure();
   }
 
+  void _syncSecure() => ref
+      .read(secureScreenProvider.notifier)
+      .setReason(secureReasonHideAmounts, on: state);
+
   Future<void> set({required bool hidden}) async {
+    _touched = true;
     state = hidden;
+    _syncSecure();
     await ref
         .read(localSettingsRepositoryProvider)
         .write(hideAmountsSettingKey, hidden ? '1' : '0');
@@ -71,7 +122,7 @@ class AmountFormat {
   static const String mask = '••• ₽';
 
   /// `1 234,56 ₽` или маска.
-  String full(int kopecks) => hidden ? mask : formatAmount(kopecks);
+  String full(int kopecks) => hidden ? mask : formatAmountClamped(kopecks);
 
   /// Компактно для плиток: `80,5к ₽`.
   String short(int kopecks) => hidden ? mask : formatAmountShort(kopecks);
@@ -79,7 +130,7 @@ class AmountFormat {
   /// Со знаком: `+1 000 ₽` / `-250 ₽` (ASCII-минус); 0 — без знака.
   String signed(int kopecks) {
     if (hidden) return mask;
-    final text = formatAmount(kopecks);
+    final text = formatAmountClamped(kopecks);
     return kopecks > 0 ? '+$text' : text;
   }
 }
@@ -148,6 +199,12 @@ const Object _unset = Object();
 /// Ключ локальной настройки «разблокировать биометрией».
 const String biometricSettingKey = 'finance.lock.biometric';
 
+/// Метка «замок сброшен, но защищённое хранилище не удалось очистить»: пока
+/// она стоит, нечитаемое хранилище не запирает раздел снова (PIN из него всё
+/// равно не будет прочитан), а при следующем успешном чтении хранилище
+/// очищается.
+const String lockResetPendingKey = 'finance.lock.reset_pending';
+
 /// Итог попытки разблокировки.
 enum UnlockResult { unlocked, wrong, blocked }
 
@@ -163,7 +220,14 @@ class FinanceLockNotifier extends Notifier<FinanceLockState> {
   /// Читает состояние замка. Если защищённое хранилище недоступно, раздел
   /// остаётся закрытым (а не открывается «по умолчанию»).
   Future<void> load() async {
+    final settings = ref.read(localSettingsRepositoryProvider);
+    final pending = await settings.read(lockResetPendingKey) == '1';
     try {
+      if (pending) {
+        // Сброс замка не дочистил хранилище: доделываем, когда оно читается.
+        await _pin.clear();
+        await settings.delete(lockResetPendingKey);
+      }
       final hasPin = await _pin.isConfigured();
       final available = await ref.read(biometricProvider).isAvailable();
       final wanted =
@@ -183,12 +247,42 @@ class FinanceLockNotifier extends Notifier<FinanceLockState> {
       );
     } on Object {
       if (!ref.mounted) return;
-      state = const FinanceLockState(
-        loaded: true,
-        hasPin: true,
-        error: 'Не удалось прочитать защищённое хранилище',
-      );
+      state = pending
+          ? const FinanceLockState(loaded: true, locked: false)
+          : const FinanceLockState(
+              loaded: true,
+              hasPin: true,
+              error: 'Не удалось прочитать защищённое хранилище',
+            );
     }
+  }
+
+  /// «Забыл PIN» / нечитаемое хранилище: снимает замок на этом устройстве.
+  /// PIN удаляется вместе с настройкой биометрии и счётчиком ошибок; данные
+  /// раздела **не удаляются**. Вызывать только после явного подтверждения
+  /// пользователя (диалог в интерфейсе). Если защищённое хранилище не
+  /// очищается (нечитаемо), ставится метка [lockResetPendingKey]: замок
+  /// считается снятым, а очистка повторится при следующем чтении.
+  Future<void> resetLock() async {
+    final settings = ref.read(localSettingsRepositoryProvider);
+    var cleared = true;
+    try {
+      await _pin.clear();
+    } on Object {
+      cleared = false;
+    }
+    await settings.delete(biometricSettingKey);
+    if (cleared) {
+      await settings.delete(lockResetPendingKey);
+    } else {
+      await settings.write(lockResetPendingKey, '1');
+    }
+    if (!ref.mounted) return;
+    state = FinanceLockState(
+      loaded: true,
+      locked: false,
+      biometricAvailable: state.biometricAvailable,
+    );
   }
 
   /// Закрывает раздел (уход приложения в фон, кнопка «Закрыть»).
@@ -212,16 +306,25 @@ class FinanceLockNotifier extends Notifier<FinanceLockState> {
   /// Разблокировка биометрией (если включена и доступна).
   Future<bool> unlockWithBiometric() async {
     if (!state.biometric) return false;
+    // Блокировка после неверных PIN действует и на биометрию.
+    final until = await _pin.blockedUntil();
+    if (until != null) {
+      state = state.copyWith(blockedUntil: until);
+      return false;
+    }
     final ok = await ref
         .read(biometricProvider)
         .authenticate(reason: 'Открыть раздел «Финансы»');
-    if (ok) state = state.copyWith(locked: false, failures: 0);
+    if (ok) {
+      state = state.copyWith(locked: false, failures: 0, blockedUntil: null);
+    }
     return ok;
   }
 
   /// Включает замок или меняет PIN; раздел остаётся открытым.
   Future<void> setPin(String pin) async {
     await _pin.setPin(pin);
+    await ref.read(localSettingsRepositoryProvider).delete(lockResetPendingKey);
     state = state.copyWith(hasPin: true, locked: false, failures: 0);
   }
 

@@ -13,6 +13,8 @@ import 'package:my_tasker/core/widgets/empty_state.dart';
 import 'package:my_tasker/core/widgets/notice_card.dart';
 import 'package:my_tasker/core/widgets/screen_scaffold.dart';
 import 'package:my_tasker/core/widgets/status_pill.dart';
+import 'package:my_tasker/features/finance/application/privacy_providers.dart';
+import 'package:my_tasker/features/finance/data/finance_repository.dart';
 
 /// Корзина: удалённые не более 30 суток назад строки всех синхронизируемых
 /// таблиц (только «корневые»: потомки удалённого родителя скрыты).
@@ -20,6 +22,21 @@ final StreamProvider<List<TrashItem>> trashProvider =
     StreamProvider.autoDispose<List<TrashItem>>(
       (ref) => ref.watch(syncStoreProvider).watchTrash(),
     );
+
+/// Таблицы раздела «Финансы»: пока раздел закрыт замком, их заголовки в
+/// корзине скрыты (имя счёта, контрагент долга, название цели).
+const Set<String> financeTrashTables = {
+  FinanceRepository.accountsTable,
+  FinanceRepository.categoriesTable,
+  FinanceRepository.transactionsTable,
+  FinanceRepository.checkpointsTable,
+  FinanceRepository.debtsTable,
+  FinanceRepository.repaymentsTable,
+  FinanceRepository.goalsTable,
+};
+
+/// Заголовок записи финансовой таблицы вместо скрытого.
+const String hiddenFinanceTitle = 'Запись раздела «Финансы»';
 
 /// «Настройки › Корзина»: список с «удалится через N дней» и «Восстановить».
 class TrashScreen extends ConsumerWidget {
@@ -31,9 +48,17 @@ class TrashScreen extends ConsumerWidget {
     TrashItem item,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final lock = ref.read(financeLockProvider);
+    final hidden =
+        (!lock.loaded || lock.locked) &&
+        financeTrashTables.contains(item.table);
     await ref.read(syncStoreProvider).restore(item.table, item.id);
     messenger.showSnackBar(
-      SnackBar(content: Text('«${item.title}» восстановлено')),
+      SnackBar(
+        content: Text(
+          '«${hidden ? hiddenFinanceTitle : item.title}» восстановлено',
+        ),
+      ),
     );
   }
 
@@ -43,6 +68,8 @@ class TrashScreen extends ConsumerWidget {
     final offline =
         ref.watch(syncStatusProvider).indicator == SyncIndicatorKind.offline;
     final now = ref.watch(clockProvider)();
+    final lock = ref.watch(financeLockProvider);
+    final financeHidden = !lock.loaded || lock.locked;
     final t = context.text;
     final c = context.colors;
 
@@ -87,6 +114,8 @@ class TrashScreen extends ConsumerWidget {
             _TrashTile(
               item: item,
               now: now,
+              hideTitle:
+                  financeHidden && financeTrashTables.contains(item.table),
               onRestore: () => _restore(context, ref, item),
             ),
             const SizedBox(height: AppSpacing.s2),
@@ -131,10 +160,12 @@ class _TrashTile extends StatelessWidget {
     required this.item,
     required this.now,
     required this.onRestore,
+    this.hideTitle = false,
   });
 
   final TrashItem item;
   final DateTime now;
+  final bool hideTitle;
   final VoidCallback onRestore;
 
   @override
@@ -167,7 +198,8 @@ class _TrashTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.title,
+                      hideTitle ? hiddenFinanceTitle : item.title,
+                      key: hideTitle ? Key('trash-hidden-${item.id}') : null,
                       style: t.bodyStrong,
                       overflow: TextOverflow.ellipsis,
                     ),

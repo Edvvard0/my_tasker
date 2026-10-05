@@ -16,12 +16,17 @@ import 'package:my_tasker/features/calendar/domain/recurrence_draft.dart';
 import 'package:my_tasker/features/calendar/presentation/event_editor.dart';
 import 'package:my_tasker/features/calendar/presentation/widgets/form_pickers.dart';
 import 'package:my_tasker/features/calendar/presentation/widgets/recurrence_scope_dialog.dart';
+import 'package:my_tasker/features/study/application/study_calendar.dart';
+import 'package:my_tasker/features/study/presentation/lesson_sheet.dart';
 
 /// Карточка события (тап по блоку): время, слой, место, повторение
 /// («по нечётным неделям, Вт»), напоминания; «Изменить» и «Удалить»
 /// (для повторяющихся — «Только это · Это и следующие · Все в серии»).
 Future<void> showEventDetails(BuildContext context, EventItem item) =>
-    showEditorSheet<void>(context, builder: (_) => EventDetails(item: item));
+    // Занятие слоя «Учёба» (Этап 7) — не событие: открываем лист занятия.
+    item is StudyEventItem
+    ? showLessonSheet(context, date: item.date, lessonKey: item.lesson.key)
+    : showEditorSheet<void>(context, builder: (_) => EventDetails(item: item));
 
 class EventDetails extends ConsumerWidget {
   const EventDetails({required this.item, super.key});

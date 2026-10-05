@@ -86,7 +86,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                           key: const Key('categories-seed'),
                           onPressed: () => ref
                               .read(financeRepositoryProvider)
-                              .seedPresetCategories(),
+                              .seedPresetCategories(force: true),
                           child: const Text('Стандартный набор'),
                         ),
                       OutlinedButton(

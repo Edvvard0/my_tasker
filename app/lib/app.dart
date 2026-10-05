@@ -13,6 +13,7 @@ import 'package:my_tasker/features/calendar/reminders/reminder_taps.dart';
 import 'package:my_tasker/features/recovery/presentation/recovery_screen.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 import 'package:my_tasker/features/shell/splash_screen.dart';
+import 'package:my_tasker/features/study/application/attachment_providers.dart';
 import 'package:my_tasker/features/work/application/timer_providers.dart';
 
 /// Корневой виджет приложения.
@@ -37,7 +38,9 @@ class MyTaskerApp extends ConsumerWidget {
         // Таймер времени (Этап 4): уведомление/трей и «Стоп» из системы.
         ..watch(timerLifecycleProvider)
         // Банки (Этап 6): уведомления банков -> черновики операций.
-        ..watch(bankLifecycleProvider);
+        ..watch(bankLifecycleProvider)
+        // Учёба (Этап 7): файлы вложений доезжают до сервера в фоне.
+        ..watch(attachmentLifecycleProvider);
     }
     final auth = ok ? ref.watch(authControllerProvider) : const AuthUnknown();
     return MaterialApp.router(

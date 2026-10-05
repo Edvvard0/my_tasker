@@ -229,8 +229,65 @@ void main() {
         DebtRepayment.fromRow,
       )).single.id;
       await tapKey(tester, 'repayment-delete-$id');
+      // Подтверждение обязательно: пока не нажато, ничего не удалено.
+      expect(find.byKey(const Key('repayment-delete-dialog')), findsOneWidget);
+      expect(find.byKey(const Key('repayment-delete-only')), findsNothing);
+      expect(_textOf(tester, 'debt-remaining'), nb('1 600 ₽'));
+      await tapKey(tester, 'repayment-delete-cancel');
+      expect(_textOf(tester, 'debt-remaining'), nb('1 600 ₽'));
+      await tapKey(tester, 'repayment-delete-$id');
+      await tapKey(tester, 'repayment-delete-confirm');
       expect(_textOf(tester, 'debt-remaining'), nb('2 600 ₽'));
       expect(find.byKey(const Key('debt-no-repayments')), findsOneWidget);
+    });
+
+    group('удаление погашения со связанной операцией', () {
+      Future<(ProviderContainer, String, String)> repaidViaAccount(
+        WidgetTester tester,
+      ) async {
+        final container = await pump(tester);
+        await tapKey(tester, 'debt-${demo.debtMasha}');
+        await tester.enterText(find.byKey(const Key('repay-amount')), '1 000');
+        await tapKey(tester, 'repay-account-${demo.cash}');
+        await tapKey(tester, 'repay-save');
+        final repayment = (await _rows(
+          tester,
+          container,
+          'debt_repayments',
+          DebtRepayment.fromRow,
+        )).single;
+        expect(repayment.transactionId, isNotNull);
+        return (container, repayment.id, repayment.transactionId!);
+      }
+
+      testWidgets('«Погашение и операцию» удаляет обе строки', (tester) async {
+        final (container, id, txId) = await repaidViaAccount(tester);
+        await tapKey(tester, 'repayment-delete-$id');
+        expect(find.byKey(const Key('repayment-delete-only')), findsOneWidget);
+        await tapKey(tester, 'repayment-delete-confirm');
+        expect(_textOf(tester, 'debt-remaining'), nb('2 600 ₽'));
+        final txs = await _rows(
+          tester,
+          container,
+          'transactions',
+          FinTransaction.fromRow,
+        );
+        expect(txs.where((t) => t.id == txId), isEmpty);
+      });
+
+      testWidgets('«Только погашение» оставляет операцию', (tester) async {
+        final (container, id, txId) = await repaidViaAccount(tester);
+        await tapKey(tester, 'repayment-delete-$id');
+        await tapKey(tester, 'repayment-delete-only');
+        expect(_textOf(tester, 'debt-remaining'), nb('2 600 ₽'));
+        final txs = await _rows(
+          tester,
+          container,
+          'transactions',
+          FinTransaction.fromRow,
+        );
+        expect(txs.where((t) => t.id == txId), hasLength(1));
+      });
     });
 
     testWidgets('«Из Работы» ведёт к ожидаемым поступлениям', (tester) async {

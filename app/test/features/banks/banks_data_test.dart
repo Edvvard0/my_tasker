@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/features/banks/domain/bank_data.dart';
 import 'package:my_tasker/features/banks/domain/bank_models.dart';
 import 'package:my_tasker/features/banks/domain/bank_operations.dart';
+import 'package:my_tasker/features/banks/domain/bank_rules.dart'
+    show trimEdgeSpaces;
 import 'package:my_tasker/features/banks/domain/notification_engine.dart';
 import 'package:my_tasker/features/banks/domain/notification_guess.dart';
 
@@ -294,6 +296,16 @@ void main() {
       );
     });
 
+    test('время позже публикации до 10 минут — не в будущем: момент '
+        'публикации', () {
+      final posted = DateTime.utc(2026, 10, 3, 8, 40);
+      expect(notificationMoment(posted, '11:46'), posted);
+      expect(
+        notificationMoment(posted, '11:51'),
+        DateTime.utc(2026, 10, 2, 8, 51),
+      );
+    });
+
     test('время позже публикации больше чем на 10 минут — «вчера»', () {
       // Опубликовано 00:05 МСК 4 октября (21:05Z 3-го), в тексте 23:58.
       final posted = DateTime.utc(2026, 10, 3, 21, 5);
@@ -302,6 +314,27 @@ void main() {
         DateTime.utc(2026, 10, 3, 20, 58),
       );
     });
+  });
+
+  test('обрезка по краям: явный набор символов, одинаковый с Python', () {
+    // Не режутся ни `trim()` Python-стиля (U+001C–U+001F), ни Dart (U+FEFF).
+    for (final kept in ['\u001c', '\u001f', '\ufeff']) {
+      expect(trimEdgeSpaces('${kept}x$kept'), '${kept}x$kept');
+    }
+    for (final cut in [
+      '\u0009',
+      '\u0085',
+      '\u00a0',
+      '\u1680',
+      '\u2003',
+      '\u202f',
+      '\u205f',
+      '\u3000',
+    ]) {
+      expect(trimEdgeSpaces('${cut}x$cut'), 'x');
+    }
+    expect(trimEdgeSpaces(''), '');
+    expect(trimEdgeSpaces('  '), '');
   });
 
   test('догадка по тексту нераспознанного уведомления', () {

@@ -144,6 +144,40 @@ class ApiClient {
     timeout: timeout,
   );
 
+  /// `PUT` с сырыми байтами в теле (загрузка файла вложения, Этап 7) и
+  /// JSON в ответе. [timeout] — на отправку и на ответ: файл до 25 МиБ.
+  Future<Map<String, Object?>> putBytes(
+    String path,
+    Uint8List bytes, {
+    Duration timeout = const Duration(minutes: 5),
+  }) => _json(
+    'PUT',
+    path,
+    body: bytes,
+    contentType: 'application/octet-stream',
+    timeout: timeout,
+  );
+
+  /// `GET` с байтами в ответе (скачивание файла вложения, Этап 7).
+  Future<Uint8List> getBytes(
+    String path, {
+    Duration timeout = const Duration(minutes: 5),
+  }) async {
+    final response = await _request(
+      'GET',
+      path,
+      asBytes: true,
+      timeout: timeout,
+    );
+    final data = response.data;
+    if (data is Uint8List) return data;
+    if (data is List<int>) return Uint8List.fromList(data);
+    throw ApiException(
+      kind: ApiErrorKind.malformed,
+      status: response.statusCode,
+    );
+  }
+
   /// `DELETE` / `POST` без тела в ответе (`204`).
   Future<void> send(String method, String path, {bool auth = true}) async {
     await _request(method, path, auth: auth);
@@ -221,6 +255,7 @@ class ApiClient {
     Object? body,
     bool auth = true,
     bool stream = false,
+    bool asBytes = false,
     Map<String, Object?> headers = const {},
     CancelToken? cancelToken,
     String? contentType,
@@ -241,6 +276,7 @@ class ApiClient {
       body: body,
       token: token,
       stream: stream,
+      asBytes: asBytes,
       headers: headers,
       cancelToken: cancelToken,
       contentType: contentType,
@@ -261,6 +297,7 @@ class ApiClient {
           body: body,
           token: token,
           stream: stream,
+          asBytes: asBytes,
           headers: headers,
           cancelToken: cancelToken,
           contentType: contentType,
@@ -284,6 +321,7 @@ class ApiClient {
     Map<String, Object?>? query,
     Object? body,
     bool stream = false,
+    bool asBytes = false,
     Map<String, Object?> headers = const {},
     CancelToken? cancelToken,
     String? contentType,
@@ -297,7 +335,11 @@ class ApiClient {
         cancelToken: cancelToken,
         options: Options(
           method: method,
-          responseType: stream ? ResponseType.stream : ResponseType.plain,
+          responseType: stream
+              ? ResponseType.stream
+              : asBytes
+              ? ResponseType.bytes
+              : ResponseType.plain,
           receiveTimeout: stream ? Duration.zero : timeout,
           sendTimeout: timeout,
           contentType: body == null
@@ -333,6 +375,10 @@ class ApiClient {
       decoded = data;
     } else if (data is String && data.isNotEmpty) {
       decoded = _tryDecode(data);
+    } else if (data is List<int>) {
+      decoded = _tryDecode(
+        utf8.decode(data.take(64 * 1024).toList(), allowMalformed: true),
+      );
     } else if (data is ResponseBody) {
       final bytes = <int>[];
       await for (final chunk in data.stream) {

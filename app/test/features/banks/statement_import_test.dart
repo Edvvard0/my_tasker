@@ -3,6 +3,7 @@ import 'package:my_tasker/features/banks/data/statement_importer.dart';
 import 'package:my_tasker/features/banks/domain/bank_rules.dart';
 import 'package:my_tasker/features/banks/domain/statement_models.dart';
 import 'package:my_tasker/features/banks/domain/statement_plan.dart';
+import 'package:my_tasker/features/finance/domain/finance_calc.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
 import 'package:my_tasker/features/finance/domain/finance_presets.dart';
 
@@ -133,6 +134,57 @@ void main() {
     expect(cps.single.source, CheckpointSource.statement);
     expect(cps.single.actualBalance, 7777700);
     expect(cps.single.checkedAt, DateTime.utc(2026, 9, 30, 20, 59, 59));
+  });
+
+  test('выписка «по сегодня»: точка сверки не позже «сейчас», поздние '
+      'операции не «съедаются»', () async {
+    // Сейчас 2026-10-03 12:00 UTC; выписка по сегодня: остаток «на конец
+    // дня» — это 20:59:59Z, то есть в будущем.
+    final statement = statementOf(
+      [
+        serverLine(
+          index: 0,
+          occurredAt: '2026-10-03T07:00:00Z',
+          kind: 'expense',
+          amount: 10000,
+          merchant: 'Кофе Дом',
+        ),
+      ],
+      closing: {'amount': 500000, 'at': '2026-10-03T20:59:59Z'},
+    );
+    final result = await import(statement);
+    expect(result.checkpointCreated, isTrue);
+    final cps = [
+      for (final r in await d.fin.device.store.visibleRows(
+        'balance_checkpoints',
+      ))
+        BalanceCheckpoint.fromRow(r),
+    ];
+    expect(cps.single.checkedAt, DateTime.utc(2026, 10, 3, 12));
+
+    // Позже выписки пользователь вносит покупку (14:00 того же дня): она
+    // идёт после точки и уменьшает баланс, а не теряется.
+    clock.advance(const Duration(hours: 2));
+    final later = d.fin.finance.newId();
+    await d.fin.finance.createTransaction(
+      FinTransaction(
+        id: later,
+        kind: TxKind.expense,
+        accountId: account,
+        amount: 30000,
+        occurredAt: DateTime.utc(2026, 10, 3, 14),
+      ),
+    );
+    final acc = (await d.fin.finance.getAccount(account))!;
+    expect(balanceAt(acc, await txs(), cps), 470000);
+
+    // Повторный импорт той же выписки позже в тот же день не плодит точек.
+    final again = await import(statement);
+    expect(again.checkpointCreated, isFalse);
+    expect(
+      await d.fin.device.store.visibleRows('balance_checkpoints'),
+      hasLength(1),
+    );
   });
 
   test('повторный импорт той же выписки: все строки — дубликаты, ничего не '

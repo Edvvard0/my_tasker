@@ -9,6 +9,7 @@ import 'package:my_tasker/features/calendar/data/event_moves.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_items.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_validation.dart';
 import 'package:my_tasker/features/calendar/presentation/widgets/recurrence_scope_dialog.dart';
+import 'package:my_tasker/features/study/application/study_calendar.dart';
 import 'package:my_tasker/features/tasks/data/task_repository.dart';
 import 'package:my_tasker/features/tasks/domain/task_models.dart';
 
@@ -48,6 +49,8 @@ class CalendarActions {
 
   /// Блок перетащили: сдвиг на [days] суток и [minutes] минут.
   Future<void> move(CalendarItem item, int days, int minutes) async {
+    // Занятия слоя «Учёба» считаются из расписания: их не двигают.
+    if (item is StudyEventItem) return;
     final zone = ref.read(deviceTimeZoneProvider);
     final newWall = _shift(item.start, days, minutes);
     final newStart = wallToUtc(
@@ -132,6 +135,7 @@ class CalendarActions {
 
   /// Растянули нижний край: новая длительность [minutes].
   Future<void> resize(CalendarItem item, int minutes) async {
+    if (item is StudyEventItem) return;
     final zone = ref.read(deviceTimeZoneProvider);
     final start = wallToUtc(
       zone,

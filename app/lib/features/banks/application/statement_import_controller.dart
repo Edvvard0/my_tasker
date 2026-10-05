@@ -95,6 +95,10 @@ class StatementImportController extends Notifier<ImportState> {
         state = state.copyWith(busy: false);
         return;
       }
+      if (file.bytes.length > maxStatementBytes) {
+        state = state.copyWith(busy: false, error: statementTooBigText);
+        return;
+      }
       final statement = await ref.read(statementsApiProvider).parse(file.bytes);
       final accounts =
           ref.read(financeDataProvider).value?.activeAccounts ?? [];
@@ -201,10 +205,10 @@ class StatementImportController extends Notifier<ImportState> {
         step: ImportStep.done,
         result: result,
       );
-    } on Object catch (e) {
+    } on Object {
       state = state.copyWith(
         busy: false,
-        error: 'Не удалось сохранить операции: $e',
+        error: 'Не удалось сохранить операции. Повторите попытку.',
       );
     }
   }

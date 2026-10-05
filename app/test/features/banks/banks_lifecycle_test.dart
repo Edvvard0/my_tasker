@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_tasker/core/db/database_providers.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
+import 'package:my_tasker/features/banks/data/notification_store.dart';
 import 'package:my_tasker/features/banks/domain/bank_models.dart';
 import 'package:my_tasker/features/banks/platform/bank_platform.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
@@ -14,6 +16,14 @@ class _BrokenPlatform extends FakeBankPlatform {
     drains++;
     throw StateError('очередь недоступна');
   }
+}
+
+/// Хранилище, у которого обработка пачки падает сразу (до разбора).
+class _ThrowingStore extends NotificationStore {
+  _ThrowingStore(super._db);
+
+  @override
+  Future<int> purgeExpired() async => throw StateError('база недоступна');
 }
 
 Future<List<FinTransaction>> _txs(
@@ -67,6 +77,8 @@ void main() {
       await _settle(tester);
       expect(platform.packages, [tbankPackage, vtbPackage]);
       expect(platform.drains, greaterThanOrEqualTo(1));
+      // Очередь на устройстве удаляется только после подтверждения пачки.
+      expect(platform.acks, greaterThanOrEqualTo(1));
       expect(platform.queue, isEmpty);
       final created = (await _txs(
         tester,
@@ -137,7 +149,39 @@ void main() {
       );
       await _settle(tester);
       expect(platform.drains, greaterThanOrEqualTo(1));
+      expect(platform.acks, 0);
       expect(find.byKey(const Key('finance-overview')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('сбой обработки пачки: подтверждения нет, уведомления остаются '
+        'в очереди на устройстве', (tester) async {
+      final platform = FakeBankPlatform()
+        ..queue.add(
+          raw(
+            tbankPackage,
+            'Покупка',
+            _purchase,
+            DateTime.utc(2026, 9, 30, 8, 30),
+          ),
+        );
+      await pumpBanks(
+        tester,
+        location: '/finance',
+        platform: platform,
+        overrides: [
+          notificationStoreProvider.overrideWith(
+            (ref) => _ThrowingStore(ref.watch(appDatabaseProvider)),
+          ),
+        ],
+        seedWith: (c) async {
+          await seedFinanceDemo(c);
+        },
+      );
+      await _settle(tester);
+      expect(platform.drains, greaterThanOrEqualTo(1));
+      expect(platform.acks, 0);
+      expect(platform.queue, hasLength(1));
       expect(tester.takeException(), isNull);
     });
 

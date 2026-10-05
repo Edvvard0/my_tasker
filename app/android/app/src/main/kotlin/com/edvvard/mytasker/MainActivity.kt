@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -16,6 +17,31 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         configureBanks(messenger)
+        configureScreenSecurity(messenger)
+    }
+
+    /**
+     * Защита экрана «Финансов»: пока раздел открыт или включено «скрыть суммы»,
+     * окно помечено FLAG_SECURE (нет скриншотов, записи экрана и превью в
+     * «последних приложениях»). Управляет Dart: `setSecure(true|false)`.
+     */
+    private fun configureScreenSecurity(messenger: io.flutter.plugin.common.BinaryMessenger) {
+        MethodChannel(messenger, "my_tasker/screen_security").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setSecure" -> {
+                    val secure = call.arguments as? Boolean ?: false
+                    runOnUiThread {
+                        if (secure) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        }
+                    }
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     /** Мост «Банков» (Этап 6): слушатель уведомлений и системные настройки доступа. */
@@ -52,6 +78,11 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "drain" -> result.success(BankNotificationQueue.drain(applicationContext))
+                // Пачка, выданная последним drain, обработана: очередь на диске можно удалить.
+                "ack" -> {
+                    BankNotificationQueue.ack(applicationContext)
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }

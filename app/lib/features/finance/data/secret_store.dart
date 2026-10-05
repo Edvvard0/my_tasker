@@ -35,6 +35,9 @@ class MemorySecretStore implements SecretStore {
   /// Тест может «сломать» хранилище: чтение бросает исключение.
   bool failReads = false;
 
+  /// И удаление: хранилище, которое не очищается (сброс замка).
+  bool failDeletes = false;
+
   @override
   Future<String?> read(String key) async {
     if (failReads) throw StateError('хранилище недоступно');
@@ -45,5 +48,8 @@ class MemorySecretStore implements SecretStore {
   Future<void> write(String key, String value) async => values[key] = value;
 
   @override
-  Future<void> delete(String key) async => values.remove(key);
+  Future<void> delete(String key) async {
+    if (failDeletes) throw StateError('хранилище недоступно');
+    values.remove(key);
+  }
 }

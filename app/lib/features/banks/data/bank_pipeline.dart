@@ -29,8 +29,17 @@ enum ProcessOutcome {
   /// Создан черновик операции.
   draftCreated,
 
-  /// Такая операция уже есть (дедупликация): черновик не создан.
+  /// Точно такая же операция уже есть (тот же идентификатор или хеш):
+  /// черновик не создан.
   duplicate,
+
+  /// Создан черновик, но он похож на уже внесённую операцию (выписка,
+  /// ручная): пользователь решит — дубль или отдельная покупка.
+  possibleDuplicate,
+
+  /// Обработка упала: уведомление сохранено как «не распознано» (причина
+  /// `error`), остаток пачки обрабатывается дальше.
+  failed,
 }
 
 /// Конвейер уведомлений: уведомление → разбор по правилам → черновик
@@ -57,12 +66,35 @@ class BankPipeline {
 
   final AsyncMutex _mutex = AsyncMutex();
 
-  /// Обрабатывает пачку уведомлений по очереди; возвращает исходы.
+  /// Обрабатывает пачку уведомлений по очереди; возвращает исходы. Сбой
+  /// одного уведомления не прерывает пачку: оно сохраняется как «не
+  /// распознано» (причина `error`, с исходным текстом) и обработка
+  /// продолжается. Если не удалось сохранить даже это, после обработки
+  /// остальных бросается [StateError]: пачку нельзя считать принятой
+  /// (платформа не должна удалять очередь).
   Future<List<ProcessOutcome>> ingest(Iterable<RawNotification> batch) async {
     await notifications.purgeExpired();
     final outcomes = <ProcessOutcome>[];
+    Object? unsaved;
     for (final raw in batch) {
-      outcomes.add(await process(raw));
+      try {
+        outcomes.add(await process(raw));
+      } on Object {
+        try {
+          await notifications.insert(
+            raw,
+            state: NotificationState.unrecognized,
+            reason: 'error',
+          );
+          outcomes.add(ProcessOutcome.failed);
+        } on Object catch (e) {
+          unsaved = e;
+          outcomes.add(ProcessOutcome.failed);
+        }
+      }
+    }
+    if (unsaved != null) {
+      throw StateError('Не удалось сохранить уведомление банка');
     }
     return outcomes;
   }
@@ -106,11 +138,24 @@ class BankPipeline {
     final created = await _createDraft(data, raw, parsed, accounts.single);
     await notifications.insert(
       raw,
-      state: NotificationState.processed,
+      state: created.possibleDuplicate
+          ? NotificationState.possibleDuplicate
+          : NotificationState.processed,
+      reason: created.possibleDuplicate ? 'possible_duplicate' : null,
+      // Результат разбора хранит остаток: точка сверки создаётся, когда
+      // черновик подтверждён (а не пока он может оказаться дублем).
+      parsed: created.duplicate ? null : parsed,
       txId: created.txId,
     );
-    return created.duplicate
-        ? ProcessOutcome.duplicate
+    return _outcomeOf(created);
+  }
+
+  static ProcessOutcome _outcomeOf(
+    ({String? txId, bool duplicate, bool possibleDuplicate}) created,
+  ) {
+    if (created.duplicate) return ProcessOutcome.duplicate;
+    return created.possibleDuplicate
+        ? ProcessOutcome.possibleDuplicate
         : ProcessOutcome.draftCreated;
   }
 
@@ -128,6 +173,9 @@ class BankPipeline {
     if (row == null || row['deleted_at'] != null) {
       throw StateError('Счёт не найден');
     }
+    if (Account.fromRow(row).archived) {
+      throw StateError('Счёт в архиве: выберите другой счёт');
+    }
     final raw = RawNotification(
       package: notification.package,
       title: notification.title,
@@ -140,10 +188,12 @@ class BankPipeline {
       parsed,
       Account.fromRow(row),
     );
-    await notifications.markProcessed(notification.id, txId: created.txId);
-    return created.duplicate
-        ? ProcessOutcome.duplicate
-        : ProcessOutcome.draftCreated;
+    await notifications.markProcessed(
+      notification.id,
+      txId: created.txId,
+      possibleDuplicate: created.possibleDuplicate,
+    );
+    return _outcomeOf(created);
   });
 
   Future<List<Account>> _accountsForCard(String? last4) async {
@@ -166,7 +216,7 @@ class BankPipeline {
       FinTransaction.fromRow(r),
   ];
 
-  Future<({String? txId, bool duplicate})> _createDraft(
+  Future<({String? txId, bool duplicate, bool possibleDuplicate})> _createDraft(
     BankData data,
     RawNotification raw,
     NotificationParse parsed,
@@ -185,7 +235,8 @@ class BankPipeline {
       account.id,
       await _transactionsOf(account.id),
     );
-    // 1. Точное совпадение — любой источник (повторная публикация того же
+    // 1. Дублем без вопросов считается только ТОЧНОЕ совпадение: тот же
+    //    идентификатор или тот же хеш (повторная публикация того же
     //    уведомления в ту же минуту).
     final exact = classifyCandidates(
       data.normalization,
@@ -194,12 +245,18 @@ class BankPipeline {
       existing: existing,
     ).single;
     if (exact.action == MatchAction.duplicate && exact.reason != 'fuzzy') {
-      return (txId: exact.existingId, duplicate: true);
+      return (
+        txId: exact.existingId,
+        duplicate: true,
+        possibleDuplicate: false,
+      );
     }
     // 2. Нечётко — только с операциями, которые уже внесли другим путём
     //    (вручную, из выписки): две настоящие покупки подряд в одном
     //    магазине — две операции, поэтому уведомления между собой нечётко
-    //    не склеиваются.
+    //    не склеиваются. Нечёткое совпадение не отбрасывается молча: такая
+    //    операция может быть и настоящей покупкой, поэтому создаётся
+    //    черновик с пометкой «возможный дубль» — решает пользователь.
     final other = classifyCandidates(
       data.normalization,
       accountId: account.id,
@@ -209,9 +266,7 @@ class BankPipeline {
           if (e.source != 'notification') e,
       ],
     ).single;
-    if (other.action != MatchAction.create) {
-      return (txId: other.existingId, duplicate: true);
-    }
+    final possibleDuplicate = other.action != MatchAction.create;
     final rules = await banks.rules();
     var suggestion = suggestCategory(
       data,
@@ -253,18 +308,8 @@ class BankPipeline {
           dedupHash: exact.dedupHash,
         ),
       );
-      final balance = parsed.balance;
-      if (balance != null && !parsed.needsReview) {
-        await finance.reconcile(
-          accountId: account.id,
-          actualBalance: balance,
-          checkedAt: occurredAt,
-          note: 'Остаток из уведомления банка',
-          source: CheckpointSource.notification,
-        );
-      }
     });
-    return (txId: txId, duplicate: false);
+    return (txId: txId, duplicate: false, possibleDuplicate: possibleDuplicate);
   }
 
   static String _amountText(int kopecks) {

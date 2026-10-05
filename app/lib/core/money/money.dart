@@ -84,6 +84,14 @@ int? tryParseAmount(String text) {
   }
 }
 
+/// Как [formatAmount], но для суммы вне допустимого диапазона не бросает
+/// исключение, а возвращает «≈ ∞» / «≈ -∞» (для интерфейса и контекста ИИ:
+/// сумма счетов из синхронизированных данных может выйти за предел).
+String formatAmountClamped(int kopecks) {
+  if (kopecks.abs() > maxKopecks) return kopecks > 0 ? '≈ ∞' : '≈ -∞';
+  return formatAmount(kopecks);
+}
+
 /// Форматирует копейки: `123456` -> `1 234,56 ₽` (разделители U+00A0),
 /// копейки пишутся только если они не нулевые, минус — ASCII `-`.
 String formatAmount(int kopecks) {

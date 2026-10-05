@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_tasker/core/sync/sync_engine.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_validation.dart';
 import 'package:my_tasker/features/finance/data/finance_repository.dart';
 import 'package:my_tasker/features/finance/domain/finance_calc.dart';
@@ -224,6 +225,139 @@ void main() {
       await repo.deleteCategory(categoryPresetId('expense.other'));
       expect(await repo.seedPresetCategories(), 0);
       expect(await dev.device.store.visibleRows('categories'), hasLength(27));
+    });
+  });
+
+  group('засев после чистки надгробий', () {
+    test('удалённая предустановленная категория не воскресает, когда её '
+        'надгробие вычищено через 30 суток', () async {
+      expect(await repo.seedPresetCategories(), 28);
+      final other = categoryPresetId('expense.other');
+      await repo.deleteCategory(other);
+      expect(await dev.device.sync(), SyncOutcome.success);
+
+      clock.advance(const Duration(days: 31));
+      expect(await dev.device.store.purgeOldTombstones(), greaterThan(0));
+      expect(
+        await dev.device.store.getRow('categories', other),
+        isNull,
+        reason: 'надгробие вычищено, строки в базе нет вовсе',
+      );
+
+      expect(await repo.seedPresetCategories(), 0);
+      expect(await dev.device.store.getRow('categories', other), isNull);
+      expect(await dev.device.store.visibleRows('categories'), hasLength(27));
+    });
+
+    test(
+      'набор засеянных переживает «перезапуск»: хранится в sync_meta',
+      () async {
+        await repo.seedPresetCategories();
+        final raw = await dev.device.store.readMeta(
+          FinanceRepository.seededCategoriesMetaKey,
+        );
+        expect(raw, isNotNull);
+        expect(raw, contains(categoryPresetId('expense.other')));
+      },
+    );
+
+    test(
+      '«Стандартный набор» (force) возвращает вычищенные категории',
+      () async {
+        await repo.seedPresetCategories();
+        final other = categoryPresetId('expense.other');
+        await repo.deleteCategory(other);
+        await dev.device.sync();
+        clock.advance(const Duration(days: 31));
+        await dev.device.store.purgeOldTombstones();
+        expect(await repo.seedPresetCategories(), 0);
+        expect(await repo.seedPresetCategories(force: true), 1);
+        expect((await repo.getCategory(other))!.name, isNotEmpty);
+      },
+    );
+
+    test(
+      'категория, уже пришедшая с другого устройства, считается засеянной',
+      () async {
+        // Строка есть в базе (пришла синхронизацией): засев её не создаёт и
+        // запоминает ключ.
+        final id = categoryPresetId('expense.other');
+        final preset = categoryPresets.firstWhere((p) => p.id == id);
+        await dev.device.store.create('categories', id, preset.toFields());
+        expect(await repo.seedPresetCategories(), 27);
+        await repo.deleteCategory(id);
+        await dev.device.sync();
+        clock.advance(const Duration(days: 31));
+        await dev.device.store.purgeOldTombstones();
+        expect(await repo.seedPresetCategories(), 0);
+      },
+    );
+  });
+
+  group('сверка и будущее', () {
+    test('сверка позже «сейчас + сутки» отклоняется, в пределах суток — '
+        'принимается', () async {
+      final a = await account();
+      await expectLater(
+        repo.reconcile(
+          accountId: a,
+          actualBalance: 1,
+          checkedAt: clock.now.add(const Duration(days: 3)),
+        ),
+        _invalid('будущую дату'),
+      );
+      await repo.reconcile(
+        accountId: a,
+        actualBalance: 1,
+        checkedAt: clock.now.add(const Duration(hours: 12)),
+      );
+      expect(
+        await dev.device.store.visibleRows('balance_checkpoints'),
+        hasLength(1),
+      );
+    });
+  });
+
+  group('цели: слагаемые из будущих версий', () {
+    test('неизвестное слагаемое не теряется при правке цели', () async {
+      final id = repo.newId();
+      await dev.device.store.create('goals', id, {
+        'name': 'Подушка',
+        'target_amount': 40000000,
+        'deadline_date': null,
+        'archived': false,
+        'formula': [
+          {'kind': 'all_accounts', 'sign': '+'},
+          {'kind': 'crypto_wallet', 'sign': '+', 'wallet': 'x'},
+        ],
+      });
+      final goal = (await repo.getGoal(id))!;
+      expect(goal.formula, hasLength(1));
+      expect(goal.unknownTerms, hasLength(1));
+
+      // Правка названия через клиент: формула в строке остаётся целой.
+      await repo.updateGoal(goal.copyWith(name: 'Подушка 2'));
+      final row = (await dev.device.store.getRow('goals', id))!;
+      expect(row['name'], 'Подушка 2');
+      expect((row['formula']! as List).map((t) => (t as Map)['kind']), [
+        'all_accounts',
+        'crypto_wallet',
+      ]);
+
+      // Даже если форма прислала цель без неизвестных слагаемых.
+      await repo.updateGoal(
+        Goal(
+          id: id,
+          name: 'Подушка 3',
+          targetAmount: 40000000,
+          formula: const [GoalTerm(kind: GoalTermKind.debtsToMe)],
+        ),
+      );
+      final again = (await dev.device.store.getRow('goals', id))!;
+      expect((again['formula']! as List).map((t) => (t as Map)['kind']), [
+        'debts_to_me',
+        'crypto_wallet',
+      ]);
     });
   });
 

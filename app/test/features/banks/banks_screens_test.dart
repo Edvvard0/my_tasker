@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_tasker/core/db/database_providers.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/features/banks/data/bank_drafts.dart';
+import 'package:my_tasker/features/banks/data/bank_pipeline.dart';
 import 'package:my_tasker/features/banks/data/banks_repository.dart';
 import 'package:my_tasker/features/banks/data/notification_store.dart';
 import 'package:my_tasker/features/banks/domain/bank_models.dart';
@@ -384,6 +386,72 @@ void main() {
     });
   });
 
+  group('«Черновики»: возможный дубль', () {
+    const text =
+        'Покупка на 321,50 ₽, Кафе у дома. Карта *1234. Доступно 9 000 ₽';
+
+    /// Ручная операция и уведомление, похожее на неё: черновик с пометкой.
+    Future<String> flagged(
+      WidgetTester tester,
+      ProviderContainer c,
+      String raw0,
+    ) async {
+      await _add(
+        tester,
+        c,
+        demo.bank,
+        amount: 32150,
+        merchant: 'Кафе у дома',
+        status: TxStatus.confirmed,
+        source: TxSource.manual,
+        at: DateTime.utc(2026, 9, 29, 8),
+      );
+      final outcome = await _run(
+        tester,
+        () => c
+            .read(bankPipelineProvider)
+            .process(
+              raw(tbankPackage, 'Покупка', raw0, DateTime.utc(2026, 9, 29, 9)),
+            ),
+      );
+      expect(outcome, ProcessOutcome.possibleDuplicate);
+      return (await _txs(tester, c))
+          .firstWhere(
+            (t) => t.source == TxSource.notification && t.amount == 32150,
+          )
+          .id;
+    }
+
+    testWidgets('значок и два решения; «Это дубль» отклоняет черновик', (
+      tester,
+    ) async {
+      final c = await pump(tester);
+      final id = await flagged(tester, c, text);
+      expect(find.byKey(Key('draft-possible-duplicate-$id')), findsOneWidget);
+      expect(find.text('ВОЗМОЖНЫЙ ДУБЛЬ'), findsOneWidget);
+      expect(find.text('Отдельная покупка'), findsOneWidget);
+      await tapKey(tester, 'draft-reject-$id');
+      expect(find.byKey(Key('draft-card-$id')), findsNothing);
+      expect((await _txs(tester, c)).any((t) => t.id == id), isFalse);
+      final left = await _run(
+        tester,
+        () => c
+            .read(notificationStoreProvider)
+            .byState(NotificationState.possibleDuplicate),
+      );
+      expect(left, isEmpty);
+    });
+
+    testWidgets('«Отдельная покупка» подтверждает черновик', (tester) async {
+      final c = await pump(tester);
+      final id = await flagged(tester, c, text);
+      await tapKey(tester, 'draft-confirm-$id');
+      final tx = (await _txs(tester, c)).firstWhere((t) => t.id == id);
+      expect(tx.status, TxStatus.confirmed);
+      expect(find.byKey(Key('draft-possible-duplicate-$id')), findsNothing);
+    });
+  });
+
   group('«Требует проверки»', () {
     Future<BankNotification> unrecognized(
       WidgetTester tester,
@@ -460,8 +528,26 @@ void main() {
       await tapKey(tester, 'tx-save');
       final all = await _txs(tester, c);
       final created = all.firstWhere((t) => t.amount == 123450);
-      expect(created.comment, contains('Кафе у дома'));
+      // Сырой текст уведомления в комментарий (и на сервер) не попадает.
+      expect(created.comment, 'Из уведомления банка');
+      expect(created.comment, isNot(contains('Кафе у дома')));
       expect(created.status, TxStatus.confirmed);
+      final outbox = await _run(
+        tester,
+        () async => [
+          for (final e
+              in await c
+                  .read(appDatabaseProvider)
+                  .select(c.read(appDatabaseProvider).syncOutbox)
+                  .get())
+            e.fields ?? '',
+        ],
+      );
+      expect(outbox.where((f) => f.contains('Кафе у дома')), isEmpty);
+      expect(
+        outbox.where((f) => f.contains('Из уведомления банка')),
+        isNotEmpty,
+      );
       // Уведомление обработано и пропало из списка.
       expect(find.byKey(Key('review-unrecognized-${n.id}')), findsNothing);
       final stored = await _run(
@@ -495,6 +581,30 @@ void main() {
         c,
       )).firstWhere((t) => t.amount == 10000 && t.accountId == demo.savings);
       expect(created.status, TxStatus.draft);
+    });
+
+    testWidgets('нужен счёт: счёт в архиве — понятное сообщение, не падает', (
+      tester,
+    ) async {
+      final c = await pump(tester, location: '/finance/banks/review');
+      final pending = await needsAccount(tester, c);
+      // Пока открыт экран, счёт успели убрать в архив (на другом устройстве).
+      await _run(
+        tester,
+        () => c
+            .read(financeRepositoryProvider)
+            .setAccountArchived(demo.savings, archived: true),
+      );
+      await tester.pumpAndSettle();
+      // Архивных счетов в выборе уже нет; вызываем конвейер как кнопка.
+      await _run(
+        tester,
+        () => expectLater(
+          c.read(bankPipelineProvider).assignAccount(pending, demo.savings),
+          throwsStateError,
+        ),
+      );
+      expect(find.byKey(Key('review-account-${pending.id}')), findsOneWidget);
     });
 
     testWidgets('нужен счёт: «Убрать»', (tester) async {

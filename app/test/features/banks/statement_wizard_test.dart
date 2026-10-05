@@ -1,9 +1,13 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/features/banks/application/statement_import_controller.dart';
+import 'package:my_tasker/features/banks/data/statements_api.dart';
 import 'package:my_tasker/features/banks/domain/statement_models.dart';
+import 'package:my_tasker/features/banks/platform/statement_file_source.dart';
 import 'package:my_tasker/features/finance/domain/finance_models.dart';
 
 import '../../support/banks_env.dart';
@@ -282,6 +286,27 @@ void main() {
       expect(stepTitle(tester), 'Шаг 2 из 4 · Счёт');
     });
 
+    testWidgets('файл больше 10 МБ: понятное сообщение, на сервер не '
+        'отправляется', (tester) async {
+      await pump(tester);
+      files.file = PickedStatementFile(
+        name: 'big.pdf',
+        bytes: Uint8List(maxStatementBytes + 1),
+      );
+      await tapKey(tester, 'import-pick');
+      expect(find.textContaining('Файл больше 10 МБ'), findsOneWidget);
+      expect(api.calls, 0);
+      expect(stepTitle(tester), 'Шаг 1 из 4 · Файл');
+      // Ровно 10 000 000 байт — ещё можно.
+      files.file = PickedStatementFile(
+        name: 'ok.pdf',
+        bytes: Uint8List(maxStatementBytes),
+      );
+      await tapKey(tester, 'import-pick');
+      expect(api.calls, 1);
+      expect(stepTitle(tester), 'Шаг 2 из 4 · Счёт');
+    });
+
     testWidgets('закрыли диалог выбора файла: ничего не происходит', (
       tester,
     ) async {
@@ -341,6 +366,9 @@ void main() {
         find.textContaining('Не удалось сохранить операции'),
         findsOneWidget,
       );
+      // Текст исключения пользователю не показывается.
+      expect(find.textContaining('Bad state'), findsNothing);
+      expect(find.textContaining('Exception'), findsNothing);
     });
 
     testWidgets('десктоп: тот же мастер', (tester) async {

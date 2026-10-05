@@ -5,6 +5,7 @@ import 'package:my_tasker/core/db/sync_tables.dart';
 import 'package:my_tasker/features/ai_chat/data/ai_tables.dart';
 import 'package:my_tasker/features/banks/data/banks_tables.dart';
 import 'package:my_tasker/features/finance/data/finance_tables.dart';
+import 'package:my_tasker/features/study/data/study_tables.dart';
 import 'package:my_tasker/features/work/data/work_tables.dart';
 
 part 'app_database.g.dart';
@@ -43,6 +44,10 @@ class LocalSettings extends Table {
 /// * v7 — Этап 6 (Банки): синхронизируемая `merchant_category_rules` и
 ///   локальная (не синхронизируется) `bank_notifications` — сырые
 ///   уведомления на 30 дней (`features/banks/data/banks_tables.dart`).
+/// * v8 — Этап 7 (Учёба): `study_semesters`, `study_subjects`,
+///   `study_bells`, `class_slots`, `study_day_rules`, `class_overrides`,
+///   `study_attendance`, `study_debts`, `attachments`
+///   (`features/study/data/study_tables.dart`).
 ///
 /// Правила миграций: любое изменение схемы = `schemaVersion + 1` и новый шаг
 /// в [migrationSteps]; шаги применяются последовательно. Откат версии
@@ -84,13 +89,22 @@ class LocalSettings extends Table {
     Goals,
     MerchantCategoryRules,
     BankNotifications,
+    StudySemesters,
+    StudySubjects,
+    StudyBells,
+    ClassSlots,
+    StudyDayRules,
+    ClassOverrides,
+    StudyAttendance,
+    StudyDebts,
+    Attachments,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   /// Текущая версия схемы (то же значение, что и [schemaVersion]).
-  static const int currentSchemaVersion = 7;
+  static const int currentSchemaVersion = 8;
 
   @override
   int get schemaVersion => currentSchemaVersion;
@@ -184,6 +198,28 @@ class AppDatabase extends _$AppDatabase {
       await m.createTable(db.bankNotifications);
       await m.createIndex(db.bankNotificationsReceivedIdx);
       await m.createIndex(db.bankNotificationsStateIdx);
+    },
+    8: (m) async {
+      final db = m.database as AppDatabase;
+      await m.createTable(db.studySemesters);
+      await m.createTable(db.studySubjects);
+      await m.createTable(db.studyBells);
+      await m.createTable(db.classSlots);
+      await m.createTable(db.studyDayRules);
+      await m.createTable(db.classOverrides);
+      await m.createTable(db.studyAttendance);
+      await m.createTable(db.studyDebts);
+      await m.createTable(db.attachments);
+      await m.createIndex(db.studySubjectsSemesterIdx);
+      await m.createIndex(db.studyBellsSemesterIdx);
+      await m.createIndex(db.classSlotsSemesterIdx);
+      await m.createIndex(db.classSlotsSubjectIdx);
+      await m.createIndex(db.studyDayRulesSemesterIdx);
+      await m.createIndex(db.classOverridesSlotIdx);
+      await m.createIndex(db.studyAttendanceSlotIdx);
+      await m.createIndex(db.studyDebtsSubjectIdx);
+      await m.createIndex(db.attachmentsSubjectIdx);
+      await m.createIndex(db.attachmentsDebtIdx);
     },
   };
 

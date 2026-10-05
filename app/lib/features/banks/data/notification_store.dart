@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_tasker/core/config/clock.dart';
@@ -14,6 +15,11 @@ import 'package:my_tasker/features/finance/domain/finance_models.dart'
 
 /// Срок хранения сырых уведомлений (spec 0 и 2.4 Этапа 6): 30 суток.
 const Duration notificationRetention = Duration(days: 30);
+
+/// Окно «повтора»: уведомление с тем же пакетом, заголовком и текстом в
+/// пределах этого срока от уже виденного считается повторной публикацией
+/// (банк обновил уведомление), а не новой операцией.
+const Duration notificationRepeatWindow = Duration(minutes: 2);
 
 /// Локальное хранилище сырых уведомлений банков (`bank_notifications`).
 /// Не синхронизируется: исходный текст остаётся на устройстве, на сервер
@@ -30,10 +36,35 @@ class NotificationStore {
   final DateTime Function() _now;
   final String Function() _newId;
 
-  /// Отпечаток уведомления для защиты от повторной обработки.
-  static String fingerprint(RawNotification n) =>
-      '${n.package}|${n.postedAt.toUtc().millisecondsSinceEpoch}|'
-      '${n.title}|${n.text}';
+  /// Хеш «пакет, заголовок, текст» — общая часть отпечатка и ключ окна
+  /// повтора. Сам текст в отпечаток не попадает.
+  static String contentKey(RawNotification n) => sha256
+      .convert(utf8.encode('${n.package}\u0000${n.title}\u0000${n.text}'))
+      .toString()
+      .substring(0, 32);
+
+  /// Отпечаток уведомления для защиты от повторной обработки:
+  /// `<хеш содержимого>:<хеш экземпляра>`. Экземпляр — ключ уведомления в
+  /// системе и `when` (одно и то же уведомление, опубликованное повторно,
+  /// их сохраняет); `postTime` в отпечаток **не входит** — он меняется при
+  /// повторной публикации. Без ключа и `when` (старая очередь, тесты) в
+  /// экземпляр входит время публикации.
+  static String fingerprint(RawNotification n) {
+    final when = n.whenMs ?? 0;
+    final instance = n.key != null || when > 0
+        ? '${n.key ?? ''}|$when'
+        : '${n.postedAt.toUtc().millisecondsSinceEpoch}';
+    final tail = sha256
+        .convert(utf8.encode(instance))
+        .toString()
+        .substring(0, 16);
+    return '${contentKey(n)}:$tail';
+  }
+
+  /// Состояния, у которых исходный текст не нужен: он стирается.
+  static bool _keepsText(NotificationState state) =>
+      state == NotificationState.unrecognized ||
+      state == NotificationState.needsAccount;
 
   /// Сохраняет уведомление; `null`, если такое уже есть.
   Future<BankNotification?> insert(
@@ -53,8 +84,8 @@ class NotificationStore {
               id: id,
               fingerprint: fingerprint(raw),
               package: raw.package,
-              title: raw.title,
-              body: raw.text,
+              title: _keepsText(state) ? raw.title : '',
+              body: _keepsText(state) ? raw.text : '',
               postedAt: financeInstantText(raw.postedAt),
               receivedAt: financeInstantText(received),
               state: state.wire,
@@ -72,12 +103,23 @@ class NotificationStore {
     return await get(id);
   }
 
-  /// Уже обработанное уведомление (по отпечатку).
+  /// Уже обработанное уведомление: тот же отпечаток или то же содержимое
+  /// в пределах [notificationRepeatWindow] (повторная публикация в другую
+  /// минуту).
   Future<bool> seen(RawNotification raw) async {
-    final rows = await (_db.select(
+    final exact = await (_db.select(
       _db.bankNotifications,
     )..where((t) => t.fingerprint.equals(fingerprint(raw)))).get();
-    return rows.isNotEmpty;
+    if (exact.isNotEmpty) return true;
+    final similar = await (_db.select(
+      _db.bankNotifications,
+    )..where((t) => t.fingerprint.like('${contentKey(raw)}:%'))).get();
+    final at = raw.postedAt.toUtc();
+    return similar.any(
+      (r) =>
+          parseFinanceInstant(r.postedAt).difference(at).abs() <=
+          notificationRepeatWindow,
+    );
   }
 
   Future<BankNotification?> get(String id) async {
@@ -140,13 +182,26 @@ class NotificationStore {
     _db.bankNotifications,
   )..where((t) => t.id.equals(id))).write(change());
 
-  /// Операция создана или найдена: исходный текст больше не нужен для
-  /// проверки, но хранится до конца срока.
-  Future<void> markProcessed(String id, {String? txId}) => _update(
+  /// Операция создана или найдена: исходный текст больше не нужен и
+  /// стирается (остаются результат разбора — для остатка — и ссылка на
+  /// операцию, пока остаток не использован).
+  Future<void> markProcessed(
+    String id, {
+    String? txId,
+    bool possibleDuplicate = false,
+  }) => _update(
     id,
     () => BankNotificationsCompanion(
-      state: Value(NotificationState.processed.wire),
+      state: Value(
+        (possibleDuplicate
+                ? NotificationState.possibleDuplicate
+                : NotificationState.processed)
+            .wire,
+      ),
+      reason: Value(possibleDuplicate ? 'possible_duplicate' : null),
       txId: Value(txId),
+      title: const Value(''),
+      body: const Value(''),
     ),
   );
 
@@ -154,14 +209,54 @@ class NotificationStore {
     id,
     () => BankNotificationsCompanion(
       state: Value(NotificationState.dismissed.wire),
+      title: const Value(''),
+      body: const Value(''),
     ),
   );
 
-  /// Удаляет уведомления старше [notificationRetention]; возвращает число.
+  /// Уведомления, по которым создана операция [txId] и которые ещё хранят
+  /// результат разбора (остаток для точки сверки) или ждут решения
+  /// «дубль / отдельная покупка».
+  Future<List<BankNotification>> pendingForTx(String txId) async {
+    final rows =
+        await (_db.select(_db.bankNotifications)..where(
+              (t) =>
+                  t.txId.equals(txId) &
+                  t.state.isIn([
+                    NotificationState.processed.wire,
+                    NotificationState.possibleDuplicate.wire,
+                  ]) &
+                  (t.parsedJson.isNotNull() |
+                      t.state.equals(NotificationState.possibleDuplicate.wire)),
+            ))
+            .get();
+    return [for (final r in rows) _model(r)];
+  }
+
+  /// Решение по операции принято: пометка «возможный дубль» и результат
+  /// разбора больше не нужны.
+  Future<void> settle(String id) => _update(
+    id,
+    () => BankNotificationsCompanion(
+      state: Value(NotificationState.processed.wire),
+      reason: const Value(null),
+      parsedJson: const Value(null),
+    ),
+  );
+
+  /// Удаляет закрытые уведомления (обработанные и убранные) старше
+  /// [notificationRetention]; возвращает число. **Нерешённые**
+  /// (`unrecognized`, `needs_account`, `possible_duplicate`) не удаляются:
+  /// иначе настоящая операция молча пропала бы из «Требует проверки».
   Future<int> purgeExpired() {
     final cutoff = _utcSeconds(_now()).subtract(notificationRetention);
     return (_db.delete(_db.bankNotifications)..where(
-          (t) => t.receivedAt.isSmallerThanValue(financeInstantText(cutoff)),
+          (t) =>
+              t.receivedAt.isSmallerThanValue(financeInstantText(cutoff)) &
+              t.state.isIn([
+                NotificationState.processed.wire,
+                NotificationState.dismissed.wire,
+              ]),
         ))
         .go();
   }

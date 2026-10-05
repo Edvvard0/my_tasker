@@ -43,6 +43,7 @@ const desktopSize = Size(1440, 900);
 /// [backend] — вместо сети фейковый сервер (тогда `http://localhost`
 /// разрешён); [serverUrl] — сохранить адрес сервера в БД до старта;
 /// [now] — зафиксировать «текущее время» (стабильные подписи «5 мин назад»);
+/// [clock] — своё «текущее время», которое можно двигать во время теста;
 /// [opener] — свой способ открыть БД (например, «сломанную»);
 /// [defaultAiApi] — поддельный API ИИ по умолчанию (экраны ИИ не ходят в сеть);
 /// [secretStore] — защищённое хранилище PIN «Финансов» (по умолчанию память).
@@ -58,6 +59,7 @@ Future<ProviderContainer> pumpApp(
   FakeBackend? backend,
   String? serverUrl,
   DateTime? now,
+  DateTime Function()? clock,
   AppDatabaseOpener? opener,
   bool defaultAiApi = true,
   SecretStore? secretStore,
@@ -89,7 +91,10 @@ Future<ProviderContainer> pumpApp(
       ),
       if (backend != null)
         plainAdapterFactoryProvider.overrideWithValue(() => backend),
-      if (now != null) clockProvider.overrideWithValue(() => now),
+      if (clock != null)
+        clockProvider.overrideWithValue(clock)
+      else if (now != null)
+        clockProvider.overrideWithValue(() => now),
       // Экраны ИИ не ходят в настоящую сеть: поддельный API по умолчанию.
       if (defaultAiApi) aiApiProvider.overrideWithValue(FakeAiApi()),
       // Замок «Финансов»: PIN лежит в памяти, а не в защищённом хранилище ОС.

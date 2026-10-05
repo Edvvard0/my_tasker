@@ -7,6 +7,7 @@ import 'package:my_tasker/core/auth/auth_models.dart';
 import 'package:my_tasker/features/calendar/data/calendar_repository.dart';
 import 'package:my_tasker/features/calendar/presentation/event_editor.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
+import 'package:my_tasker/features/study/presentation/lesson_sheet.dart';
 import 'package:my_tasker/features/tasks/data/task_repository.dart';
 import 'package:my_tasker/features/tasks/presentation/task_editor.dart';
 
@@ -45,8 +46,24 @@ class TaskTarget extends ReminderTarget {
   int get hashCode => taskId.hashCode;
 }
 
-/// Разбирает `payload` уведомления (`event:<id>|<ключ>` или `task:<id>`);
-/// `null` — не наше или битое.
+/// Занятие «Был на паре?» (Этап 7): пара [slotId] на дату по расписанию
+/// [date].
+class StudyTarget extends ReminderTarget {
+  const StudyTarget(this.slotId, this.date);
+
+  final String slotId;
+  final String date;
+
+  @override
+  bool operator ==(Object other) =>
+      other is StudyTarget && other.slotId == slotId && other.date == date;
+
+  @override
+  int get hashCode => Object.hash(slotId, date);
+}
+
+/// Разбирает `payload` уведомления (`event:<id>|<ключ>`, `task:<id>` или
+/// `study:<пара>|<дата>`); `null` — не наше или битое.
 ReminderTarget? parseReminderPayload(String? payload) {
   if (payload == null) return null;
   if (payload.startsWith('event:')) {
@@ -58,6 +75,12 @@ ReminderTarget? parseReminderPayload(String? payload) {
   if (payload.startsWith('task:')) {
     final id = payload.substring(5);
     return id.isEmpty ? null : TaskTarget(id);
+  }
+  if (payload.startsWith('study:')) {
+    final body = payload.substring(6);
+    final bar = body.indexOf('|');
+    if (bar <= 0 || bar == body.length - 1) return null;
+    return StudyTarget(body.substring(0, bar), body.substring(bar + 1));
   }
   return null;
 }
@@ -127,6 +150,12 @@ final reminderTapHandlerProvider = Provider<void>((ref) {
             .getTask(target.taskId);
         if (task == null || !context.mounted) return;
         await showTaskEditor(context, taskId: target.taskId);
+      case StudyTarget():
+        await showAttendanceSheet(
+          context,
+          slotId: target.slotId,
+          scheduledDate: target.date,
+        );
     }
   }
 

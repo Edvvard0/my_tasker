@@ -76,12 +76,18 @@ enum TxKind {
   final String label;
   final String wire;
 
-  static TxKind parse(Object? value) {
+  /// `null` — вид неизвестен этой версии приложения.
+  static TxKind? tryParse(Object? value) {
     for (final s in values) {
       if (s.wire == value) return s;
     }
-    return expense;
+    return null;
   }
+
+  /// Неизвестный вид читается как расход; операции с таким видом
+  /// [FinTransaction.fromRow] помечает «требует проверки» (в суммы не
+  /// попадают).
+  static TxKind parse(Object? value) => tryParse(value) ?? expense;
 }
 
 /// Источник операции.
@@ -347,7 +353,11 @@ class FinTransaction {
     merchant: row['merchant'] as String?,
     comment: row['comment'] as String?,
     source: TxSource.parse(row['source']),
-    status: row.containsKey('status')
+    // Операция неизвестного вида (из будущей версии) не должна менять
+    // балансы как расход: она «требует проверки» и в суммы не входит.
+    status: row['kind'] != null && TxKind.tryParse(row['kind']) == null
+        ? TxStatus.needsReview
+        : row.containsKey('status')
         ? TxStatus.parse(row['status'])
         : TxStatus.confirmed,
     externalId: row['external_id'] as String?,
@@ -688,6 +698,7 @@ class Goal {
     required this.formula,
     this.deadlineDate,
     this.archived = false,
+    this.unknownTerms = const [],
   });
 
   factory Goal.fromRow(Json row) {
@@ -701,6 +712,12 @@ class Goal {
           ? [for (final item in raw) ?GoalTerm.fromJson(item)]
           : const [],
       archived: row['archived'] == true,
+      unknownTerms: raw is List
+          ? [
+              for (final item in raw)
+                if (GoalTerm.fromJson(item) == null) item,
+            ]
+          : const [],
     );
   }
 
@@ -711,11 +728,16 @@ class Goal {
   final List<GoalTerm> formula;
   final bool archived;
 
+  /// Слагаемые, которых эта версия приложения не понимает (из будущей
+  /// версии): в расчёте не участвуют, но при перезаписи цели сохраняются как
+  /// есть, а не теряются молча.
+  final List<Object?> unknownTerms;
+
   Json toFields() => {
     'name': name,
     'target_amount': targetAmount,
     'deadline_date': deadlineDate,
-    'formula': [for (final t in formula) t.toJson()],
+    'formula': [for (final t in formula) t.toJson(), ...unknownTerms],
     'archived': archived,
   };
 
@@ -725,7 +747,9 @@ class Goal {
     Object? deadlineDate = _unset,
     List<GoalTerm>? formula,
     bool? archived,
+    List<Object?>? unknownTerms,
   }) => Goal(
+    unknownTerms: unknownTerms ?? this.unknownTerms,
     id: id,
     name: name ?? this.name,
     targetAmount: targetAmount ?? this.targetAmount,

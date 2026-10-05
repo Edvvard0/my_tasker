@@ -259,12 +259,15 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('«Учёба» — настоящий раздел, а не заглушка', (tester) async {
+      await _pump(tester, location: '/study');
+      expect(find.byKey(const Key('study-overview')), findsOneWidget);
+      expect(find.textContaining('этапе 7'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('все экраны-заглушки открываются без ошибок', (tester) async {
-      const routes = {
-        '/work/servers': 'этапе 9',
-        '/study': 'этапе 7',
-        '/sleep': 'этапе 8',
-      };
+      const routes = {'/work/servers': 'этапе 9', '/sleep': 'этапе 8'};
       for (final entry in routes.entries) {
         await _pump(tester, location: entry.key);
         expect(

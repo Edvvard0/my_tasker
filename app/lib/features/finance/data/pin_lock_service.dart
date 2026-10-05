@@ -37,14 +37,27 @@ class PinBlocked extends PinCheck {
 /// попыток подряд ввод блокируется на время, которое растёт вдвое с каждой
 /// следующей ошибкой (до [maxBlock]); счётчик лежит в том же хранилище, а
 /// не в памяти, поэтому перезапуск приложения блокировку не сбрасывает.
+///
+/// Время блокировки считается по двум часам: настенным (хранится, переживает
+/// перезапуск) и **монотонным** (`Stopwatch`; не зависит от перевода системных
+/// часов, но живёт только до перезапуска процесса). Действует более поздний
+/// конец: перевод часов вперёд при работающем приложении блокировку не
+/// снимает. После перезапуска остаётся только настенное время — монотонных
+/// часов, переживающих перезагрузку, без платформенного плагина нет.
 class PinLockService {
   PinLockService(
     this._store, {
     Random? random,
     this.iterations = 20000,
     DateTime Function()? now,
+    Duration Function()? monotonic,
   }) : _random = random ?? Random.secure(),
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _monotonic = monotonic ?? _stopwatchElapsed;
+
+  static final Stopwatch _stopwatch = Stopwatch()..start();
+
+  static Duration _stopwatchElapsed() => _stopwatch.elapsed;
 
   static const String pinKey = 'finance_lock_pin_v1'; // gitleaks:allow
   static const String attemptsKey = 'finance_lock_attempts_v1';
@@ -57,6 +70,10 @@ class PinLockService {
   final SecretStore _store;
   final Random _random;
   final DateTime Function() _now;
+  final Duration Function() _monotonic;
+
+  /// Конец текущей блокировки по монотонным часам (только этот процесс).
+  Duration? _monotonicUntil;
 
   /// Число итераций PBKDF2 для нового PIN (тесты ставят малое).
   final int iterations;
@@ -90,21 +107,36 @@ class PinLockService {
       }),
     );
     await _store.delete(attemptsKey);
+    _monotonicUntil = null;
   }
 
   /// Снимает PIN (замок выключен).
   Future<void> clear() async {
     await _store.delete(pinKey);
     await _store.delete(attemptsKey);
+    _monotonicUntil = null;
   }
 
   /// До какого момента ввод заблокирован; `null` — не заблокирован.
   Future<DateTime?> blockedUntil() async {
-    final state = await _attempts();
-    final until = state.blockedUntilMs;
-    if (until == null) return null;
-    final moment = DateTime.fromMillisecondsSinceEpoch(until, isUtc: true);
-    return moment.isAfter(_now().toUtc()) ? moment : null;
+    final now = _now().toUtc();
+    DateTime? result;
+    final until = (await _attempts()).blockedUntilMs;
+    if (until != null) {
+      final moment = DateTime.fromMillisecondsSinceEpoch(until, isUtc: true);
+      if (moment.isAfter(now)) result = moment;
+    }
+    final mono = _monotonicUntil;
+    if (mono != null) {
+      final left = mono - _monotonic();
+      if (left > Duration.zero) {
+        final moment = now.add(left);
+        if (result == null || moment.isAfter(result)) result = moment;
+      } else {
+        _monotonicUntil = null;
+      }
+    }
+    return result;
   }
 
   /// Проверяет PIN. Неверные попытки считаются и блокируют ввод.
@@ -123,6 +155,7 @@ class PinLockService {
     );
     if (_sameBytes(actual, expected)) {
       await _store.delete(attemptsKey);
+      _monotonicUntil = null;
       return const PinAccepted();
     }
     final state = await _attempts();
@@ -133,6 +166,7 @@ class PinLockService {
           firstBlock.inSeconds * (1 << min(failures - freeAttempts, 10));
       final seconds = min(doubled, maxBlock.inSeconds);
       until = _now().toUtc().add(Duration(seconds: seconds));
+      _monotonicUntil = _monotonic() + Duration(seconds: seconds);
     }
     await _store.write(
       attemptsKey,

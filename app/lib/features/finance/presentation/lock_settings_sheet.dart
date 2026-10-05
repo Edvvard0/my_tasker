@@ -197,8 +197,10 @@ class _LockSettingsSheetState extends ConsumerState<LockSettingsSheet> {
                             contentPadding: EdgeInsets.zero,
                             title: Text('Закрыть раздел сейчас', style: t.body),
                             onTap: () {
-                              ref.read(financeLockProvider.notifier).lock();
+                              // Сначала закрываем свой лист: замок сам
+                              // закрывает окна поверх раздела.
                               Navigator.of(context).pop();
+                              ref.read(financeLockProvider.notifier).lock();
                             },
                           ),
                         ],

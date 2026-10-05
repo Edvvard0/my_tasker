@@ -123,6 +123,25 @@ class _NeedsAccountCard extends ConsumerWidget {
   final BankNotification notification;
   final NotificationRules rules;
 
+  Future<void> _assign(
+    BuildContext context,
+    WidgetRef ref,
+    String accountId,
+  ) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      await ref
+          .read(bankPipelineProvider)
+          .assignAccount(notification, accountId);
+    } on Object {
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text('Не удалось записать операцию. Выберите другой счёт.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final parsed = notification.parsed;
@@ -169,11 +188,7 @@ class _NeedsAccountCard extends ConsumerWidget {
               keyPrefix: 'review-pick-${notification.id}',
               onSelect: (id) {
                 if (id == null) return;
-                unawaited(
-                  ref
-                      .read(bankPipelineProvider)
-                      .assignAccount(notification, id),
-                );
+                unawaited(_assign(context, ref, id));
               },
             ),
           ),
@@ -210,7 +225,9 @@ class _UnrecognizedCard extends ConsumerWidget {
         kind: guess.isIncome ? TxKind.income : TxKind.expense,
         prefill: TransactionPrefill(
           amount: guess.amount,
-          comment: 'Из уведомления: ${notification.body}',
+          // Текст уведомления в комментарий не кладём: комментарий
+          // синхронизируется на сервер, а сырой текст остаётся на устройстве.
+          comment: 'Из уведомления банка',
           date: notification.postedAt,
         ),
         onSaved: (txId) =>

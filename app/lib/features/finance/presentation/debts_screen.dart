@@ -614,6 +614,8 @@ class DebtSheet extends ConsumerStatefulWidget {
   ConsumerState<DebtSheet> createState() => _DebtSheetState();
 }
 
+enum _RepaymentDelete { repaymentOnly, withTransaction }
+
 class _DebtSheetState extends ConsumerState<DebtSheet> {
   final _amount = TextEditingController();
   final _note = TextEditingController();
@@ -628,6 +630,61 @@ class _DebtSheetState extends ConsumerState<DebtSheet> {
     _amount.dispose();
     _note.dispose();
     super.dispose();
+  }
+
+  /// Удаление погашения с подтверждением. Если деньги двигались операцией по
+  /// счёту, предлагается удалить и её, иначе она останется в балансе.
+  Future<void> _deleteRepayment(DebtRepayment r) async {
+    final choice = await showDialog<_RepaymentDelete>(
+      context: context,
+      builder: (context) {
+        final linked = r.transactionId != null;
+        return AlertDialog(
+          key: const Key('repayment-delete-dialog'),
+          title: Text('Удалить погашение?', style: context.text.h3),
+          content: Text(
+            linked
+                ? 'Погашение связано с операцией по счёту. Если удалить '
+                      'только погашение, операция останется в балансе счёта. '
+                      'Удалить и операцию тоже?'
+                : 'Долг снова станет непогашенным на эту сумму.',
+            style: context.text.body.copyWith(
+              color: context.colors.textSecondary,
+            ),
+          ),
+          actions: [
+            TextButton(
+              key: const Key('repayment-delete-cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Отмена'),
+            ),
+            if (linked)
+              TextButton(
+                key: const Key('repayment-delete-only'),
+                onPressed: () =>
+                    Navigator.of(context).pop(_RepaymentDelete.repaymentOnly),
+                child: const Text('Только погашение'),
+              ),
+            FilledButton(
+              key: const Key('repayment-delete-confirm'),
+              onPressed: () => Navigator.of(context).pop(
+                linked
+                    ? _RepaymentDelete.withTransaction
+                    : _RepaymentDelete.repaymentOnly,
+              ),
+              child: Text(linked ? 'Погашение и операцию' : 'Удалить'),
+            ),
+          ],
+        );
+      },
+    );
+    if (choice == null || !mounted) return;
+    await ref
+        .read(financeRepositoryProvider)
+        .deleteRepayment(
+          r.id,
+          withTransaction: choice == _RepaymentDelete.withTransaction,
+        );
   }
 
   Future<void> _repay(Debt debt) async {
@@ -787,9 +844,7 @@ class _DebtSheetState extends ConsumerState<DebtSheet> {
                         key: Key('repayment-delete-${r.id}'),
                         tooltip: 'Удалить погашение',
                         icon: const Icon(LucideIcons.trash2, size: 18),
-                        onPressed: () => ref
-                            .read(financeRepositoryProvider)
-                            .deleteRepayment(r.id),
+                        onPressed: () => unawaited(_deleteRepayment(r)),
                       ),
                     ),
                   if (state.remaining > 0) ...[

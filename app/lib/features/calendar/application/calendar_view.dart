@@ -8,6 +8,8 @@ import 'package:my_tasker/core/db/database_providers.dart';
 import 'package:my_tasker/features/calendar/application/calendar_providers.dart';
 import 'package:my_tasker/features/calendar/application/device_timezone.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_items.dart';
+import 'package:my_tasker/features/study/application/study_calendar.dart';
+import 'package:my_tasker/features/study/application/study_providers.dart';
 
 /// Вид календаря (02, 5.1.2).
 enum CalendarViewMode {
@@ -183,12 +185,27 @@ calendarItemsProvider =
     Provider.family<AsyncValue<List<CalendarItem>>, DateSpan>((ref, span) {
       final data = ref.watch(calendarDataProvider);
       final zone = ref.watch(deviceTimeZoneProvider);
-      return data.whenData(
-        (d) => buildCalendarItems(
+      // Слой «Учёба» (Этап 7): занятия считаются из расписания. Пока
+      // данные учёбы читаются (или не прочитались) — слой пуст, остальной
+      // календарь показывается как раньше.
+      final study = ref.watch(studyDataProvider).value;
+      return data.whenData((d) {
+        final items = buildCalendarItems(
           d,
           fromDate: span.from,
           toDate: span.to,
           zone: zone,
-        ),
-      );
+        );
+        if (study == null || !d.layerVisible(studyLayerId)) return items;
+        final lessons = buildStudyItems(
+          study,
+          fromDate: span.from,
+          toDate: span.to,
+        );
+        if (lessons.isEmpty) return items;
+        return [...items, ...lessons]..sort((a, b) {
+          final c = a.start.compareTo(b.start);
+          return c != 0 ? c : a.title.compareTo(b.title);
+        });
+      });
     });

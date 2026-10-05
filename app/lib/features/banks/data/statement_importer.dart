@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:my_tasker/core/config/clock.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/core/sync/sync_store.dart';
 import 'package:my_tasker/features/banks/domain/bank_rules.dart';
@@ -35,10 +36,15 @@ class ImportResult {
 /// операциями `source = statement`, совпавшие с черновиками уточняют их,
 /// остаток на конец периода — точка сверки `source = statement`.
 class StatementImporter {
-  StatementImporter({required this.store, required this.finance});
+  StatementImporter({
+    required this.store,
+    required this.finance,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
 
   final SyncStore store;
   final FinanceRepository finance;
+  final DateTime Function() _now;
 
   Future<ImportResult> commit({
     required ParsedStatement statement,
@@ -136,22 +142,30 @@ class StatementImporter {
     // однозначно привязать его нельзя.
     if (accounts.length != 1) return false;
     final accountId = accounts.single;
+    // Остаток верен на конец периода, но не позже «сейчас»: выписка «по
+    // сегодня» иначе повесила бы точку в будущее, и она «съедала» бы все
+    // операции, внесённые после выписки.
+    final now = _now().toUtc();
+    final checkedAt = closing.at.isAfter(now) ? now : closing.at;
     for (final row in await store.visibleRows(
       FinanceRepository.checkpointsTable,
       where: 't.account_id = ?',
       args: [accountId],
     )) {
       final cp = BalanceCheckpoint.fromRow(row);
+      // Тот же остаток уже записан (повторный импорт): точка могла быть
+      // поставлена раньше внутри последнего дня периода.
       if (cp.source == CheckpointSource.statement &&
-          cp.checkedAt == closing.at &&
-          cp.actualBalance == closing.amount) {
+          cp.actualBalance == closing.amount &&
+          !cp.checkedAt.isAfter(closing.at) &&
+          cp.checkedAt.isAfter(closing.at.subtract(const Duration(days: 1)))) {
         return false;
       }
     }
     await finance.reconcile(
       accountId: accountId,
       actualBalance: closing.amount,
-      checkedAt: closing.at,
+      checkedAt: checkedAt,
       note: 'Остаток из выписки',
       source: CheckpointSource.statement,
     );
@@ -176,5 +190,6 @@ final Provider<StatementImporter> statementImporterProvider =
       (ref) => StatementImporter(
         store: ref.watch(syncStoreProvider),
         finance: ref.watch(financeRepositoryProvider),
+        now: ref.watch(clockProvider),
       ),
     );

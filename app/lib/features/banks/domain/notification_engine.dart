@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:my_tasker/core/money/money.dart';
 import 'package:my_tasker/features/banks/domain/bank_data.dart';
 import 'package:my_tasker/features/banks/domain/bank_rules.dart'
-    show homeCurrency;
+    show homeCurrency, trimEdgeSpaces;
 
 /// Пробелы очистки: U+0020 U+00A0 U+202F U+2009 U+2007 U+0009 U+000D U+000A
 /// U+2028 U+2029 U+000B U+000C (`trim()` и `\s` здесь не подходят: они
@@ -302,7 +302,7 @@ NotificationParse _result(
   String? group(String name) {
     final index = rule.groups[name];
     final found = index == null ? null : match.group(index);
-    return found?.trim();
+    return found == null ? null : trimEdgeSpaces(found);
   }
 
   NotificationParse unrecognized(String reason) => NotificationParse(
@@ -318,6 +318,9 @@ NotificationParse _result(
     amount = parseAmount(group('amount') ?? '');
     final rawBalance = group('balance');
     balance = rawBalance == null ? null : parseAmount(rawBalance);
+    // Сумма операции строго положительная (2.4): «Покупка на 0 ₽» — не
+    // операция. Остаток после операции может быть любым, в том числе нулём.
+    if (amount <= 0) return unrecognized('bad_amount');
   } on FormatException {
     return unrecognized('bad_amount');
   }

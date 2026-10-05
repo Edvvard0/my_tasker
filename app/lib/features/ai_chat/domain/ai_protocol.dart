@@ -203,6 +203,7 @@ class CompletionRequest {
     this.agentId,
     this.presetId,
     this.containsSensitive = false,
+    this.sensitiveToolsConsent = false,
     this.tools,
     this.temperature,
     this.maxTokens,
@@ -215,6 +216,11 @@ class CompletionRequest {
   final String contextText;
   final String? presetId;
   final bool containsSensitive;
+
+  /// Явное согласие пользователя на финансовые инструменты агента (облако
+  /// получит балансы, долги и цели). Без согласия поле в запрос не попадает
+  /// и сервер исключает такие инструменты.
+  final bool sensitiveToolsConsent;
 
   /// История в формате OpenAI без `system`.
   final List<Map<String, Object?>> messages;
@@ -237,6 +243,7 @@ class CompletionRequest {
     },
     'messages': messages,
     'tools': tools,
+    if (sensitiveToolsConsent) 'sensitive_tools_consent': true,
     'timezone': timezone,
     if (temperature != null || maxTokens != null)
       'params': {'temperature': ?temperature, 'max_tokens': ?maxTokens},

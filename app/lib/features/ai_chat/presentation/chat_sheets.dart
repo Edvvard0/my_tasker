@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,6 +19,8 @@ import 'package:my_tasker/features/ai_chat/domain/ai_models.dart';
 import 'package:my_tasker/features/ai_chat/domain/ai_protocol.dart';
 import 'package:my_tasker/features/ai_chat/domain/context_builder.dart';
 import 'package:my_tasker/features/calendar/application/calendar_providers.dart';
+import 'package:my_tasker/features/finance/application/privacy_providers.dart';
+import 'package:my_tasker/features/finance/presentation/finance_gate.dart';
 
 /// Выбранная модель (id из каталога, имя для показа).
 class ModelChoice {
@@ -323,6 +327,11 @@ class AgentPickerSheet extends ConsumerWidget {
 
 /// Сборка контекста для показа (оценка токенов и превью): обновляется при
 /// смене выбора и данных задач и календаря.
+///
+/// Чувствительные источники (финансы) собираются только при открытом замке
+/// раздела «Финансы»: иначе превью показало бы суммы в обход PIN, и вместо
+/// текста возвращается [ContextPackage.withheld]. Режим «скрыть суммы»
+/// действует и на превью (маска вместо сумм).
 // Тип семейства Riverpod 3 недоступен из публичного API.
 // ignore: specify_nonobvious_property_types
 final contextPreviewProvider = FutureProvider.autoDispose
@@ -331,9 +340,14 @@ final contextPreviewProvider = FutureProvider.autoDispose
       ref
         ..watch(tasksProvider)
         ..watch(eventsProvider);
-      return ref
-          .read(contextBuilderProvider)
-          .build(selection.sources, ref.read(contextEnvProvider)());
+      final builder = ref.read(contextBuilderProvider);
+      var env = ref.read(contextEnvProvider)();
+      if (builder.isSensitive(selection.sources)) {
+        final lock = ref.watch(financeLockProvider);
+        if (!lock.loaded || lock.locked) return const ContextPackage.withheld();
+        env = env.copyWith(hideAmounts: ref.watch(hideAmountsProvider));
+      }
+      return builder.build(selection.sources, env);
     });
 
 /// «Что знает ассистент в этом чате» (02, 5.2.3).
@@ -454,7 +468,10 @@ class ContextSheet extends ConsumerWidget {
                 ElevatedButton(
                   key: const Key('context-preview'),
                   onPressed: package.hasValue
-                      ? () => showContextPreview(context, package.requireValue)
+                      ? () => showContextPreview(
+                          context,
+                          conversationId: conversationId,
+                        )
                       : null,
                   child: const Text('Превью'),
                 ),
@@ -645,28 +662,37 @@ class _PresetNameDialogState extends State<_PresetNameDialog> {
   }
 }
 
-/// Превью: ровно тот текст, который уйдёт в запрос (`context.text`).
-Future<void> showContextPreview(BuildContext context, ContextPackage package) =>
-    showEditorSheet<void>(
-      context,
-      builder: (_) => ContextPreviewSheet(package: package),
-    );
+/// Превью контекста: текст, который уйдёт в запрос (`context.text`). Для
+/// чувствительного контекста (финансы) он не уходит в облако, а используется
+/// только локальной моделью, и показывается только при открытом разделе.
+Future<void> showContextPreview(
+  BuildContext context, {
+  required String conversationId,
+}) => showEditorSheet<void>(
+  context,
+  builder: (_) => ContextPreviewSheet(conversationId: conversationId),
+);
 
-class ContextPreviewSheet extends StatelessWidget {
-  const ContextPreviewSheet({required this.package, super.key});
+class ContextPreviewSheet extends ConsumerWidget {
+  const ContextPreviewSheet({required this.conversationId, super.key});
 
-  final ContextPackage package;
+  final String conversationId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
     final t = context.text;
+    final package =
+        ref.watch(contextPreviewProvider(conversationId)).value ??
+        ContextPackage.empty;
+    final hidden = ref.watch(hideAmountsProvider);
+    final local = package.containsSensitive;
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           SheetHeader(
-            title: 'Что уйдёт в облако',
+            title: local ? 'Для локальной модели' : 'Что уйдёт в облако',
             trailing: Text(
               formatTokens(package.tokens),
               style: t.bodyS.copyWith(color: c.textSecondary),
@@ -680,24 +706,61 @@ class ContextPreviewSheet extends StatelessWidget {
                 AppSpacing.s6,
                 AppSpacing.s6,
               ),
-              child: package.text.isEmpty
+              child: package.withheld
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Раздел «Финансы» закрыт. Откройте его, чтобы '
+                          'увидеть контекст: он содержит суммы.',
+                          key: const Key('preview-withheld'),
+                          style: t.body.copyWith(color: c.textSecondary),
+                        ),
+                        const SizedBox(height: AppSpacing.s3),
+                        FilledButton(
+                          key: const Key('preview-unlock'),
+                          onPressed: () =>
+                              unawaited(ensureFinanceUnlocked(context, ref)),
+                          child: const Text('Открыть раздел'),
+                        ),
+                      ],
+                    )
+                  : package.text.isEmpty
                   ? Text(
                       'Контекст не выбран: в запрос уйдёт только переписка.',
                       key: const Key('preview-empty'),
                       style: t.body.copyWith(color: c.textSecondary),
                     )
-                  : Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(AppSpacing.s3),
-                      decoration: BoxDecoration(
-                        color: c.surface3,
-                        borderRadius: AppRadii.borderS,
-                      ),
-                      child: SelectableText(
-                        package.text,
-                        key: const Key('preview-text'),
-                        style: t.bodyS,
-                      ),
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (local && hidden)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.s2,
+                            ),
+                            child: Text(
+                              'Суммы скрыты режимом «скрыть суммы» только в '
+                              'этом окне: локальная модель получит их '
+                              'полностью.',
+                              key: const Key('preview-masked-note'),
+                              style: t.caption.copyWith(color: c.textSecondary),
+                            ),
+                          ),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(AppSpacing.s3),
+                          decoration: BoxDecoration(
+                            color: c.surface3,
+                            borderRadius: AppRadii.borderS,
+                          ),
+                          child: SelectableText(
+                            package.text,
+                            key: const Key('preview-text'),
+                            style: t.bodyS,
+                          ),
+                        ),
+                      ],
                     ),
             ),
           ),
@@ -706,3 +769,37 @@ class ContextPreviewSheet extends StatelessWidget {
     );
   }
 }
+
+/// Согласие на финансовые инструменты облачного агента (spec Этапа 3, 5.1).
+/// `true` — разрешено для этого чата, `false` — не разрешать, `null` — окно
+/// закрыто без выбора (решение не сохраняется).
+Future<bool?> showSensitiveConsentDialog(BuildContext context) =>
+    showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('sensitive-consent-dialog'),
+        title: Text('Данные «Финансов» в облако?', style: context.text.h3),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Text(
+            'Данные из раздела «Финансы» (балансы, долги, цели) будут '
+            'отправлены в polza.ai. Без разрешения агент ответит без цифр.',
+            style: context.text.body.copyWith(
+              color: context.colors.textSecondary,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            key: const Key('consent-deny'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Не разрешать'),
+          ),
+          FilledButton(
+            key: const Key('consent-allow'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Разрешить для этого чата'),
+          ),
+        ],
+      ),
+    );

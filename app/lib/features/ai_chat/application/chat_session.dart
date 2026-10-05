@@ -153,13 +153,20 @@ class ChatSessionNotifier extends Notifier<ChatSessionState> {
   /// чувствительный контекст, уже идёт ответ): интерфейс оставляет текст
   /// в поле ввода. `true` — сообщение сохранено, ответ запрошен; ход ответа
   /// виден в состоянии, завершение — [whenSettled].
-  Future<bool> send(String text, {required Conversation conversation}) async {
+  Future<bool> send(
+    String text, {
+    required Conversation conversation,
+    bool sensitiveToolsConsent = false,
+  }) async {
     if (state.busy || _starting) return false;
     final clean = text.trim();
     if (clean.isEmpty) return false;
     _starting = true;
     try {
-      final prepared = await _prepare(conversation);
+      final prepared = await _prepare(
+        conversation,
+        sensitiveToolsConsent: sensitiveToolsConsent,
+      );
       if (prepared == null) return false;
       await _persist(prepared.conversation);
       await ref
@@ -174,11 +181,17 @@ class ChatSessionNotifier extends Notifier<ChatSessionState> {
 
   /// Повторяет запрос по уже сохранённой истории (после сбоя): новый
   /// `assistant_message_id`.
-  Future<void> retry({required Conversation conversation}) async {
+  Future<void> retry({
+    required Conversation conversation,
+    bool sensitiveToolsConsent = false,
+  }) async {
     if (state.busy || _starting) return;
     _starting = true;
     try {
-      final prepared = await _prepare(conversation);
+      final prepared = await _prepare(
+        conversation,
+        sensitiveToolsConsent: sensitiveToolsConsent,
+      );
       if (prepared == null) return;
       await _persist(prepared.conversation);
       _start(prepared);
@@ -241,7 +254,10 @@ class ChatSessionNotifier extends Notifier<ChatSessionState> {
     }
   }
 
-  Future<_Prepared?> _prepare(Conversation conversation) async {
+  Future<_Prepared?> _prepare(
+    Conversation conversation, {
+    required bool sensitiveToolsConsent,
+  }) async {
     final model = conversation.model;
     if (model == null || model.isEmpty) {
       _fail(ChatFailure.forCode('no_model'));
@@ -267,6 +283,7 @@ class ChatSessionNotifier extends Notifier<ChatSessionState> {
       conversation.copyWith(contextPresetId: selection.presetId),
       package,
       selection.presetId,
+      sensitiveToolsConsent: sensitiveToolsConsent,
     );
   }
 
@@ -390,7 +407,10 @@ class ChatSessionNotifier extends Notifier<ChatSessionState> {
     final window = catalog?.byId(conversation.model)?.contextLength ?? 32000;
     final budget = ((window * 0.7).floor() - prepared.package.tokens - 1500)
         .clamp(2000, 100000);
-    final history = trimHistory(buildHistory(messages, proposals), budget);
+    final history = trimHistory(
+      buildHistory(messages, proposals, forCloud: true),
+      budget,
+    );
     final zone = ref.read(deviceTimeZoneProvider);
     return CompletionRequest(
       conversationId: conversationId,
@@ -401,6 +421,7 @@ class ChatSessionNotifier extends Notifier<ChatSessionState> {
       contextText: prepared.package.text,
       presetId: prepared.presetId,
       containsSensitive: prepared.package.containsSensitive,
+      sensitiveToolsConsent: prepared.sensitiveToolsConsent,
       timezone: isIanaLocation(zone) ? zone.name : 'UTC',
     );
   }
@@ -498,11 +519,17 @@ class ChatSessionNotifier extends Notifier<ChatSessionState> {
 }
 
 class _Prepared {
-  const _Prepared(this.conversation, this.package, this.presetId);
+  const _Prepared(
+    this.conversation,
+    this.package,
+    this.presetId, {
+    required this.sensitiveToolsConsent,
+  });
 
   final Conversation conversation;
   final ContextPackage package;
   final String? presetId;
+  final bool sensitiveToolsConsent;
 }
 
 // Тип семейства Riverpod 3 недоступен из публичного API.

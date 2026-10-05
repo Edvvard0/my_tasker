@@ -16,12 +16,15 @@ import 'package:my_tasker/core/widgets/form_text_field.dart';
 import 'package:my_tasker/features/ai_chat/application/ai_providers.dart';
 import 'package:my_tasker/features/ai_chat/application/chat_context.dart';
 import 'package:my_tasker/features/ai_chat/application/chat_session.dart';
+import 'package:my_tasker/features/ai_chat/application/sensitive_consent.dart';
 import 'package:my_tasker/features/ai_chat/data/ai_repository.dart';
 import 'package:my_tasker/features/ai_chat/domain/ai_errors.dart';
 import 'package:my_tasker/features/ai_chat/domain/ai_format.dart';
 import 'package:my_tasker/features/ai_chat/domain/ai_models.dart';
+import 'package:my_tasker/features/ai_chat/domain/sensitive_tools.dart';
 import 'package:my_tasker/features/ai_chat/presentation/chat_sheets.dart';
 import 'package:my_tasker/features/ai_chat/presentation/message_widgets.dart';
+import 'package:my_tasker/features/finance/presentation/finance_gate.dart';
 
 /// Подсказки-примеры для пустого чата по теме (02, 5.2.2).
 const Map<AiTopic, List<String>> topicSuggestions = {
@@ -168,15 +171,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       await _pickModel(conv, persisted: persisted);
       return;
     }
+    final consent = await _sensitiveConsent(conv);
+    if (!mounted) return;
     _input.clear();
     final accepted = await ref
         .read(chatSessionProvider(_id).notifier)
-        .send(text, conversation: conv);
+        .send(text, conversation: conv, sensitiveToolsConsent: consent);
     if (!accepted && mounted && _input.text.isEmpty) _input.text = text;
   }
 
-  Future<void> _retry(Conversation conv) =>
-      ref.read(chatSessionProvider(_id).notifier).retry(conversation: conv);
+  Future<void> _retry(Conversation conv) async {
+    final consent = await _sensitiveConsent(conv);
+    if (!mounted) return;
+    await ref
+        .read(chatSessionProvider(_id).notifier)
+        .retry(conversation: conv, sensitiveToolsConsent: consent);
+  }
+
+  /// Нужно ли отправить с запросом согласие на финансовые инструменты
+  /// агента. Только для агентов с такими инструментами. Если раздел
+  /// «Финансы» закрыт PIN, сначала разблокировка (отказ от неё — ответ без
+  /// цифр, решение не сохраняется). Первый раз спрашивает диалогом;
+  /// решение хранится на уровне беседы. «Не разрешать» — поле не уходит.
+  Future<bool> _sensitiveConsent(Conversation conv) async {
+    final agents = ref.read(agentsProvider).value ?? const [];
+    final agent = agents.where((a) => a.id == conv.agentId).firstOrNull;
+    if (!agentUsesSensitiveTools(agent)) return false;
+    final store = ref.read(sensitiveToolsConsentProvider);
+    final decision = await store.read(_id);
+    if (decision == false || !mounted) return false;
+    final unlocked = await ensureFinanceUnlocked(
+      context,
+      ref,
+      hint: 'Чтобы агент ответил с цифрами из «Финансов», откройте раздел.',
+    );
+    if (!unlocked || !mounted) return false;
+    if (decision != null) return true;
+    final allowed = await showSensitiveConsentDialog(context);
+    if (allowed == null || !mounted) return false;
+    await store.write(_id, allowed: allowed);
+    return allowed;
+  }
 
   Future<void> _menu(Conversation conv) async {
     final repo = ref.read(aiRepositoryProvider);
@@ -368,21 +403,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       onRetry: messages.isEmpty ? null : () => _retry(conv),
                     ),
                   ),
-                if (preview != null && preview.tokens > 0)
+                if (preview != null && (preview.tokens > 0 || preview.withheld))
                   Padding(
                     padding: EdgeInsets.symmetric(
                       horizontal: windowClass.gutter,
                     ),
                     child: InkWell(
                       key: const Key('context-caption'),
-                      onTap: () => showContextPreview(context, preview),
+                      onTap: () =>
+                          showContextPreview(context, conversationId: _id),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           vertical: AppSpacing.s1,
                         ),
                         child: Text(
-                          'В запрос уйдёт контекст ${formatTokens(preview.tokens)}'
-                          ' · Посмотреть',
+                          preview.withheld
+                              ? 'Контекст «Финансы» скрыт: раздел закрыт · '
+                                    'Открыть'
+                              : preview.containsSensitive
+                              ? 'Локальной модели уйдёт контекст '
+                                    '${formatTokens(preview.tokens)}'
+                                    ' · Посмотреть'
+                              : 'В запрос уйдёт контекст '
+                                    '${formatTokens(preview.tokens)}'
+                                    ' · Посмотреть',
                           style: t.caption.copyWith(color: c.textSecondary),
                         ),
                       ),

@@ -259,6 +259,27 @@ class FinanceData {
   }
 }
 
+/// «Повторить» после ошибки: перезапускает только потоки, которые упали, а
+/// не все подряд (остальные уже загружены).
+void retryFailedFinanceStreams(WidgetRef ref) {
+  if (ref.read(accountsProvider).hasError) ref.invalidate(accountsProvider);
+  if (ref.read(financeCategoriesProvider).hasError) {
+    ref.invalidate(financeCategoriesProvider);
+  }
+  if (ref.read(transactionsProvider).hasError) {
+    ref.invalidate(transactionsProvider);
+  }
+  if (ref.read(checkpointsProvider).hasError) {
+    ref.invalidate(checkpointsProvider);
+  }
+  if (ref.read(debtsProvider).hasError) ref.invalidate(debtsProvider);
+  if (ref.read(repaymentsProvider).hasError) {
+    ref.invalidate(repaymentsProvider);
+  }
+  if (ref.read(goalsProvider).hasError) ref.invalidate(goalsProvider);
+  if (ref.read(workDataProvider).hasError) ref.invalidate(workDataProvider);
+}
+
 /// Снимок «Финансов»: пока хотя бы один поток загружается — загрузка,
 /// ошибка любого — ошибка экрана.
 final Provider<AsyncValue<FinanceData>> financeDataProvider =
@@ -304,14 +325,16 @@ final Provider<AsyncValue<FinanceData>> financeDataProvider =
     });
 
 /// Засев предустановленных категорий (spec 3.2): после первой полной
-/// синхронизации и только для ключей без строки в базе. Перезапускается
-/// по окончании каждого цикла синхронизации.
+/// синхронизации (и не во время повторной полной загрузки), однократно для
+/// каждого ключа. Перезапускается по окончании каждого цикла синхронизации.
 final FutureProvider<void> financeBootstrapProvider = FutureProvider<void>((
   ref,
 ) async {
   ref.watch(syncStatusProvider.select((s) => s.run.isBusy));
   final store = ref.watch(syncStoreProvider);
   if (await store.lastSuccessAt() == null) return;
+  // Пока идёт полная повторная загрузка, строк в базе может ещё не быть.
+  if (await store.needsResync()) return;
   await ref.read(financeRepositoryProvider).seedPresetCategories();
 });
 

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_tasker/core/config/clock.dart';
 import 'package:my_tasker/core/sync/ids.dart';
@@ -145,17 +147,44 @@ class FinanceRepository {
   Future<void> restoreCategory(String id) =>
       _store.restore(categoriesTable, id);
 
-  /// Засев предустановленных категорий (spec 3.2): только ключи, для
-  /// которых в локальной базе нет строки с таким `id` вообще (ни живой, ни
-  /// в корзине) — удалённая пользователем категория не воскресает.
-  /// Возвращает, сколько категорий создано.
-  Future<int> seedPresetCategories() async {
+  /// Ключ в `sync_meta`: id предустановленных категорий, которые на этой
+  /// установке уже засеяны (JSON-список).
+  static const String seededCategoriesMetaKey = 'finance.seeded_categories';
+
+  Future<Set<String>> _seededCategoryIds() async {
+    final raw = await _store.readMeta(seededCategoriesMetaKey);
+    if (raw == null) return {};
+    try {
+      return {for (final id in jsonDecode(raw) as List<Object?>) '$id'};
+    } on Object {
+      return {};
+    }
+  }
+
+  /// Засев предустановленных категорий (spec 3.2): однократен на установку
+  /// для каждого ключа. Категория, которая уже засевалась (или чья строка уже
+  /// есть в базе — живая или в корзине), больше не создаётся: иначе удалённая
+  /// пользователем категория воскресала бы, когда её надгробие вычищают через
+  /// 30 суток. Набор засеянных id хранится локально, он переживает чистку
+  /// надгробий. [force] (кнопка «Стандартный набор») игнорирует набор, но
+  /// строки, которые уже есть, не трогает. Возвращает, сколько создано.
+  Future<int> seedPresetCategories({bool force = false}) async {
     var created = 0;
     await _store.transaction(() async {
+      final before = await _seededCategoryIds();
+      final after = {...before};
       for (final preset in categoryPresets) {
+        if (!force && before.contains(preset.id)) continue;
+        after.add(preset.id);
         if (await _store.getRow(categoriesTable, preset.id) != null) continue;
         await _store.create(categoriesTable, preset.id, preset.toFields());
         created++;
+      }
+      if (after.length != before.length) {
+        await _store.writeMeta(
+          seededCategoriesMetaKey,
+          jsonEncode(after.toList()..sort()),
+        );
       }
     });
     return created;
@@ -270,6 +299,11 @@ class FinanceRepository {
       note: _blankToNull(note),
     );
     ensureValid(checkpointProblem(cp));
+    // Сверка «на будущее» замораживает баланс: все операции после неё не
+    // учитываются. Сутки запаса — на разницу часов устройства и банка.
+    if (cp.checkedAt.isAfter(_nowUtc.add(const Duration(days: 1)))) {
+      throw const ValidationError('Сверку нельзя назначить на будущую дату');
+    }
     final account = await getAccount(accountId);
     if (account == null) {
       throw const ValidationError('Счёт не найден: возможно, его удалили');
@@ -403,8 +437,23 @@ class FinanceRepository {
     return id;
   }
 
-  Future<void> deleteRepayment(String id) =>
-      _store.softDelete(repaymentsTable, id);
+  /// Удаляет погашение. С [withTransaction] удаляется и операция, которой
+  /// двигались деньги (если она есть): иначе баланс счёта останется
+  /// изменённым, а долг снова станет непогашенным.
+  Future<void> deleteRepayment(String id, {bool withTransaction = false}) =>
+      _store.transaction(() async {
+        final row = await _store.getRow(repaymentsTable, id);
+        final txId = row == null
+            ? null
+            : DebtRepayment.fromRow(row).transactionId;
+        await _store.softDelete(repaymentsTable, id);
+        if (withTransaction && txId != null) {
+          final tx = await _store.getRow(transactionsTable, txId);
+          if (tx != null && tx['deleted_at'] == null) {
+            await _store.softDelete(transactionsTable, txId);
+          }
+        }
+      });
 
   // ---- цели -----------------------------------------------------------------------
 
@@ -421,11 +470,15 @@ class FinanceRepository {
   }
 
   Future<void> updateGoal(Goal next) async {
-    final clean = next.copyWith(name: next.name.trim());
-    ensureValid(goalProblem(clean));
     await _store.transaction(() async {
-      final current = await getGoal(clean.id);
-      if (current == null) throw StateError('Цели ${clean.id} нет');
+      final current = await getGoal(next.id);
+      if (current == null) throw StateError('Цели ${next.id} нет');
+      // Слагаемые, которых эта версия не знает, берутся из хранимой строки.
+      final clean = next.copyWith(
+        name: next.name.trim(),
+        unknownTerms: current.unknownTerms,
+      );
+      ensureValid(goalProblem(clean));
       final fields = _changes(current.toFields(), clean.toFields());
       if (fields.isNotEmpty) {
         await _store.update(goalsTable, clean.id, fields);

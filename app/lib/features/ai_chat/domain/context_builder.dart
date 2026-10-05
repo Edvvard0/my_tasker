@@ -14,10 +14,22 @@ class ContextEnv {
     required this.now,
     required this.zone,
     required this.readRows,
+    this.hideAmounts = false,
   });
 
   final DateTime now;
   final tz.Location zone;
+
+  /// Режим «скрыть суммы»: источники с деньгами показывают маску вместо
+  /// сумм. Включается только для превью на экране, не для запроса к модели.
+  final bool hideAmounts;
+
+  ContextEnv copyWith({bool? hideAmounts}) => ContextEnv(
+    now: now,
+    zone: zone,
+    readRows: readRows,
+    hideAmounts: hideAmounts ?? this.hideAmounts,
+  );
 
   /// Живые строки синхронизируемой таблицы (JSON-вид).
   final Future<List<Map<String, Object?>>> Function(String table) readRows;
@@ -99,7 +111,18 @@ class ContextPackage {
     required this.tokens,
     required this.containsSensitive,
     this.unknownSources = const [],
+    this.withheld = false,
   });
+
+  /// Чувствительный контекст не собирался: раздел закрыт замком (превью
+  /// показывает только подсказку).
+  const ContextPackage.withheld()
+    : sections = const [],
+      text = '',
+      tokens = 0,
+      containsSensitive = true,
+      unknownSources = const [],
+      withheld = true;
 
   static const empty = ContextPackage(
     sections: [],
@@ -119,6 +142,9 @@ class ContextPackage {
 
   /// Источники пресета, которых нет в реестре этой версии приложения.
   final List<String> unknownSources;
+
+  /// См. [ContextPackage.withheld].
+  final bool withheld;
 }
 
 /// Заголовок блока контекста в запросе.

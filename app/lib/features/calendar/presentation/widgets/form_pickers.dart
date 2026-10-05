@@ -16,6 +16,7 @@ class DateChoiceRow extends StatelessWidget {
     this.allowNone = false,
     this.noneLabel = 'Нет',
     this.keyPrefix = 'date',
+    this.allowFuture = true,
     super.key,
   });
 
@@ -28,17 +29,26 @@ class DateChoiceRow extends StatelessWidget {
   /// Префикс ключей чипов (`date-today`, `date-pick`…).
   final String keyPrefix;
 
+  /// `false` — только сегодня и прошлое (сверка баланса): чипов «Завтра» и
+  /// «Пн» нет, календарь не листается дальше сегодняшнего дня.
+  final bool allowFuture;
+
   DateTime get _nextMonday {
     final monday = mondayOf(today);
     return addDays(monday, 7);
   }
 
   Future<void> _pick(BuildContext context) async {
+    final last = allowFuture
+        ? DateTime(maxYear)
+        : DateTime(today.year, today.month, today.day);
+    var initial = value ?? today;
+    if (initial.isAfter(last)) initial = last;
     final picked = await showDatePicker(
       context: context,
-      initialDate: value ?? today,
+      initialDate: initial,
       firstDate: DateTime(minYear),
-      lastDate: DateTime(maxYear),
+      lastDate: last,
       locale: const Locale('ru'),
     );
     if (picked != null) onChanged(civil(picked.year, picked.month, picked.day));
@@ -48,7 +58,10 @@ class DateChoiceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tomorrow = addDays(today, 1);
     final monday = _nextMonday;
-    final quick = <DateTime>{today, tomorrow, monday};
+    final quick = <DateTime>{
+      today,
+      if (allowFuture) ...[tomorrow, monday],
+    };
     final v = value == null ? null : dateOnly(value!);
     return ChipRow(
       children: [
@@ -65,18 +78,20 @@ class DateChoiceRow extends StatelessWidget {
           selected: v == today,
           onTap: () => onChanged(today),
         ),
-        FilterPill(
-          key: Key('$keyPrefix-tomorrow'),
-          label: 'Завтра',
-          selected: v == tomorrow,
-          onTap: () => onChanged(tomorrow),
-        ),
-        FilterPill(
-          key: Key('$keyPrefix-monday'),
-          label: 'Пн, ${monday.day} ${monthShortNames[monday.month - 1]}',
-          selected: v == monday,
-          onTap: () => onChanged(monday),
-        ),
+        if (allowFuture) ...[
+          FilterPill(
+            key: Key('$keyPrefix-tomorrow'),
+            label: 'Завтра',
+            selected: v == tomorrow,
+            onTap: () => onChanged(tomorrow),
+          ),
+          FilterPill(
+            key: Key('$keyPrefix-monday'),
+            label: 'Пн, ${monday.day} ${monthShortNames[monday.month - 1]}',
+            selected: v == monday,
+            onTap: () => onChanged(monday),
+          ),
+        ],
         FilterPill(
           key: Key('$keyPrefix-pick'),
           label: v != null && !quick.contains(v) ? dayTitleShort(v) : 'Выбрать',

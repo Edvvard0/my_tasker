@@ -9,6 +9,8 @@ import 'package:my_tasker/features/ai_chat/domain/context_builder.dart';
 import 'package:my_tasker/features/ai_chat/presentation/chat_sheets.dart';
 import 'package:my_tasker/features/calendar/data/calendar_repository.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_models.dart';
+import 'package:my_tasker/features/study/data/study_repository.dart';
+import 'package:my_tasker/features/study/domain/study_models.dart';
 import 'package:my_tasker/features/tasks/data/task_repository.dart';
 import 'package:my_tasker/features/tasks/domain/task_models.dart';
 
@@ -363,12 +365,76 @@ void main() {
       expect(estimateTokens('abcd'), 2);
     });
 
-    test('реестр по умолчанию: задачи, расписание, работа и финансы', () {
+    test('реестр по умолчанию: задачи, расписание, работа, финансы, учёба', () {
       final sources = device.container.read(contextSourcesProvider);
-      expect(sources.map((s) => s.id), ['tasks', 'events', 'work', 'finance']);
+      expect(sources.map((s) => s.id), [
+        'tasks',
+        'events',
+        'work',
+        'finance',
+        'study',
+      ]);
       // Суммы финансов — чувствительные данные: источник не уходит в облако.
       expect(sources.where((s) => s.sensitive).map((s) => s.id), ['finance']);
     });
+  });
+
+  group('источник «Учёба»', () {
+    test(
+      'выбирается в превью: расписание, пропуски и долги; не чувствителен',
+      () async {
+        final c = device.container;
+        final repo = c.read(studyRepositoryProvider);
+        final sem = repo.newId();
+        await repo.createSemester(
+          Semester(
+            id: sem,
+            name: 'Осень',
+            startDate: '2026-09-01',
+            endDate: '2026-12-31',
+            week1Start: '2026-08-31',
+          ),
+        );
+        final subj = repo.newId();
+        await repo.createSubject(
+          Subject(id: subj, semesterId: sem, name: 'Матан', absenceLimit: 3),
+        );
+        await repo.saveBell(
+          semesterId: sem,
+          number: 1,
+          startTime: '08:30',
+          endTime: '10:00',
+        );
+        await repo.createSlot(
+          ClassSlot(
+            id: repo.newId(),
+            semesterId: sem,
+            subjectId: subj,
+            weekday: 1,
+            number: 1,
+            kind: LessonKind.lecture,
+          ),
+        );
+        await repo.createDebt(
+          StudyDebt(id: repo.newId(), subjectId: subj, title: 'ЛР 1'),
+        );
+        final real = c.read(contextBuilderProvider);
+        expect(
+          real.isSensitive(const [ContextSourceRef(source: 'study')]),
+          isFalse,
+        );
+        final p = await real.build(const [
+          ContextSourceRef(source: 'study'),
+        ], c.read(contextEnvProvider)());
+        expect(p.containsSensitive, isFalse);
+        final section = p.sections.single;
+        expect(section.label, 'Учёба');
+        expect(section.summary, 'расписание на 7 дней');
+        expect(section.text, contains('Долг · Матан · ЛР 1'));
+        expect(section.text, contains('- 2026-10-05 Пн'));
+        expect(section.text, contains('08:30–10:00 Матан'));
+      },
+    );
   });
 
   group('выбор контекста чата', () {

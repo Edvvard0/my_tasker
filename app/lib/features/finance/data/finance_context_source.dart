@@ -6,6 +6,9 @@ import 'package:my_tasker/features/work/domain/work_calc.dart' show receivables;
 import 'package:my_tasker/features/work/domain/work_format.dart';
 import 'package:my_tasker/features/work/domain/work_models.dart';
 
+/// Маска суммы в превью при включённом режиме «скрыть суммы».
+const String maskedAmount = '••• ₽';
+
 /// «Финансы» как источник контекста для чата ИИ (агент «Финансы»): общий
 /// баланс и счета, доход и расход за период с разбивкой по категориям,
 /// цели с формулой, долги и ожидаемые поступления из «Работы». Расчёты —
@@ -63,6 +66,8 @@ class FinanceContextSource extends ContextSource {
     ContextEnv env,
     Map<String, Object?> filter,
   ) async {
+    String money(int kopecks) =>
+        env.hideAmounts ? maskedAmount : formatAmountClamped(kopecks);
     final accounts = [
       for (final r in await env.readRows('accounts')) Account.fromRow(r),
     ];
@@ -108,13 +113,13 @@ class FinanceContextSource extends ContextSource {
 
     final out = <String>[];
     final balances = accountBalances(accounts, txs, checkpoints);
-    out.add('- Общий баланс: ${formatAmount(balances.total)}');
+    out.add('- Общий баланс: ${money(balances.total)}');
     for (final a in accounts) {
       if (a.archived) continue;
       final parts = [
         'счёт «${a.name}»',
         a.kind.label.toLowerCase(),
-        formatAmount(balances.of(a.id)),
+        money(balances.of(a.id)),
         if (!a.includeInTotal) 'не в общем балансе',
       ];
       out.add('- ${parts.join(' · ')}');
@@ -141,8 +146,8 @@ class FinanceContextSource extends ContextSource {
       expense += m.expense;
     }
     out.add(
-      '- Доход $caption: ${formatAmount(income)} · расход: '
-      '${formatAmount(expense)} · итог: ${formatAmount(income - expense)}',
+      '- Доход $caption: ${money(income)} · расход: '
+      '${money(expense)} · итог: ${money(income - expense)}',
     );
     final breakdown = categoryBreakdown(
       txs,
@@ -154,15 +159,15 @@ class FinanceContextSource extends ContextSource {
       final names = {for (final c in categories) c.id: c.name};
       final parts = [
         for (final g in breakdown.groups.take(6))
-          '${names[g.categoryId] ?? 'Без категории'} ${formatAmount(g.total)}',
+          '${names[g.categoryId] ?? 'Без категории'} ${money(g.total)}',
       ];
       out.add('- Расходы по категориям $caption: ${parts.join(', ')}');
     }
 
     final summary = debtsSummary(debts, repayments, today: today);
     out.add(
-      '- Мне должны (открытые долги): ${formatAmount(summary.owedToMe)} · '
-      'я должен: ${formatAmount(summary.iOwe)}',
+      '- Мне должны (открытые долги): ${money(summary.owedToMe)} · '
+      'я должен: ${money(summary.iOwe)}',
     );
     for (final d in debts) {
       final s = summary.stateOf(d.id)!;
@@ -170,14 +175,14 @@ class FinanceContextSource extends ContextSource {
       final who = people[d.personId] ?? d.counterparty ?? 'не указан';
       out.add(
         '- Долг · ${d.direction.label.toLowerCase()} · $who: осталось '
-        '${formatAmount(s.remaining)} из ${formatAmount(d.amount)}'
+        '${money(s.remaining)} из ${money(d.amount)}'
         '${d.dueDate == null ? '' : ' · срок ${d.dueDate}'}'
         '${s.overdue ? ' (просрочен)' : ''}',
       );
     }
 
     final owed = receivables(projects, crs, allocations);
-    out.add('- Ожидаемые поступления из «Работы»: ${formatAmount(owed.total)}');
+    out.add('- Ожидаемые поступления из «Работы»: ${money(owed.total)}');
 
     for (final g in goals) {
       if (g.archived) continue;
@@ -194,11 +199,11 @@ class FinanceContextSource extends ContextSource {
       );
       final parts = [
         'цель «${g.name}»',
-        'есть ${formatAmount(p.have)} из ${formatAmount(p.target)} (${formatPercentBp(p.progressBp)})',
+        'есть ${money(p.have)} из ${money(p.target)} (${formatPercentBp(p.progressBp)})',
         if (p.reached)
-          'цель достигнута, запас ${formatAmount(p.surplus)}'
+          'цель достигнута, запас ${money(p.surplus)}'
         else
-          'не хватает ${formatAmount(p.missing)}',
+          'не хватает ${money(p.missing)}',
         if (g.deadlineDate != null) 'срок ${g.deadlineDate}',
       ];
       out.add('- ${parts.join(' · ')}');

@@ -60,6 +60,13 @@ class _ReconcileSheetState extends ConsumerState<ReconcileSheet> {
       _saving = true;
     });
     final now = ref.read(clockProvider)().toUtc();
+    if (formatDate(_date!).compareTo(moscowDay(now)) > 0) {
+      setState(() {
+        _error = 'Сверка на будущую дату невозможна: баланс замёрз бы';
+        _saving = false;
+      });
+      return;
+    }
     try {
       await ref
           .read(financeRepositoryProvider)
@@ -133,6 +140,7 @@ class _ReconcileSheetState extends ConsumerState<ReconcileSheet> {
                     label: 'На какой момент (по Москве)',
                     child: DateChoiceRow(
                       keyPrefix: 'reconcile-date',
+                      allowFuture: false,
                       today: today,
                       value: _date,
                       onChanged: (d) => setState(() => _date = d),

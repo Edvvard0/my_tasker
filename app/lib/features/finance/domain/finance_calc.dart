@@ -80,6 +80,12 @@ DateTime momentForDate(String day, DateTime now) {
   return DateTime.utc(date.year, date.month, date.day, 9);
 }
 
+/// Момент [at] раньше открытия счёта: операция не изменит его баланс (всё до
+/// открытия уже входит в начальный остаток). Нужна для предупреждения при
+/// вводе «задним числом».
+bool isBeforeOpening(Account account, DateTime at) =>
+    at.isBefore(openingInstant(account.openingDate));
+
 /// Операция [at] на счёте [accountId] не изменит баланс: она не позже
 /// точки сверки, а точка — истина на свой момент (spec 4.2). Нужна для
 /// предупреждения при вводе «задним числом».

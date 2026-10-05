@@ -42,6 +42,19 @@ class _PlainSqliteDb extends Fake implements Database {
       ResultSet(const [], null, const []);
 }
 
+/// Таблицы Этапа 7 (Учёба, схема v8).
+const studyTables = [
+  'study_semesters',
+  'study_subjects',
+  'study_bells',
+  'class_slots',
+  'study_day_rules',
+  'class_overrides',
+  'study_attendance',
+  'study_debts',
+  'attachments',
+];
+
 /// Таблицы Этапа 6 (Банки, схема v7).
 const banksTables = ['merchant_category_rules', 'bank_notifications'];
 
@@ -68,9 +81,9 @@ void main() {
     setUp(() => db = AppDatabase(NativeDatabase.memory()));
     tearDown(() => db.close());
 
-    test('создаёт схему v7: настройки, синхронизация, календарь, ИИ-чат, Работа, Финансы и Банки', () async {
+    test('создаёт схему v8: настройки, синхронизация, календарь, ИИ-чат, Работа, Финансы, Банки и Учёба', () async {
       expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
-      expect(db.schemaVersion, 7);
+      expect(db.schemaVersion, 8);
       final tables = await db
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -86,11 +99,14 @@ void main() {
         'ai_model_favorites',
         'ai_prompt_versions',
         'ai_tool_proposals',
+        'attachments',
         'balance_checkpoints',
         'bank_notifications',
         'calendars',
         'categories',
         'change_requests',
+        'class_overrides',
+        'class_slots',
         'debt_repayments',
         'debts',
         'event_overrides',
@@ -102,6 +118,12 @@ void main() {
         'payments',
         'people',
         'projects',
+        'study_attendance',
+        'study_bells',
+        'study_day_rules',
+        'study_debts',
+        'study_semesters',
+        'study_subjects',
         'subtasks',
         'sync_meta',
         'sync_outbox',
@@ -156,8 +178,8 @@ void main() {
       );
     });
 
-    test('в реестре AppDatabase есть шаги до v2…v7 (v7 — Банки)', () {
-      expect(AppDatabase.migrationSteps.keys, [2, 3, 4, 5, 6, 7]);
+    test('в реестре AppDatabase есть шаги до v2…v8 (v8 — Учёба)', () {
+      expect(AppDatabase.migrationSteps.keys, [2, 3, 4, 5, 6, 7, 8]);
     });
   });
 
@@ -220,7 +242,7 @@ void main() {
       final first = AppDatabase(NativeDatabase(file));
       await first.customSelect('SELECT 1').get();
       await first.close();
-      sqlite3.open(file.path)
+      final raw = sqlite3.open(file.path)
         ..execute('DROP TABLE tasks')
         ..execute('DROP TABLE events')
         ..execute('DROP TABLE calendars')
@@ -250,7 +272,11 @@ void main() {
         ..execute('DROP TABLE debt_repayments')
         ..execute('DROP TABLE goals')
         ..execute('DROP TABLE merchant_category_rules')
-        ..execute('DROP TABLE bank_notifications')
+        ..execute('DROP TABLE bank_notifications');
+      for (final t in studyTables) {
+        raw.execute('DROP TABLE $t');
+      }
+      raw
         ..execute('PRAGMA user_version = 2')
         ..close();
 
@@ -289,6 +315,7 @@ void main() {
         // …и Финансов (v6).
         ...financeTables,
         ...banksTables,
+        ...studyTables,
       ]) {
         raw.execute('DROP TABLE $t');
       }
@@ -328,6 +355,7 @@ void main() {
         'people',
         ...financeTables,
         ...banksTables,
+        ...studyTables,
       ]) {
         raw.execute('DROP TABLE $t');
       }
@@ -416,7 +444,7 @@ void main() {
       await first.close();
       // Настоящая БД v5: без таблиц Финансов, с данными прежних этапов.
       final raw = sqlite3.open(file.path);
-      for (final t in [...financeTables, ...banksTables]) {
+      for (final t in [...financeTables, ...banksTables, ...studyTables]) {
         raw.execute('DROP TABLE $t');
       }
       raw
@@ -524,7 +552,7 @@ void main() {
 
     test('БД более новой схемы не открывается старым кодом', () async {
       sqlite3.open(file.path)
-        ..execute('PRAGMA user_version = 8')
+        ..execute('PRAGMA user_version = 9')
         ..close();
 
       final db = AppDatabase(NativeDatabase(file));

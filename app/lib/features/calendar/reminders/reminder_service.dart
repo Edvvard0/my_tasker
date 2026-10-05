@@ -12,6 +12,7 @@ import 'package:my_tasker/features/calendar/domain/calendar_models.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_models.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_planner.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_scheduler.dart';
+import 'package:my_tasker/features/study/data/study_reminders.dart';
 import 'package:my_tasker/features/tasks/domain/task_models.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -20,6 +21,19 @@ typedef PeriodicTimerFactory = Timer Function(
   Duration period,
   void Function(Timer timer) callback,
 );
+
+/// Дополнительный источник напоминаний (например, «Был на паре?» Этапа 7):
+/// даёт свои уведомления и список таблиц, правка которых требует
+/// пересчёта. Все источники планируются вместе с событиями и задачами:
+/// [reconcileReminders] отменяет всё, чего нет в общем списке, поэтому
+/// отдельных планировщиков на одном канале быть не может.
+abstract interface class ExtraReminderSource {
+  /// Таблицы, правки которых меняют напоминания источника.
+  List<String> get tables;
+
+  /// Напоминания на ближайшее время (UTC [now], пояс [zone]).
+  Future<List<PlannedReminder>> plan(DateTime now, tz.Location zone);
+}
 
 /// Держит запланированные напоминания в соответствии с данными.
 ///
@@ -41,6 +55,7 @@ class ReminderService {
     this.debounce = const Duration(milliseconds: 500),
     this.refreshEvery = const Duration(hours: 6),
     this.periodicTimer = Timer.periodic,
+    this.extraSources = const [],
   });
 
   final SyncStore store;
@@ -53,6 +68,9 @@ class ReminderService {
   final Duration debounce;
   final Duration? refreshEvery;
   final PeriodicTimerFactory periodicTimer;
+
+  /// Дополнительные источники напоминаний (Этап 7: «Был на паре?»).
+  final List<ExtraReminderSource> extraSources;
 
   final List<StreamSubscription<Object?>> _subscriptions = [];
   Timer? _debounceTimer;
@@ -88,7 +106,11 @@ class ReminderService {
         _pending = false;
         replans++;
         final input = await _readInput();
-        planned = planReminders(input);
+        planned = [
+          ...planReminders(input),
+          for (final source in extraSources)
+            ...await source.plan(input.now, input.zone),
+        ];
         await reconcileReminders(scheduler, planned);
       } while (_pending);
     } finally {
@@ -125,7 +147,10 @@ class ReminderService {
 
   /// Начинает следить за данными и планировать.
   Future<void> start() async {
-    for (final table in _tables) {
+    for (final table in {
+      ..._tables,
+      for (final source in extraSources) ...source.tables,
+    }) {
       _subscriptions.add(
         store.watchVisibleRows(table).skip(1).listen((_) => _schedule()),
       );
@@ -207,6 +232,7 @@ final reminderServiceProvider = Provider<ReminderService>((ref) {
     settings: ref.watch(calendarSettingsRepositoryProvider),
     zone: () => ref.read(deviceTimeZoneProvider),
     now: () => ref.read(clockProvider)().toUtc(),
+    extraSources: [ref.watch(studyReminderSourceProvider)],
   );
   // Смена пояса устройства пересчитывает напоминания.
   ref

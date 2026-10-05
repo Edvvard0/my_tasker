@@ -8,6 +8,7 @@ import 'package:my_tasker/features/calendar/application/device_timezone.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_items.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_models.dart';
 import 'package:my_tasker/features/finance/data/finance_context_source.dart';
+import 'package:my_tasker/features/study/data/study_context_source.dart';
 import 'package:my_tasker/features/tasks/domain/task_models.dart';
 import 'package:my_tasker/features/work/data/work_context_source.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -229,6 +230,7 @@ final contextSourcesProvider = Provider<List<ContextSource>>(
     EventsContextSource(),
     WorkContextSource(),
     FinanceContextSource(),
+    StudyContextSource(),
   ],
 );
 
