@@ -6,7 +6,7 @@ import 'package:my_tasker/core/db/app_database.dart';
 import 'package:my_tasker/core/db/local_settings_repository.dart';
 import 'package:sqlite3/sqlite3.dart' hide Row;
 
-import '../../core/database_test.dart' show sleepTables;
+import '../../core/database_test.dart' show monitoringTables, sleepTables;
 
 /// Схема v9 (Сон и ритуалы): миграция v8 -> v9 на файловой БД.
 void main() {
@@ -55,7 +55,7 @@ void main() {
     await first.close();
     // Настоящая БД v8: без таблиц Сна, с данными прежних этапов.
     final raw = sqlite3.open(file.path);
-    for (final t in sleepTables) {
+    for (final t in [...sleepTables, ...monitoringTables]) {
       raw.execute('DROP TABLE $t');
     }
     raw
@@ -90,7 +90,7 @@ void main() {
     );
     final version = await db.customSelect('PRAGMA user_version').getSingle();
     expect(version.read<int>('user_version'), AppDatabase.currentSchemaVersion);
-    expect(AppDatabase.currentSchemaVersion, 9);
+    expect(AppDatabase.currentSchemaVersion, greaterThanOrEqualTo(9));
 
     for (final entry in columns.entries) {
       final cols = await db

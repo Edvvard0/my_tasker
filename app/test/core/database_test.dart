@@ -42,6 +42,13 @@ class _PlainSqliteDb extends Fake implements Database {
       ResultSet(const [], null, const []);
 }
 
+/// Таблицы Этапа 9 (Серверы, схема v10).
+const monitoringTables = [
+  'monitor_servers',
+  'monitor_services',
+  'monitor_checks',
+];
+
 /// Таблицы Этапа 8 (Сон и ритуалы, схема v9).
 const sleepTables = ['sleep_entries', 'daily_plans', 'evening_checkins'];
 
@@ -84,9 +91,9 @@ void main() {
     setUp(() => db = AppDatabase(NativeDatabase.memory()));
     tearDown(() => db.close());
 
-    test('создаёт схему v9: настройки, синхронизация, календарь, ИИ-чат, Работа, Финансы, Банки, Учёба и Сон', () async {
+    test('создаёт схему v10: настройки, синхронизация, календарь, ИИ-чат, Работа, Финансы, Банки, Учёба, Сон и Серверы', () async {
       expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
-      expect(db.schemaVersion, 9);
+      expect(db.schemaVersion, 10);
       final tables = await db
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -119,6 +126,9 @@ void main() {
         'goals',
         'local_settings',
         'merchant_category_rules',
+        'monitor_checks',
+        'monitor_servers',
+        'monitor_services',
         'payment_allocations',
         'payments',
         'people',
@@ -184,8 +194,8 @@ void main() {
       );
     });
 
-    test('в реестре AppDatabase есть шаги до v2…v9 (v8 — Учёба, v9 — Сон)', () {
-      expect(AppDatabase.migrationSteps.keys, [2, 3, 4, 5, 6, 7, 8, 9]);
+    test('в реестре AppDatabase есть шаги до v2…v10 (v8 — Учёба, v9 — Сон, v10 — Серверы)', () {
+      expect(AppDatabase.migrationSteps.keys, [2, 3, 4, 5, 6, 7, 8, 9, 10]);
     });
   });
 
@@ -279,7 +289,7 @@ void main() {
         ..execute('DROP TABLE goals')
         ..execute('DROP TABLE merchant_category_rules')
         ..execute('DROP TABLE bank_notifications');
-      for (final t in [...studyTables, ...sleepTables]) {
+      for (final t in [...studyTables, ...sleepTables, ...monitoringTables]) {
         raw.execute('DROP TABLE $t');
       }
       raw
@@ -323,6 +333,7 @@ void main() {
         ...banksTables,
         ...studyTables,
         ...sleepTables,
+        ...monitoringTables,
       ]) {
         raw.execute('DROP TABLE $t');
       }
@@ -364,6 +375,7 @@ void main() {
         ...banksTables,
         ...studyTables,
         ...sleepTables,
+        ...monitoringTables,
       ]) {
         raw.execute('DROP TABLE $t');
       }
@@ -457,6 +469,7 @@ void main() {
         ...banksTables,
         ...studyTables,
         ...sleepTables,
+        ...monitoringTables,
       ]) {
         raw.execute('DROP TABLE $t');
       }
@@ -565,7 +578,7 @@ void main() {
 
     test('БД более новой схемы не открывается старым кодом', () async {
       sqlite3.open(file.path)
-        ..execute('PRAGMA user_version = 10')
+        ..execute('PRAGMA user_version = 11')
         ..close();
 
       final db = AppDatabase(NativeDatabase(file));

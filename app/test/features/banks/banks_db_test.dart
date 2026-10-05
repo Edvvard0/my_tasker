@@ -8,7 +8,8 @@ import 'package:my_tasker/features/banks/data/notification_store.dart';
 import 'package:my_tasker/features/banks/domain/bank_models.dart';
 import 'package:sqlite3/sqlite3.dart' hide Row;
 
-import '../../core/database_test.dart' show sleepTables, studyTables;
+import '../../core/database_test.dart'
+    show monitoringTables, sleepTables, studyTables;
 
 /// Схема v7 (Банки): миграция v6 → v7 на файловой БД и локальная таблица
 /// сырых уведомлений.
@@ -34,6 +35,7 @@ void main() {
       'bank_notifications',
       ...studyTables,
       ...sleepTables,
+      ...monitoringTables,
     ]) {
       raw.execute('DROP TABLE $t');
     }
@@ -64,7 +66,7 @@ void main() {
     expect(names, hasLength(4));
     final version = await db.customSelect('PRAGMA user_version').getSingle();
     expect(version.read<int>('user_version'), AppDatabase.currentSchemaVersion);
-    expect(AppDatabase.currentSchemaVersion, 9);
+    expect(AppDatabase.currentSchemaVersion, greaterThanOrEqualTo(7));
 
     // Колонки таблицы правил — по контракту.
     final cols = await db

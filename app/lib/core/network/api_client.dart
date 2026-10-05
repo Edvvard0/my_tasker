@@ -81,6 +81,18 @@ const Set<String> _refreshableCodes = {
   'not_authenticated',
 };
 
+/// Ответ условного `GET` ([ApiClient.getJsonConditional]): либо `304`
+/// («не изменилось», [body] пуст), либо новое тело и его [etag].
+class ConditionalJson {
+  const ConditionalJson({required this.notModified, this.body, this.etag});
+
+  final bool notModified;
+  final Map<String, Object?>? body;
+
+  /// Заголовок `ETag` ответа (если сервер его прислал).
+  final String? etag;
+}
+
 /// HTTP-клиент API: заголовки протокола, разбор ошибок, обновление токена
 /// при `401` (один повтор), нормализация сетевых сбоев.
 class ApiClient {
@@ -120,6 +132,30 @@ class ApiClient {
     Map<String, Object?>? query,
     bool auth = true,
   }) => _json('GET', path, query: query, auth: auth);
+
+  /// `GET` с `If-None-Match` ([etag]): `304` не ошибка, а результат
+  /// [ConditionalJson.notModified]; при `200` возвращает тело и новый `ETag`.
+  Future<ConditionalJson> getJsonConditional(
+    String path, {
+    String? etag,
+    Map<String, Object?>? query,
+  }) async {
+    final response = await _request(
+      'GET',
+      path,
+      query: query,
+      headers: {'If-None-Match': ?etag},
+      allowNotModified: true,
+    );
+    if (response.statusCode == 304) {
+      return const ConditionalJson(notModified: true);
+    }
+    return ConditionalJson(
+      notModified: false,
+      body: _decodeMap(response),
+      etag: response.headers.value('etag'),
+    );
+  }
 
   Future<Map<String, Object?>> postJson(
     String path, {
@@ -235,6 +271,10 @@ class ApiClient {
       contentType: contentType,
       timeout: timeout,
     );
+    return _decodeMap(response);
+  }
+
+  Map<String, Object?> _decodeMap(Response<Object?> response) {
     final data = response.data;
     if (data is Map) return data.cast<String, Object?>();
     if (data is! String || data.isEmpty) return const {};
@@ -260,6 +300,7 @@ class ApiClient {
     CancelToken? cancelToken,
     String? contentType,
     Duration? timeout,
+    bool allowNotModified = false,
   }) async {
     var token = auth ? await tokens?.currentAccessToken() : null;
     if (auth && token == null && tokens != null) {
@@ -307,6 +348,7 @@ class ApiClient {
     }
     final status = response.statusCode ?? 0;
     if (status >= 200 && status < 300) return response;
+    if (allowNotModified && status == 304) return response;
     error ??= await _error(response);
     if (status == 401 && auth && tokens != null) {
       await tokens!.onDeviceRevoked(error.code ?? 'unauthorized');

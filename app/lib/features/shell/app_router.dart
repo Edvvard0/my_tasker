@@ -33,6 +33,7 @@ import 'package:my_tasker/features/finance/presentation/transactions_screen.dart
 import 'package:my_tasker/features/finance/presentation/work_income_screen.dart';
 import 'package:my_tasker/features/local_ai/presentation/local_benchmark_screen.dart';
 import 'package:my_tasker/features/local_ai/presentation/local_models_screen.dart';
+import 'package:my_tasker/features/monitoring/presentation/pulse_screen.dart';
 import 'package:my_tasker/features/settings/presentation/server_connection_screen.dart';
 import 'package:my_tasker/features/settings/presentation/settings_screen.dart';
 import 'package:my_tasker/features/settings/presentation/theme_showcase_screen.dart';
@@ -59,7 +60,6 @@ import 'package:my_tasker/features/work/presentation/people_screen.dart';
 import 'package:my_tasker/features/work/presentation/project_screen.dart';
 import 'package:my_tasker/features/work/presentation/receivables_screen.dart';
 import 'package:my_tasker/features/work/presentation/time_screen.dart';
-import 'package:my_tasker/features/work/servers_screen.dart';
 import 'package:my_tasker/features/work/work_screen.dart';
 
 /// Ключ корневого навигатора: экраны поверх оболочки (сетка «Разделы»).
@@ -161,7 +161,7 @@ GoRouter createRouter({
                 ),
                 GoRoute(
                   path: 'servers',
-                  builder: (_, _) => const ServersScreen(),
+                  builder: (_, _) => const PulseScreen(),
                 ),
               ],
             ),

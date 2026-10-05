@@ -15,6 +15,7 @@ import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/features/ai_chat/application/ai_providers.dart';
 import 'package:my_tasker/features/finance/application/privacy_providers.dart';
 import 'package:my_tasker/features/finance/data/secret_store.dart';
+import 'package:my_tasker/features/monitoring/application/monitoring_providers.dart';
 import 'package:my_tasker/features/settings/data/server_connection_repository.dart';
 import 'package:my_tasker/features/shell/app_router.dart';
 
@@ -97,6 +98,8 @@ Future<ProviderContainer> pumpApp(
         clockProvider.overrideWithValue(() => now),
       // Экраны ИИ не ходят в настоящую сеть: поддельный API по умолчанию.
       if (defaultAiApi) aiApiProvider.overrideWithValue(FakeAiApi()),
+      // «Пульс» не обновляет себя по таймеру: висящий таймер роняет тест.
+      pulsePollIntervalProvider.overrideWithValue(null),
       // Замок «Финансов»: PIN лежит в памяти, а не в защищённом хранилище ОС.
       secretStoreProvider.overrideWithValue(secretStore ?? MemorySecretStore()),
       ...overrides,

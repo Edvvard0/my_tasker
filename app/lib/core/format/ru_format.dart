@@ -44,6 +44,9 @@ String _two(int n) => n.toString().padLeft(2, '0');
 /// «14:02».
 String formatClock(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}';
 
+/// «14:02» в часовом поясе устройства (в golden-тестах — закреплённый).
+String formatLocalClock(DateTime t) => formatClock(_local(t));
+
 /// «12 сент.» (год добавляется, если он не текущий).
 String formatDate(DateTime t, DateTime now) {
   final base = '${t.day} ${_months[t.month - 1]}';

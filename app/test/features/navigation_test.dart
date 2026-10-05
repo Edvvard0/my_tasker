@@ -126,7 +126,9 @@ void main() {
 
       expect(_location(tester), '/work/servers');
       expect(find.text('Работа ›'), findsOneWidget);
-      expect(_title('Серверы'), findsOneWidget);
+      // «Серверы» — и заголовок экрана, и вкладка внутри него.
+      expect(find.byKey(const Key('pulse-screen')), findsOneWidget);
+      expect(_title('Серверы'), findsWidgets);
 
       await tester.tap(find.byTooltip('Назад'));
       await tester.pumpAndSettle();
@@ -273,17 +275,11 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('все экраны-заглушки открываются без ошибок', (tester) async {
-      const routes = {'/work/servers': 'этапе 9'};
-      for (final entry in routes.entries) {
-        await _pump(tester, location: entry.key);
-        expect(
-          find.textContaining(entry.value),
-          findsOneWidget,
-          reason: entry.key,
-        );
-        expect(tester.takeException(), isNull, reason: entry.key);
-      }
+    testWidgets('«Серверы» — настоящий раздел, а не заглушка', (tester) async {
+      await _pump(tester, location: '/work/servers');
+      expect(find.byKey(const Key('pulse-screen')), findsOneWidget);
+      expect(find.textContaining('этапе 9'), findsNothing);
+      expect(tester.takeException(), isNull);
     });
   });
 

@@ -133,7 +133,6 @@ class _WorkBody extends ConsumerWidget {
                 key: const Key('work-servers-link'),
                 icon: LucideIcons.server,
                 label: 'Серверы',
-                trailingText: 'Этап 9',
                 onTap: () => context.go('/work/servers'),
               ),
             ],
