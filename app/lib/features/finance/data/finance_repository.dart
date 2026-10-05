@@ -251,17 +251,22 @@ class FinanceRepository {
 
   /// Сверка = точка с фактическим балансом из банка. Корректировка —
   /// вычисляемая величина: операций сверка не создаёт (spec 4.4).
+  ///
+  /// [source] — откуда баланс: вручную, из уведомления банка или из
+  /// выписки (Этап 6).
   Future<String> reconcile({
     required String accountId,
     required int actualBalance,
     DateTime? checkedAt,
     String? note,
+    CheckpointSource source = CheckpointSource.manual,
   }) async {
     final cp = BalanceCheckpoint(
       id: _newId(),
       accountId: accountId,
       checkedAt: checkedAt ?? _nowUtc,
       actualBalance: actualBalance,
+      source: source,
       note: _blankToNull(note),
     );
     ensureValid(checkpointProblem(cp));

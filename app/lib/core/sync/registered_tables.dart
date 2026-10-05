@@ -1,5 +1,6 @@
 import 'package:my_tasker/core/sync/sync_table.dart';
 import 'package:my_tasker/features/ai_chat/data/ai_sync_specs.dart';
+import 'package:my_tasker/features/banks/data/banks_sync_specs.dart';
 import 'package:my_tasker/features/calendar/data/calendar_sync_specs.dart';
 import 'package:my_tasker/features/finance/data/finance_sync_specs.dart';
 import 'package:my_tasker/features/tasks/data/task_sync_specs.dart';
@@ -56,4 +57,6 @@ const List<SyncTableSpec> registeredSyncTables = [
   // Этап 5 (Финансы): `backend/src/tasker/finance/tables.py`,
   // `FINANCE_TABLES`.
   ...financeSyncSpecs,
+  // Этап 6 (Банки): `backend/src/tasker/banks/tables.py`, `BANKS_TABLES`.
+  ...banksSyncSpecs,
 ];

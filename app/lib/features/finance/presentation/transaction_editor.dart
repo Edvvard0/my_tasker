@@ -26,16 +26,44 @@ import 'package:my_tasker/features/work/presentation/work_forms.dart'
 /// Открывает форму операции: [txId] — правка; иначе новая ([kind],
 /// [accountId] — начальные значения). Быстрый ввод: сумма, категория,
 /// счёт — три касания, остальное по умолчанию (сегодня, «подтверждена»).
+///
+/// [prefill] — заготовка для новой операции (например, из нераспознанного
+/// уведомления банка, Этап 6); [onSaved] получает id сохранённой операции.
 Future<void> showTransactionEditor(
   BuildContext context, {
   String? txId,
   TxKind? kind,
   String? accountId,
+  TransactionPrefill? prefill,
+  ValueChanged<String>? onSaved,
 }) => showEditorSheet<void>(
   context,
-  builder: (_) =>
-      TransactionEditor(txId: txId, initialKind: kind, accountId: accountId),
+  builder: (_) => TransactionEditor(
+    txId: txId,
+    initialKind: kind,
+    accountId: accountId,
+    prefill: prefill,
+    onSaved: onSaved,
+  ),
 );
+
+/// Заготовка полей новой операции.
+class TransactionPrefill {
+  const TransactionPrefill({
+    this.amount,
+    this.merchant,
+    this.comment,
+    this.date,
+  });
+
+  /// Копейки.
+  final int? amount;
+  final String? merchant;
+  final String? comment;
+
+  /// Момент операции: берётся его московская дата.
+  final DateTime? date;
+}
 
 /// Форма операции: расход, доход или перевод между своими счетами.
 /// Перевод — одна запись «откуда → куда» без категории; он никогда не
@@ -45,12 +73,16 @@ class TransactionEditor extends ConsumerStatefulWidget {
     this.txId,
     this.initialKind,
     this.accountId,
+    this.prefill,
+    this.onSaved,
     super.key,
   });
 
   final String? txId;
   final TxKind? initialKind;
   final String? accountId;
+  final TransactionPrefill? prefill;
+  final ValueChanged<String>? onSaved;
 
   @override
   ConsumerState<TransactionEditor> createState() => _TransactionEditorState();
@@ -83,6 +115,15 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
     _accountId = widget.accountId;
     if (_isNew) {
       _loading = false;
+      final prefill = widget.prefill;
+      if (prefill != null) {
+        final amount = prefill.amount;
+        if (amount != null) _amount.text = moneyFieldText(amount);
+        _merchant.text = prefill.merchant ?? '';
+        _comment.text = prefill.comment ?? '';
+        final date = prefill.date;
+        if (date != null) _date = parseDate(moscowDay(date)) ?? _date;
+      }
     } else {
       unawaited(_load());
     }
@@ -182,6 +223,7 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
       } else {
         await repo.updateTransaction(tx);
       }
+      widget.onSaved?.call(tx.id);
       if (!mounted) return;
       Navigator.of(context).pop();
     } on ValidationError catch (e) {

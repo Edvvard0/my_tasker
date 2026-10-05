@@ -38,6 +38,18 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Этап 6 (Банки): слушатель уведомлений банков. Доступ выдаёт
+             пользователь («Доступ к уведомлениям»); белый список пакетов
+             задаёт приложение из notification_rules.json. -->
+        <service
+            android:name=".BankNotificationListener"
+            android:exported="true"
+            android:label="My Tasker"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
         <!-- Приёмники flutter_local_notifications: срабатывание отложенного
              уведомления и восстановление после перезагрузки. -->
         <receiver

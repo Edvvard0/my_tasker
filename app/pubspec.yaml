@@ -39,6 +39,7 @@ dependencies:
   flutter_gemma_litertlm: ^1.8.5
   # statvfs через FFI: свободное место перед загрузкой модели.
   ffi: ^2.1.0
+  file_picker: ^13.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -51,6 +52,9 @@ flutter:
   uses-material-design: true
   assets:
     - assets/fonts/licenses/
+    # Копии shared-data (байт-в-байт, сверяет тест): праздники и данные Банков.
+    - assets/calendar/
+    - assets/banks/
   fonts:
     - family: Inter
       fonts:

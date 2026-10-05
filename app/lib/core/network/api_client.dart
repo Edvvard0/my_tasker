@@ -127,6 +127,23 @@ class ApiClient {
     bool auth = true,
   }) => _json('POST', path, body: body, auth: auth);
 
+  /// `POST` с сырыми байтами в теле (загрузка файла, например выписки,
+  /// Этап 6) и JSON в ответе. [timeout] — на отправку и на ответ: файл
+  /// большой, разбор на сервере идёт до 30 секунд.
+  Future<Map<String, Object?>> postBytes(
+    String path,
+    Uint8List bytes, {
+    Map<String, Object?>? query,
+    Duration timeout = const Duration(seconds: 60),
+  }) => _json(
+    'POST',
+    path,
+    query: query,
+    body: bytes,
+    contentType: 'application/octet-stream',
+    timeout: timeout,
+  );
+
   /// `DELETE` / `POST` без тела в ответе (`204`).
   Future<void> send(String method, String path, {bool auth = true}) async {
     await _request(method, path, auth: auth);
@@ -172,6 +189,8 @@ class ApiClient {
     Map<String, Object?>? query,
     Object? body,
     bool auth = true,
+    String? contentType,
+    Duration? timeout,
   }) async {
     final response = await _request(
       method,
@@ -179,6 +198,8 @@ class ApiClient {
       query: query,
       body: body,
       auth: auth,
+      contentType: contentType,
+      timeout: timeout,
     );
     final data = response.data;
     if (data is Map) return data.cast<String, Object?>();
@@ -202,6 +223,8 @@ class ApiClient {
     bool stream = false,
     Map<String, Object?> headers = const {},
     CancelToken? cancelToken,
+    String? contentType,
+    Duration? timeout,
   }) async {
     var token = auth ? await tokens?.currentAccessToken() : null;
     if (auth && token == null && tokens != null) {
@@ -220,6 +243,8 @@ class ApiClient {
       stream: stream,
       headers: headers,
       cancelToken: cancelToken,
+      contentType: contentType,
+      timeout: timeout,
     );
     ApiException? error;
     if (auth && response.statusCode == 401 && tokens != null) {
@@ -238,6 +263,8 @@ class ApiClient {
           stream: stream,
           headers: headers,
           cancelToken: cancelToken,
+          contentType: contentType,
+          timeout: timeout,
         );
       }
     }
@@ -259,6 +286,8 @@ class ApiClient {
     bool stream = false,
     Map<String, Object?> headers = const {},
     CancelToken? cancelToken,
+    String? contentType,
+    Duration? timeout,
   }) async {
     try {
       return await _dio.request<Object?>(
@@ -269,8 +298,11 @@ class ApiClient {
         options: Options(
           method: method,
           responseType: stream ? ResponseType.stream : ResponseType.plain,
-          receiveTimeout: stream ? Duration.zero : null,
-          contentType: body == null ? null : Headers.jsonContentType,
+          receiveTimeout: stream ? Duration.zero : timeout,
+          sendTimeout: timeout,
+          contentType: body == null
+              ? null
+              : (contentType ?? Headers.jsonContentType),
           headers: {
             'X-Client-Schema-Version': '$schemaVersion',
             'Authorization': ?(token == null ? null : 'Bearer $token'),

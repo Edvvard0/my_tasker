@@ -4,6 +4,8 @@ import 'package:my_tasker/app.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/core/sync/workmanager_background_sync.dart';
 import 'package:my_tasker/core/theme/font_licenses.dart';
+import 'package:my_tasker/features/banks/platform/android_bank_platform.dart';
+import 'package:my_tasker/features/banks/platform/bank_platform.dart';
 import 'package:my_tasker/features/calendar/reminders/platform_reminder_scheduler.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_service.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_taps.dart';
@@ -44,6 +46,8 @@ void main() {
           createPlatformTimerNotifier(ensureReady: reminders.permission),
         ),
         timerActionsProvider.overrideWithValue(timerActions),
+        // Банки (Этап 6): Android — слушатель уведомлений банков.
+        bankPlatformProvider.overrideWithValue(createPlatformBankPlatform()),
       ],
       child: const MyTaskerApp(),
     ),

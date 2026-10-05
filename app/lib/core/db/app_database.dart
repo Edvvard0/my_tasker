@@ -3,6 +3,7 @@ import 'package:my_tasker/core/db/calendar_tables.dart';
 import 'package:my_tasker/core/db/migration_steps.dart';
 import 'package:my_tasker/core/db/sync_tables.dart';
 import 'package:my_tasker/features/ai_chat/data/ai_tables.dart';
+import 'package:my_tasker/features/banks/data/banks_tables.dart';
 import 'package:my_tasker/features/finance/data/finance_tables.dart';
 import 'package:my_tasker/features/work/data/work_tables.dart';
 
@@ -39,6 +40,9 @@ class LocalSettings extends Table {
 /// * v6 — Этап 5 (Финансы): `accounts`, `categories`, `transactions`,
 ///   `balance_checkpoints`, `debts`, `debt_repayments`, `goals`
 ///   (`features/finance/data/finance_tables.dart`).
+/// * v7 — Этап 6 (Банки): синхронизируемая `merchant_category_rules` и
+///   локальная (не синхронизируется) `bank_notifications` — сырые
+///   уведомления на 30 дней (`features/banks/data/banks_tables.dart`).
 ///
 /// Правила миграций: любое изменение схемы = `schemaVersion + 1` и новый шаг
 /// в [migrationSteps]; шаги применяются последовательно. Откат версии
@@ -78,13 +82,15 @@ class LocalSettings extends Table {
     Debts,
     DebtRepayments,
     Goals,
+    MerchantCategoryRules,
+    BankNotifications,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   /// Текущая версия схемы (то же значение, что и [schemaVersion]).
-  static const int currentSchemaVersion = 6;
+  static const int currentSchemaVersion = 7;
 
   @override
   int get schemaVersion => currentSchemaVersion;
@@ -171,6 +177,13 @@ class AppDatabase extends _$AppDatabase {
       await m.createIndex(db.transactionsOccurredIdx);
       await m.createIndex(db.balanceCheckpointsAccountIdx);
       await m.createIndex(db.debtRepaymentsDebtIdx);
+    },
+    7: (m) async {
+      final db = m.database as AppDatabase;
+      await m.createTable(db.merchantCategoryRules);
+      await m.createTable(db.bankNotifications);
+      await m.createIndex(db.bankNotificationsReceivedIdx);
+      await m.createIndex(db.bankNotificationsStateIdx);
     },
   };
 

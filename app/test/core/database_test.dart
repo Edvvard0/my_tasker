@@ -42,6 +42,9 @@ class _PlainSqliteDb extends Fake implements Database {
       ResultSet(const [], null, const []);
 }
 
+/// Таблицы Этапа 6 (Банки, схема v7).
+const banksTables = ['merchant_category_rules', 'bank_notifications'];
+
 /// Таблицы Этапа 5 (Финансы, схема v6).
 const financeTables = [
   'accounts',
@@ -65,9 +68,9 @@ void main() {
     setUp(() => db = AppDatabase(NativeDatabase.memory()));
     tearDown(() => db.close());
 
-    test('создаёт схему v6: настройки, синхронизация, календарь, ИИ-чат, Работа и Финансы', () async {
+    test('создаёт схему v7: настройки, синхронизация, календарь, ИИ-чат, Работа, Финансы и Банки', () async {
       expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
-      expect(db.schemaVersion, 6);
+      expect(db.schemaVersion, 7);
       final tables = await db
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -84,6 +87,7 @@ void main() {
         'ai_prompt_versions',
         'ai_tool_proposals',
         'balance_checkpoints',
+        'bank_notifications',
         'calendars',
         'categories',
         'change_requests',
@@ -93,6 +97,7 @@ void main() {
         'events',
         'goals',
         'local_settings',
+        'merchant_category_rules',
         'payment_allocations',
         'payments',
         'people',
@@ -151,8 +156,8 @@ void main() {
       );
     });
 
-    test('в реестре AppDatabase есть шаги до v2…v6 (v6 — Финансы)', () {
-      expect(AppDatabase.migrationSteps.keys, [2, 3, 4, 5, 6]);
+    test('в реестре AppDatabase есть шаги до v2…v7 (v7 — Банки)', () {
+      expect(AppDatabase.migrationSteps.keys, [2, 3, 4, 5, 6, 7]);
     });
   });
 
@@ -244,6 +249,8 @@ void main() {
         ..execute('DROP TABLE debts')
         ..execute('DROP TABLE debt_repayments')
         ..execute('DROP TABLE goals')
+        ..execute('DROP TABLE merchant_category_rules')
+        ..execute('DROP TABLE bank_notifications')
         ..execute('PRAGMA user_version = 2')
         ..close();
 
@@ -281,6 +288,7 @@ void main() {
         'time_entries',
         // …и Финансов (v6).
         ...financeTables,
+        ...banksTables,
       ]) {
         raw.execute('DROP TABLE $t');
       }
@@ -319,6 +327,7 @@ void main() {
         'projects',
         'people',
         ...financeTables,
+        ...banksTables,
       ]) {
         raw.execute('DROP TABLE $t');
       }
@@ -385,7 +394,10 @@ void main() {
           .get();
       expect(names, hasLength(10));
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.read<int>('user_version'), 6);
+      expect(
+        version.read<int>('user_version'),
+        AppDatabase.currentSchemaVersion,
+      );
       // Новые таблицы пишутся и читаются.
       await db.customStatement(
         'INSERT INTO payments (id, created_at, updated_at, paid_at, amount) '
@@ -404,7 +416,7 @@ void main() {
       await first.close();
       // Настоящая БД v5: без таблиц Финансов, с данными прежних этапов.
       final raw = sqlite3.open(file.path);
-      for (final t in financeTables) {
+      for (final t in [...financeTables, ...banksTables]) {
         raw.execute('DROP TABLE $t');
       }
       raw
@@ -453,7 +465,10 @@ void main() {
         ]),
       );
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.read<int>('user_version'), 6);
+      expect(
+        version.read<int>('user_version'),
+        AppDatabase.currentSchemaVersion,
+      );
       // Колонки новых таблиц — по контракту; строки пишутся и читаются.
       final cols = await db
           .customSelect('PRAGMA table_info(transactions)')
@@ -509,7 +524,7 @@ void main() {
 
     test('БД более новой схемы не открывается старым кодом', () async {
       sqlite3.open(file.path)
-        ..execute('PRAGMA user_version = 7')
+        ..execute('PRAGMA user_version = 8')
         ..close();
 
       final db = AppDatabase(NativeDatabase(file));

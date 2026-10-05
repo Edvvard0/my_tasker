@@ -545,6 +545,12 @@ class _Links extends ConsumerWidget {
             onTap: () => context.push('/finance/analytics'),
           ),
           WorkLinkRow(
+            key: const Key('finance-link-banks'),
+            icon: LucideIcons.landmark,
+            label: 'Банки',
+            onTap: () => context.push('/finance/banks'),
+          ),
+          WorkLinkRow(
             key: const Key('finance-link-work'),
             icon: LucideIcons.briefcase,
             label: 'Ожидаемые из «Работы»',

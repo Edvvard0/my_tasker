@@ -12,6 +12,12 @@ import 'package:my_tasker/features/ai_chat/presentation/settings/models_screen.d
 import 'package:my_tasker/features/ai_chat/presentation/settings/presets_screen.dart';
 import 'package:my_tasker/features/ai_chat/presentation/settings/usage_screen.dart';
 import 'package:my_tasker/features/auth/presentation/login_screen.dart';
+import 'package:my_tasker/features/banks/presentation/bank_reconcile_screen.dart';
+import 'package:my_tasker/features/banks/presentation/bank_setup_screen.dart';
+import 'package:my_tasker/features/banks/presentation/banks_screen.dart';
+import 'package:my_tasker/features/banks/presentation/drafts_screen.dart';
+import 'package:my_tasker/features/banks/presentation/needs_review_screen.dart';
+import 'package:my_tasker/features/banks/presentation/statement_import_screen.dart';
 import 'package:my_tasker/features/calendar/calendar_screen.dart';
 import 'package:my_tasker/features/calendar/presentation/calendar_settings_screen.dart';
 import 'package:my_tasker/features/calendar/presentation/layers_screen.dart';
@@ -202,6 +208,39 @@ GoRouter createRouter({
                   path: 'work',
                   builder: (_, _) =>
                       const FinanceLockGate(child: WorkIncomeScreen()),
+                ),
+                // Этап 6 (Банки): под тем же замком раздела.
+                GoRoute(
+                  path: 'banks',
+                  builder: (_, _) =>
+                      const FinanceLockGate(child: BanksScreen()),
+                  routes: [
+                    GoRoute(
+                      path: 'drafts',
+                      builder: (_, _) =>
+                          const FinanceLockGate(child: DraftsScreen()),
+                    ),
+                    GoRoute(
+                      path: 'review',
+                      builder: (_, _) =>
+                          const FinanceLockGate(child: NeedsReviewScreen()),
+                    ),
+                    GoRoute(
+                      path: 'import',
+                      builder: (_, _) =>
+                          const FinanceLockGate(child: StatementImportScreen()),
+                    ),
+                    GoRoute(
+                      path: 'reconcile',
+                      builder: (_, _) =>
+                          const FinanceLockGate(child: BankReconcileScreen()),
+                    ),
+                    GoRoute(
+                      path: 'setup',
+                      builder: (_, _) =>
+                          const FinanceLockGate(child: BankSetupScreen()),
+                    ),
+                  ],
                 ),
               ],
             ),

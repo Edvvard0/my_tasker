@@ -7,6 +7,7 @@ import 'package:my_tasker/core/db/database_bootstrap.dart';
 import 'package:my_tasker/core/layout/window_class.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
+import 'package:my_tasker/features/banks/application/bank_providers.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_service.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_taps.dart';
 import 'package:my_tasker/features/recovery/presentation/recovery_screen.dart';
@@ -34,7 +35,9 @@ class MyTaskerApp extends ConsumerWidget {
         // Нажатие на напоминание открывает событие или задачу.
         ..watch(reminderTapHandlerProvider)
         // Таймер времени (Этап 4): уведомление/трей и «Стоп» из системы.
-        ..watch(timerLifecycleProvider);
+        ..watch(timerLifecycleProvider)
+        // Банки (Этап 6): уведомления банков -> черновики операций.
+        ..watch(bankLifecycleProvider);
     }
     final auth = ok ? ref.watch(authControllerProvider) : const AuthUnknown();
     return MaterialApp.router(
