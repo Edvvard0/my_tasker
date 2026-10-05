@@ -58,6 +58,11 @@ class SyncStore {
   final int Function() nowMs;
   final String Function() _newOpId;
 
+  /// Хуки физической очистки надгробий: `таблица -> действие над
+  /// идентификаторами удалённых строк` (например, «Учёба» убирает локальные
+  /// файлы вложений). Сбой хука очистку не прерывает.
+  final Map<String, Future<void> Function(List<String> ids)> purgeHooks = {};
+
   final StreamController<void> _writes = StreamController<void>.broadcast();
 
   /// Сигнал «была локальная запись» (запускает синхронизацию с задержкой).
@@ -886,7 +891,25 @@ class SyncStore {
     );
     var total = 0;
     for (final spec in registry.specs) {
-      total += await db.customUpdate(
+      final hook = purgeHooks[spec.name];
+      final purged = <String>[];
+      if (hook != null) {
+        final rows = await db
+            .customSelect(
+              'SELECT id FROM "${spec.name}" WHERE deleted_at IS NOT NULL '
+              'AND deleted_at < ? AND NOT EXISTS '
+              '(SELECT 1 FROM sync_outbox o WHERE o.target_table = ? '
+              'AND o.row_id = "${spec.name}".id)',
+              variables: [
+                Variable.withString(cutoff),
+                Variable.withString(spec.name),
+              ],
+              readsFrom: _tables(spec.name),
+            )
+            .get();
+        purged.addAll([for (final r in rows) r.read<String>('id')]);
+      }
+      final deleted = await db.customUpdate(
         'DELETE FROM "${spec.name}" WHERE deleted_at IS NOT NULL '
         'AND deleted_at < ? AND NOT EXISTS '
         '(SELECT 1 FROM sync_outbox o WHERE o.target_table = ? '
@@ -897,6 +920,14 @@ class SyncStore {
         ],
         updates: _tables(spec.name),
       );
+      total += deleted;
+      if (hook != null && purged.isNotEmpty) {
+        try {
+          await hook(purged);
+        } on Object {
+          // Хук вторичен: очистка корзины не должна от него зависеть.
+        }
+      }
     }
     return total;
   }
@@ -992,6 +1023,7 @@ class SyncStore {
     };
     final items = <TrashItem>[];
     for (final spec in registry.specs) {
+      if (!spec.inTrash) continue;
       final rows = await db
           .customSelect(
             'SELECT * FROM "${spec.name}" WHERE deleted_at IS NOT NULL',

@@ -8,6 +8,7 @@ import 'package:my_tasker/features/calendar/domain/calendar_validation.dart';
 import 'package:my_tasker/features/study/data/attachment_store.dart';
 import 'package:my_tasker/features/study/data/files_api.dart';
 import 'package:my_tasker/features/study/data/study_repository.dart';
+import 'package:my_tasker/features/study/domain/file_magic.dart';
 import 'package:my_tasker/features/study/domain/study_models.dart';
 import 'package:my_tasker/features/study/domain/study_validation.dart';
 
@@ -64,6 +65,14 @@ class AttachmentService {
   final String Function() _newId;
 
   Future<UploadReport>? _uploading;
+
+  /// Во время загрузки попросили ещё одну: после неё — следующий проход
+  /// (новое вложение не должно ждать следующей синхронизации).
+  bool _again = false;
+
+  /// Файлы, которые [add] сейчас записывает: сверка «файл без строки» их
+  /// не трогает.
+  final Set<String> _adding = {};
   final Map<String, Future<Uint8List>> _downloads = {};
 
   /// Добавляет файл владельцу (предмету или долгу): проверяет имя, тип и
@@ -93,27 +102,89 @@ class AttachmentService {
       sha256: sha256.convert(bytes).toString(),
     );
     ensureValid(attachmentProblem(attachment));
-    await files.write(attachment.id, bytes);
+    // Сервер отвергает файл по первым байтам (`415`): отказываем сразу, а не
+    // оставляем вложение «ждёт загрузки» навсегда.
+    if (!looksLikeMime(mime, bytes)) {
+      throw const ValidationError(
+        'Содержимое файла не подходит к его типу: проверьте, что файл не '
+        'повреждён и расширение указано верно.',
+      );
+    }
+    _adding.add(attachment.id);
     try {
-      await repository.createAttachment(attachment);
-    } on Object {
-      await files.delete(attachment.id);
-      rethrow;
+      await files.write(attachment.id, bytes);
+      try {
+        await repository.createAttachment(attachment);
+      } on Object {
+        await files.delete(attachment.id);
+        rethrow;
+      }
+    } finally {
+      _adding.remove(attachment.id);
     }
     return attachment;
   }
 
   /// Загружает на сервер все вложения со статусом `pending`, файлы которых
   /// есть на этом устройстве. Параллельные вызовы объединяются.
-  Future<UploadReport> uploadPending() =>
-      _uploading ??= _uploadAll().whenComplete(() => _uploading = null);
+  /// Если вызов пришёл во время идущей загрузки, после неё делается ещё один
+  /// проход: вложение, добавленное в это время, не ждёт следующей
+  /// синхронизации. Файлы с окончательным отказом сервера (`413/415/422`…)
+  /// сами не загружаются — только после [retryUpload].
+  Future<UploadReport> uploadPending() {
+    final running = _uploading;
+    if (running != null) {
+      _again = true;
+      return running;
+    }
+    return _uploading = _uploadLoop();
+  }
+
+  Future<UploadReport> _uploadLoop() async {
+    var report = const UploadReport();
+    try {
+      while (true) {
+        report = _merge(report, await _uploadAll());
+        if (!_again) return report;
+        _again = false;
+      }
+    } finally {
+      _again = false;
+      _uploading = null;
+    }
+  }
+
+  static UploadReport _merge(UploadReport a, UploadReport b) {
+    final uploaded = [...a.uploaded, ...b.uploaded];
+    return UploadReport(
+      uploaded: uploaded,
+      retryLater: [
+        for (final id in {...a.retryLater, ...b.retryLater})
+          if (!uploaded.contains(id)) id,
+      ],
+      failed: {
+        for (final e in {...a.failed, ...b.failed}.entries)
+          if (!uploaded.contains(e.key)) e.key: e.value,
+      },
+    );
+  }
+
+  /// Пользователь просит повторить загрузку файла с окончательным отказом.
+  Future<void> retryUpload(String id) => repository.clearUploadFailures([id]);
 
   Future<UploadReport> _uploadAll() async {
+    final blocked = await repository.uploadFailures();
     final pending = <Attachment>[];
+    final known = <String, String>{};
     for (final a in await repository.pendingUploads()) {
+      final code = blocked[a.id];
+      if (code != null) {
+        known[a.id] = code;
+        continue;
+      }
       if (await files.exists(a.id)) pending.add(a);
     }
-    if (pending.isEmpty) return const UploadReport();
+    if (pending.isEmpty) return UploadReport(failed: known);
     // Сначала метаданные должны дойти до сервера.
     var unsynced = false;
     for (final a in pending) {
@@ -128,7 +199,7 @@ class AttachmentService {
     }
     final uploaded = <String>[];
     final later = <String>[];
-    final failed = <String, String>{};
+    final failed = <String, String>{...known};
     for (final a in pending) {
       final bytes = await files.read(a.id);
       if (bytes == null) continue;
@@ -136,11 +207,14 @@ class AttachmentService {
         await api.upload(a.id, bytes);
         await repository.markUploaded(a.id);
         uploaded.add(a.id);
+        await repository.clearUploadFailures([a.id]);
       } on ApiException catch (e) {
         if (_isTemporary(e)) {
           later.add(a.id);
         } else {
-          failed[a.id] = e.code ?? 'http_${e.status}';
+          final code = e.code ?? 'http_${e.status}';
+          failed[a.id] = code;
+          await repository.markUploadFailed(a.id, code);
         }
       }
     }
@@ -201,4 +275,40 @@ class AttachmentService {
   /// Убирает вложение в корзину (локальный файл остаётся до очистки
   /// корзины: «Восстановить» вернёт вложение целиком).
   Future<void> remove(String id) => repository.deleteAttachment(id);
+
+  /// Корзина физически очищена ([ids] — строки, удалённые навсегда): убирает
+  /// локальные файлы (`files/<id>`, `view/<id>`) и запомненные отказы. Файл
+  /// вложения, строка которого ещё есть, не трогается.
+  Future<void> purgeFiles(Iterable<String> ids) async {
+    final gone = <String>[];
+    for (final id in ids) {
+      if (_adding.contains(id)) continue;
+      if (await repository.getAttachment(id) != null) continue;
+      await files.delete(id);
+      gone.add(id);
+    }
+    await repository.clearUploadFailures(gone);
+  }
+
+  /// Стартовая сверка: локальные файлы без строки `attachments` (очистка
+  /// корзины, прерванное добавление, остатки записи) удаляются. Возвращает
+  /// число удалённых.
+  Future<int> sweepOrphans() async {
+    final orphans = [
+      for (final id in await files.ids())
+        if (!_adding.contains(id)) id,
+    ];
+    var removed = 0;
+    for (final id in orphans) {
+      if (_adding.contains(id)) continue;
+      if (await repository.getAttachment(id) != null) continue;
+      await files.delete(id);
+      removed++;
+    }
+    await repository.clearUploadFailures([
+      for (final id in (await repository.uploadFailures()).keys)
+        if (await repository.getAttachment(id) == null) id,
+    ]);
+    return removed;
+  }
 }

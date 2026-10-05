@@ -22,28 +22,44 @@ Future<void> showLessonSheet(
   BuildContext context, {
   required String date,
   required String lessonKey,
+  bool followMove = false,
 }) => showEditorSheet<void>(
   context,
-  builder: (_) => LessonSheet(date: date, lessonKey: lessonKey),
+  builder: (_) =>
+      LessonSheet(date: date, lessonKey: lessonKey, followMove: followMove),
 );
 
 /// Открывает лист занятия пары [slotId] по дате по расписанию
-/// [scheduledDate] (из уведомления «Был на паре?»).
+/// [scheduledDate] (из уведомления «Был на паре?»). [shownDate] — день, где
+/// занятие показано (у перенесённой пары — день переноса); без него (старое
+/// уведомление) лист сам идёт в день переноса, а не в «призрак» на исходной
+/// дате.
 Future<void> showAttendanceSheet(
   BuildContext context, {
   required String slotId,
   required String scheduledDate,
+  String? shownDate,
 }) => showLessonSheet(
   context,
-  date: scheduledDate,
+  date: shownDate ?? scheduledDate,
   lessonKey: 'slot:$slotId@$scheduledDate',
+  followMove: shownDate == null,
 );
 
 class LessonSheet extends ConsumerWidget {
-  const LessonSheet({required this.date, required this.lessonKey, super.key});
+  const LessonSheet({
+    required this.date,
+    required this.lessonKey,
+    this.followMove = false,
+    super.key,
+  });
 
   final String date;
   final String lessonKey;
+
+  /// Лист открыт по ключу пары без дня показа: если на [date] — «призрак»
+  /// перенесённой пары, показываем занятие в день переноса.
+  final bool followMove;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -61,7 +77,9 @@ class LessonSheet extends ConsumerWidget {
     final day = data.dayOf(date);
     var lesson = day.lessons.where((l) => l.key == lessonKey).firstOrNull;
     var lessonDay = day;
-    if (lesson == null) {
+    // Ключ совпал с «призраком» на исходной дате перенесённой пары (старое
+    // уведомление без даты показа): настоящее занятие — в день переноса.
+    if (lesson == null || (followMove && lesson.isMovedAway)) {
       final moved = lessonKey.startsWith('slot:')
           ? data.overrides
                 .where(
@@ -73,8 +91,14 @@ class LessonSheet extends ConsumerWidget {
                 .firstOrNull
           : null;
       if (moved != null) {
-        lessonDay = data.dayOf(moved.newDate!);
-        lesson = lessonDay.lessons.where((l) => l.key == lessonKey).firstOrNull;
+        final target = data.dayOf(moved.newDate!);
+        final real = target.lessons
+            .where((l) => l.key == lessonKey)
+            .firstOrNull;
+        if (real != null) {
+          lessonDay = target;
+          lesson = real;
+        }
       }
     }
     if (lesson == null) {

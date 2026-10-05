@@ -107,6 +107,7 @@ class SyncTableSpec {
     required this.columns,
     required this.titleOf,
     this.parents = const [],
+    this.inTrash = true,
   });
 
   /// Имя таблицы в БД и в протоколе.
@@ -120,6 +121,12 @@ class SyncTableSpec {
 
   /// Заголовок строки в корзине.
   final String Function(Json row) titleOf;
+
+  /// Показывать удалённые строки в общей корзине. `false` — служебные
+  /// записи (снятая отметка, звонок, сброшенное изменение): они удаляются
+  /// мягко ради синхронизации, но пользователю в корзине не нужны;
+  /// восстанавливаются повторной записью по естественному ключу.
+  final bool inTrash;
 
   SyncColumn? column(String columnName) {
     for (final c in columns) {

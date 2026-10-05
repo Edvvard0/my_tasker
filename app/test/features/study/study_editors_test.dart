@@ -340,16 +340,53 @@ void main() {
       await _enter(tester, 'bells-end-0', '09:20');
       await tapKey(tester, 'bells-remove-5');
       await tapKey(tester, 'bells-save');
-      expect(_data(container).dateBellsOf(demo.semester), hasLength(5));
+      // Запись только для изменённого номера, а не вся сетка.
+      final dated = _data(container).dateBellsOf(demo.semester);
+      expect(
+        [for (final b in dated) '${b.number} ${b.startTime}'],
+        ['1 07:50'],
+      );
       expect(_data(container).dayOf('2026-10-05').lessons.first.start, '07:50');
       expect(_data(container).dayOf('2026-10-12').lessons.first.start, '08:30');
       expect(find.byKey(const Key('bells-date-2026-10-05')), findsOneWidget);
       await tester.tap(find.byKey(const Key('bells-date-2026-10-05')));
       await tester.pumpAndSettle();
+      // Таблица даты — вся сетка с подставленным звонком даты.
+      expect(find.byKey(const Key('bells-row-5')), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(
+              find.descendant(
+                of: find.byKey(const Key('bells-start-0')),
+                matching: find.byType(TextField),
+              ),
+            )
+            .controller!
+            .text,
+        '07:50',
+      );
       await tapKey(tester, 'bells-restore');
       expect(_data(container).dateBellsOf(demo.semester), isEmpty);
       expect(_data(container).dayOf('2026-10-05').lessons.first.start, '08:30');
     });
+
+    testWidgets(
+      '«только на дату»: звонок, снова равный обычному, не хранится',
+      (tester) async {
+        final (container, demo) = await _editor(tester, tab: 'bells');
+        await tapKey(tester, 'bells-add-date');
+        await _enter(tester, 'bells-start-1', '10:20');
+        await _enter(tester, 'bells-end-1', '11:50');
+        await tapKey(tester, 'bells-save');
+        expect(_data(container).dateBellsOf(demo.semester), hasLength(1));
+        await tester.tap(find.byKey(const Key('bells-date-2026-10-05')));
+        await tester.pumpAndSettle();
+        await _enter(tester, 'bells-start-1', '10:10');
+        await _enter(tester, 'bells-end-1', '11:40');
+        await tapKey(tester, 'bells-save');
+        expect(_data(container).dateBellsOf(demo.semester), isEmpty);
+      },
+    );
 
     testWidgets('ошибки: быстрая сетка, время пары, дата', (tester) async {
       await _editor(tester, tab: 'bells');

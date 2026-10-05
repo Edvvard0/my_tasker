@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_tasker/core/calendar_time/civil_date.dart';
 import 'package:my_tasker/core/config/clock.dart';
@@ -468,7 +470,9 @@ class StudyRepository {
 
   /// «Создать задачу» по долгу: задача Этапа 2 со сроком долга; ссылка
   /// хранится на стороне долга (`task_id`). Возвращает `id` задачи; если
-  /// задача уже создана и жива — её `id`.
+  /// задача уже создана и жива — её `id`. `id` детерминированный
+  /// ([debtTaskId]): два устройства офлайн создают одну задачу; задача,
+  /// лежащая в корзине, восстанавливается, а не создаётся заново.
   Future<String> createTaskForDebt(
     String debtId, {
     required String subjectName,
@@ -477,20 +481,27 @@ class StudyRepository {
     if (debt == null) throw StateError('Долга $debtId нет');
     final existing = debt.taskId;
     if (existing != null && await hasLiveTask(existing)) return existing;
-    final due = parseDate(debt.dueDate ?? '');
-    final taskId = _newId();
-    await _tasks.createTask(
-      TaskEntity(
-        id: taskId,
-        title: '${debt.title} · $subjectName',
-        status: TaskStatus.todo,
-        due: due == null ? const TaskDue.none() : TaskDue.date(due),
-        notes:
-            'Учебный долг: ${debt.kind.label.toLowerCase()} по предмету '
-            '«$subjectName».',
-      ),
-    );
-    await _store.update(debtsTable, debtId, {'task_id': taskId});
+    final taskId = debtTaskId(debtId);
+    final row = await _store.getRow(TaskRepository.tasksTable, taskId);
+    if (row == null) {
+      final due = parseDate(debt.dueDate ?? '');
+      await _tasks.createTask(
+        TaskEntity(
+          id: taskId,
+          title: '${debt.title} · $subjectName',
+          status: TaskStatus.todo,
+          due: due == null ? const TaskDue.none() : TaskDue.date(due),
+          notes:
+              'Учебный долг: ${debt.kind.label.toLowerCase()} по предмету '
+              '«$subjectName».',
+        ),
+      );
+    } else if (row['deleted_at'] != null) {
+      await _tasks.restoreTask(taskId);
+    }
+    if (debt.taskId != taskId) {
+      await _store.update(debtsTable, debtId, {'task_id': taskId});
+    }
     return taskId;
   });
 
@@ -552,6 +563,51 @@ class StudyRepository {
 
   Future<void> deleteAttachment(String id) =>
       _store.softDelete(attachmentsTable, id);
+
+  // Окончательные отказы сервера при загрузке файла (`413/415/422`…): храним
+  // в служебной таблице `sync_meta` этого устройства (не синхронизируется и
+  // не меняет схему БД), чтобы не слать файл повторно при каждом запуске и
+  // каждой синхронизации — до явного действия пользователя.
+  static const _uploadFailuresKey = 'study_attachment_upload_failures';
+
+  /// `id вложения -> код отказа сервера` для файлов, которые не будут
+  /// загружаться повторно сами.
+  Future<Map<String, String>> uploadFailures() async {
+    final raw = await _store.readMeta(_uploadFailuresKey);
+    if (raw == null) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return {};
+      return {
+        for (final e in decoded.entries)
+          if (e.value is String) e.key as String: e.value as String,
+      };
+    } on FormatException {
+      return {};
+    }
+  }
+
+  Future<void> _writeUploadFailures(Map<String, String> failures) =>
+      _store.writeMeta(
+        _uploadFailuresKey,
+        failures.isEmpty ? null : jsonEncode(failures),
+      );
+
+  /// Запоминает окончательный отказ сервера для вложения [id].
+  Future<void> markUploadFailed(String id, String code) async {
+    final failures = await uploadFailures();
+    if (failures[id] == code) return;
+    await _writeUploadFailures({...failures, id: code});
+  }
+
+  /// Забывает отказы для [ids] (повтор по просьбе пользователя, файл
+  /// загружен или вложение удалено навсегда).
+  Future<void> clearUploadFailures(Iterable<String> ids) async {
+    final failures = await uploadFailures();
+    final before = failures.length;
+    ids.forEach(failures.remove);
+    if (failures.length != before) await _writeUploadFailures(failures);
+  }
 
   Future<void> restoreAttachment(String id) =>
       _store.restore(attachmentsTable, id);

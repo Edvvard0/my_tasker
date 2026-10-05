@@ -73,6 +73,18 @@ class AttachmentTransferNotifier extends Notifier<TransferState> {
       return const UploadReport();
     }
   }
+
+  /// Пользователь просит повторить загрузку файла, от которого сервер
+  /// отказался окончательно.
+  Future<void> retry(String id) async {
+    await ref.read(attachmentServiceProvider).retryUpload(id);
+    if (!ref.mounted) return;
+    state = TransferState(
+      uploading: state.uploading,
+      failed: {...state.failed}..remove(id),
+    );
+    await kick();
+  }
 }
 
 final NotifierProvider<AttachmentTransferNotifier, TransferState>
@@ -87,6 +99,15 @@ attachmentTransferProvider =
 final Provider<void> attachmentLifecycleProvider = Provider<void>((ref) {
   if (!ref.watch(syncAutostartProvider)) return;
   final notifier = ref.read(attachmentTransferProvider.notifier);
+  // Очистка корзины убирает и локальные файлы вложений; стартовая сверка
+  // убирает «файлы без строки» (в том числе после очистки в фоне, где этого
+  // хука нет).
+  final service = ref.read(attachmentServiceProvider);
+  final syncStore = ref.read(syncStoreProvider);
+  const table = StudyRepository.attachmentsTable;
+  syncStore.purgeHooks[table] = service.purgeFiles;
+  ref.onDispose(() => syncStore.purgeHooks.remove(table));
+  unawaited(service.sweepOrphans().then<void>((_) {}, onError: (_) {}));
   ref.listen(syncStatusProvider.select((s) => s.run.lastSuccessAt), (
     previous,
     next,
@@ -100,3 +121,14 @@ final FutureProviderFamily<bool, String> attachmentLocalProvider =
     FutureProvider.autoDispose.family<bool, String>(
       (ref, id) => ref.watch(attachmentStoreProvider).exists(id),
     );
+
+/// Содержимое файла вложения для просмотра: читается один раз на экран
+/// (а не при каждой перерисовке); недостающий файл скачивается.
+final FutureProviderFamily<Uint8List, String> attachmentBytesProvider =
+    FutureProvider.autoDispose.family<Uint8List, String>((ref, id) async {
+      final attachment = await ref
+          .read(studyRepositoryProvider)
+          .getAttachment(id);
+      if (attachment == null) throw StateError('Вложения $id нет');
+      return await ref.read(attachmentServiceProvider).bytesOf(attachment);
+    });

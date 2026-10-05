@@ -199,12 +199,34 @@ void main() {
         parseReminderPayload('study:slot|2026-10-05'),
         const StudyTarget('slot', '2026-10-05'),
       );
+      // Новый формат: дата показа (день переноса).
+      expect(
+        parseReminderPayload('study:slot|2026-09-28|2026-10-05'),
+        const StudyTarget('slot', '2026-09-28', '2026-10-05'),
+      );
+      // Старый формат: дня показа нет.
+      expect(
+        (parseReminderPayload('study:slot|2026-10-05')! as StudyTarget)
+            .shownDate,
+        isNull,
+      );
       expect(const StudyTarget('a', 'b'), const StudyTarget('a', 'b'));
+      expect(
+        const StudyTarget('a', 'b'),
+        isNot(const StudyTarget('a', 'b', 'c')),
+      );
       expect(
         const StudyTarget('a', 'b').hashCode,
         const StudyTarget('a', 'b').hashCode,
       );
-      for (final bad in ['study:', 'study:slot', 'study:slot|', 'study:|d']) {
+      for (final bad in [
+        'study:',
+        'study:slot',
+        'study:slot|',
+        'study:|d',
+        'study:slot|d|',
+        'study:slot||d',
+      ]) {
         expect(parseReminderPayload(bad), isNull, reason: bad);
       }
     });
@@ -225,6 +247,57 @@ void main() {
             ?.status,
         AttendanceStatus.present,
       );
+    });
+  });
+
+  group('нажатие на напоминание перенесённой пары', () {
+    // Матан (пн, 1-я пара) с 28 сентября перенесён на сегодня, 5 октября.
+    Future<(ProviderContainer, StudyDemo)> pumpMoved(
+      WidgetTester tester,
+      String Function(StudyDemo demo) payload,
+    ) async {
+      final (container, demo) = await pumpStudyDemo(tester, files: false);
+      await tester.runAsync(
+        () => container
+            .read(studyRepositoryProvider)
+            .saveOverride(
+              ClassOverride(
+                slotId: demo.mathMon,
+                date: '2026-09-28',
+                action: OverrideAction.move,
+                newDate: '2026-10-05',
+              ),
+            ),
+      );
+      await tester.pumpAndSettle();
+      container.read(reminderTapsProvider).add(payload(demo));
+      await tester.pumpAndSettle();
+      return (container, demo);
+    }
+
+    testWidgets('новый формат: лист с отметкой посещаемости', (tester) async {
+      final (container, demo) = await pumpMoved(
+        tester,
+        (d) => 'study:${d.mathMon}|2026-09-28|2026-10-05',
+      );
+      expect(find.byKey(const Key('lesson-missing')), findsNothing);
+      await tapKey(tester, 'mark-present');
+      expect(
+        container
+            .read(studyDataProvider)
+            .requireValue
+            .markBySlotDate[(demo.mathMon, '2026-09-28')]
+            ?.status,
+        AttendanceStatus.present,
+      );
+    });
+
+    testWidgets('старый формат (без даты показа): тоже находит перенос', (
+      tester,
+    ) async {
+      await pumpMoved(tester, (d) => 'study:${d.mathMon}|2026-09-28');
+      expect(find.byKey(const Key('lesson-missing')), findsNothing);
+      expect(find.byKey(const Key('mark-present')), findsOneWidget);
     });
   });
 

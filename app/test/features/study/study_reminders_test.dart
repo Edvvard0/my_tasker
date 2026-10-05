@@ -1,9 +1,16 @@
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/core/calendar_time/calendar_ids.dart';
 import 'package:my_tasker/core/calendar_time/civil_date.dart';
 import 'package:my_tasker/core/calendar_time/wall_time.dart';
+import 'package:my_tasker/core/config/clock.dart';
 import 'package:my_tasker/core/holidays/holiday_calendar.dart';
+import 'package:my_tasker/core/sync/sync_providers.dart';
+import 'package:my_tasker/features/calendar/application/device_timezone.dart';
 import 'package:my_tasker/features/calendar/data/calendar_settings.dart';
+import 'package:my_tasker/features/calendar/reminders/headless_reminders.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_service.dart';
 import 'package:my_tasker/features/settings/data/user_settings_repository.dart';
 import 'package:my_tasker/features/study/data/study_reminders.dart';
@@ -104,7 +111,7 @@ void main() {
       final first = reminders.first;
       expect(first.title, 'Был на паре?');
       expect(first.body, '«Матан» · 08:30–10:00 · к1 28');
-      expect(first.payload, 'study:mon|2026-10-05');
+      expect(first.payload, 'study:mon|2026-10-05|2026-10-05');
       expect(first.payload, studyReminderPayload('mon', '2026-10-05'));
     });
 
@@ -190,6 +197,26 @@ void main() {
         ),
       );
       expect(moved.first, startsWith('2026-10-07T12:30:00Z'));
+      // В нажатии — и дата по расписанию, и день показа (день переноса).
+      final movedPayload = planStudyReminders(
+        input: _input(
+          overrides: const [
+            ClassOverride(
+              id: 'o1',
+              slotId: 'mon',
+              date: '2026-10-05',
+              action: OverrideAction.move,
+              newDate: '2026-10-07',
+              startTime: '14:00',
+              endTime: '15:30',
+            ),
+          ],
+        ),
+        marks: const [],
+        now: now,
+        zone: moscow,
+      ).first.payload;
+      expect(movedPayload, 'study:mon|2026-10-05|2026-10-07');
       // Отметка по исходной дате гасит напоминание и у перенесённой.
       final marked = plan(
         _input(
@@ -364,7 +391,7 @@ void main() {
         extraSources: [
           StudyReminderSource(
             store: phone.device.store,
-            holidays: HolidayCalendar.empty,
+            holidays: () async => HolidayCalendar.empty(),
           ),
         ],
       );
@@ -427,8 +454,88 @@ void main() {
       await settle(() => scheduler.scheduled.length == before);
       expect(
         scheduler.sorted.where((r) => r.title == 'Был на паре?').first.payload,
-        'study:$slotId|2026-10-12',
+        'study:$slotId|2026-10-12|2026-10-12',
       );
+    });
+
+    test('праздники приходят асинхронно: пока файл не загружен, в праздник '
+        'напоминания не планируются', () async {
+      final loaded = Completer<HolidayCalendar>();
+      final late = ReminderService(
+        store: phone.device.store,
+        scheduler: scheduler,
+        settings: CalendarSettingsRepository(
+          UserSettingsRepository(phone.device.store),
+        ),
+        zone: () => zone,
+        now: () => clock.now,
+        debounce: Duration.zero,
+        refreshEvery: null,
+        extraSources: [
+          StudyReminderSource(
+            store: phone.device.store,
+            holidays: () => loaded.future,
+          ),
+        ],
+      );
+      addTearDown(late.stop);
+      var finished = false;
+      final started = late.start().then((_) => finished = true);
+      for (var i = 0; i < 50; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      // Пустого календаря по умолчанию нет: планирование ждёт файл.
+      expect(finished, isFalse);
+      expect(scheduler.scheduled, isEmpty);
+      loaded.complete(
+        HolidayCalendar.fromJsonString(
+          '{"updated":"2026-01-01","years":{"2026":{"status":"official",'
+          '"days":[{"date":"2026-10-05","type":"holiday","name":"Праздник"},'
+          '{"date":"2026-10-12","type":"holiday","name":"Праздник"}]}}}',
+        ),
+      );
+      await started;
+      // Понедельники 5 и 12 октября — праздники: ближайшая пара 19 октября
+      // (за горизонтом 14 дней нет ни одной) — напоминаний нет.
+      expect(scheduler.sorted.where((r) => r.title == 'Был на паре?'), isEmpty);
+    });
+
+    test('фоновый хук (изолят WorkManager): праздники грузятся с задержкой '
+        '— «Был на паре?» в праздник не приходит', () async {
+      final container = ProviderContainer(
+        overrides: [
+          syncStoreProvider.overrideWithValue(phone.device.store),
+          reminderSchedulerProvider.overrideWithValue(scheduler),
+          clockProvider.overrideWithValue(() => clock.now),
+          deviceTimeZoneSourceProvider.overrideWithValue(
+            const FixedTimeZoneSource('Europe/Moscow'),
+          ),
+          holidayCalendarProvider.overrideWith((ref) async {
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+            return HolidayCalendar.fromJsonString(
+              '{"updated":"2026-01-01","years":{"2026":{"status":"official",'
+              '"days":[{"date":"2026-10-05","type":"holiday","name":"П"},'
+              '{"date":"2026-10-12","type":"holiday","name":"П"}]}}}',
+            );
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+      await replanRemindersAfterSync(container);
+      expect(scheduler.sorted.where((r) => r.title == 'Был на паре?'), isEmpty);
+    });
+
+    test('ошибка загрузки праздников: «Был на паре?» не планируется', () async {
+      final broken = StudyReminderSource(
+        store: phone.device.store,
+        holidays: () async => throw StateError('нет файла'),
+      );
+      expect(await broken.plan(clock.now, zone), isEmpty);
+      final ok = StudyReminderSource(
+        store: phone.device.store,
+        holidays: () async => HolidayCalendar.empty(),
+      );
+      expect(await ok.plan(clock.now, zone), isNotEmpty);
     });
 
     test('архив семестра убирает напоминания', () async {

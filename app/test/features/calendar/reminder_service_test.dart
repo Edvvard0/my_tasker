@@ -64,6 +64,20 @@ void main() {
     periodicTimer: periodic ?? Timer.periodic,
   );
 
+  ReminderService makeServiceWith(List<ExtraReminderSource> sources) =>
+      ReminderService(
+        store: phone.device.store,
+        scheduler: scheduler,
+        settings: CalendarSettingsRepository(
+          UserSettingsRepository(phone.device.store),
+        ),
+        zone: () => zone,
+        now: () => clock.now,
+        debounce: Duration.zero,
+        refreshEvery: null,
+        extraSources: sources,
+      );
+
   EventEntity event(int n, String start, {List<int> reminders = const [0]}) =>
       EventEntity(
         id: _uuid(n),
@@ -335,4 +349,47 @@ void main() {
       expect(scheduler.scheduled.keys.single, id);
     },
   );
+
+  test('сбой одного дополнительного источника не обрывает пересчёт '
+      'календаря и остальных источников', () async {
+    await phone.calendars.createEvent(event(1, '2026-10-06T07:00:00Z'));
+    final good = _FakeSource(
+      () async => [
+        PlannedReminder(
+          id: 77,
+          fireAt: DateTime.utc(2026, 10, 7, 7),
+          title: 'Другой источник',
+          body: '',
+          payload: 'sleep:morning|2026-10-07',
+        ),
+      ],
+    );
+    final broken = _FakeSource(() async => throw StateError('сбой'));
+    final withBroken = makeServiceWith([broken, good]);
+    addTearDown(withBroken.stop);
+    await withBroken.start();
+    expect(broken.calls, 1);
+    expect(good.calls, 1);
+    expect(scheduler.sorted.map((r) => r.title), contains('Другой источник'));
+    expect(
+      scheduler.sorted.map((r) => formatInstant(r.fireAt)),
+      contains('2026-10-06T07:00:00Z'),
+    );
+  });
+}
+
+class _FakeSource implements ExtraReminderSource {
+  _FakeSource(this._plan);
+
+  final Future<List<PlannedReminder>> Function() _plan;
+  int calls = 0;
+
+  @override
+  List<String> get tables => const [];
+
+  @override
+  Future<List<PlannedReminder>> plan(DateTime now, tz.Location zone) {
+    calls++;
+    return _plan();
+  }
 }

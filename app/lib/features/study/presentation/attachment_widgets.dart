@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -43,6 +45,9 @@ Future<void> addAttachmentFrom(
   PickedAttachment? picked;
   try {
     picked = await picker.pick(source);
+  } on AttachmentTooLargeException {
+    if (context.mounted) _say(context, 'Файл больше 25 МБ.');
+    return;
   } on Object {
     if (context.mounted) _say(context, 'Не удалось выбрать файл.');
     return;
@@ -186,7 +191,12 @@ class _AttachmentTileState extends ConsumerState<AttachmentTile> {
     setState(() => _busy = true);
     try {
       final service = ref.read(attachmentServiceProvider);
-      if (a.isImage) {
+      // HEIC на Windows Flutter не декодирует: сразу системный просмотрщик.
+      final inApp =
+          a.isImage &&
+          !(defaultTargetPlatform == TargetPlatform.windows &&
+              a.mimeType.startsWith('image/he'));
+      if (inApp) {
         await service.bytesOf(a);
         ref.invalidate(attachmentLocalProvider(a.id));
         if (mounted) unawaited(context.push('/study/files/${a.id}'));
@@ -213,6 +223,9 @@ class _AttachmentTileState extends ConsumerState<AttachmentTile> {
   }
 
   Future<void> _actions() async {
+    final failed =
+        ref.read(attachmentTransferProvider).failureOf(widget.attachment.id) !=
+        null;
     final choice = await showEditorSheet<String>(
       context,
       builder: (sheetContext) => Column(
@@ -220,6 +233,13 @@ class _AttachmentTileState extends ConsumerState<AttachmentTile> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SheetHeader(title: widget.attachment.fileName),
+          if (failed)
+            ListTile(
+              key: const Key('attachment-retry'),
+              leading: const Icon(LucideIcons.refreshCw),
+              title: const Text('Повторить загрузку'),
+              onTap: () => Navigator.of(sheetContext).pop('retry'),
+            ),
           ListTile(
             key: const Key('attachment-rename'),
             leading: const Icon(LucideIcons.pencil),
@@ -237,7 +257,18 @@ class _AttachmentTileState extends ConsumerState<AttachmentTile> {
       ),
     );
     if (!mounted || choice == null) return;
-    await (choice == 'rename' ? _rename() : _remove());
+    switch (choice) {
+      case 'retry':
+        unawaited(
+          ref
+              .read(attachmentTransferProvider.notifier)
+              .retry(widget.attachment.id),
+        );
+      case 'rename':
+        await _rename();
+      default:
+        await _remove();
+    }
   }
 
   Future<void> _remove() async {

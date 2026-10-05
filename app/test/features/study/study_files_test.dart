@@ -4,10 +4,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/core/network/api_client.dart';
 import 'package:my_tasker/core/sync/sync_engine.dart';
+import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_validation.dart';
+import 'package:my_tasker/features/study/application/attachment_providers.dart';
 import 'package:my_tasker/features/study/data/attachment_service.dart';
 import 'package:my_tasker/features/study/data/attachment_store.dart';
 import 'package:my_tasker/features/study/data/files_api.dart';
@@ -145,7 +148,7 @@ void main() {
 
     test('ровно 25 МиБ — можно', () async {
       final big = Uint8List(maxFileBytes)
-        ..setRange(0, 4, [0x25, 0x50, 0x44, 0x46]);
+        ..setRange(0, 5, [0x25, 0x50, 0x44, 0x46, 0x2D]);
       final a = await add('большой.pdf', big);
       expect(a.sizeBytes, maxFileBytes);
     });
@@ -281,11 +284,64 @@ void main() {
       },
     );
 
-    test('содержимое не подходит к типу: 415', () async {
-      final a = await add('a.pdf', Uint8List.fromList(List.filled(10, 7)));
+    test('содержимое не подходит к типу: клиент отказывает сразу', () async {
+      await expectLater(
+        add('a.pdf', Uint8List.fromList(List.filled(10, 7))),
+        throwsA(
+          isA<ValidationError>().having(
+            (e) => e.message,
+            'сообщение',
+            contains('не подходит к его типу'),
+          ),
+        ),
+      );
+      expect(phone.files.files, isEmpty);
+      expect(await phone.device.store.visibleRows('attachments'), isEmpty);
+    });
+
+    test('отказ сервера 415 запоминается: файл не шлётся повторно, пока '
+        'пользователь не попросит', () async {
+      final a = await add();
       await phone.device.sync();
+      // Сервер считает содержимое неподходящим (другой тип в метаданных).
+      final strict = FakeFilesApi(
+        metaOf: (id) => {
+          ...server.row('attachments', id)!,
+          'mime_type': 'image/png',
+        },
+      );
+      final service = serviceWith(api: strict);
+      final first = await service.uploadPending();
+      expect(first.failed, {a.id: 'content_type_mismatch'});
+      expect(strict.uploadCalls, hasLength(1));
+      // Повторные проходы (синхронизация, перезапуск) файл не шлют, но
+      // отказ по-прежнему виден.
+      final second = await service.uploadPending();
+      expect(second.failed, {a.id: 'content_type_mismatch'});
+      expect(strict.uploadCalls, hasLength(1));
+      // Состояние пережило «перезапуск»: новая служба над той же БД.
+      final restarted = serviceWith(api: strict);
+      expect((await restarted.uploadPending()).failed, {
+        a.id: 'content_type_mismatch',
+      });
+      expect(strict.uploadCalls, hasLength(1));
+      expect(await phone.study.uploadFailures(), {
+        a.id: 'content_type_mismatch',
+      });
+      // Пользователь просит повторить.
+      await restarted.retryUpload(a.id);
+      await restarted.uploadPending();
+      expect(strict.uploadCalls, hasLength(2));
+    });
+
+    test('успешная загрузка снимает запомненный отказ', () async {
+      final a = await add();
+      await phone.device.sync();
+      await phone.study.markUploadFailed(a.id, 'payload_too_large');
+      await phone.attachments.retryUpload(a.id);
       final report = await phone.attachments.uploadPending();
-      expect(report.failed, {a.id: 'content_type_mismatch'});
+      expect(report.uploaded, [a.id]);
+      expect(await phone.study.uploadFailures(), isEmpty);
     });
 
     test('лимит сервера: 413 — окончательный отказ', () async {
@@ -334,6 +390,130 @@ void main() {
       expect(identical(first, second), isTrue);
       await first;
       expect(phone.api.uploadCalls, hasLength(1));
+    });
+  });
+
+  group('загрузка во время идущей загрузки', () {
+    test('вложение, добавленное во время загрузки, подхватывается сразу '
+        'после неё', () async {
+      final gate = Completer<void>();
+      final api = _GatedApi(
+        metaOf: (id) => server.row('attachments', id),
+        gate: gate.future,
+      );
+      final first = await add('Первый.pdf');
+      await phone.device.sync();
+      final service = serviceWith(api: api);
+      final running = service.uploadPending();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      // Идёт загрузка первого; пользователь добавляет второй и «пинает».
+      final second = await add('Второй.pdf', fakePdf('другой'));
+      await phone.device.sync();
+      final joined = service.uploadPending();
+      gate.complete();
+      final report = await running;
+      expect(await joined, same(report));
+      expect(report.uploaded, containsAll([first.id, second.id]));
+      expect(api.stored.keys, containsAll([first.id, second.id]));
+      expect(await phone.study.pendingUploads(), isEmpty);
+    });
+  });
+
+  group('корзина: локальные файлы убираются вместе со строкой', () {
+    test('очистка надгробий убирает файлы files/<id> и view/<id>; живое и '
+        'лежащее в корзине (< 30 дней) остаётся', () async {
+      final trashed = await add('Старое.pdf');
+      final recent = await add('Недавнее.pdf', fakePdf('2'));
+      final alive = await add('Живое.pdf', fakePdf('3'));
+      phone.device.store.purgeHooks['attachments'] =
+          phone.attachments.purgeFiles;
+      await phone.attachments.remove(trashed.id);
+      await phone.device.sync();
+      clock.advance(const Duration(days: 20));
+      await phone.attachments.remove(recent.id);
+      await phone.device.sync();
+      clock.advance(const Duration(days: 15));
+      // «Старое» в корзине 35 дней, «Недавнее» — 15, «Живое» — не удалено.
+      expect(await phone.device.store.purgeOldTombstones(), 1);
+      expect(await phone.files.exists(trashed.id), isFalse);
+      expect(await phone.files.exists(recent.id), isTrue);
+      expect(await phone.files.exists(alive.id), isTrue);
+      expect(await phone.study.getAttachment(trashed.id), isNull);
+    });
+
+    test('сбой хука очистку не прерывает', () async {
+      final a = await add();
+      phone.device.store.purgeHooks['attachments'] = (_) async =>
+          throw StateError('x');
+      await phone.attachments.remove(a.id);
+      await phone.device.sync();
+      clock.advance(const Duration(days: 31));
+      expect(await phone.device.store.purgeOldTombstones(), 1);
+    });
+
+    test('стартовая сверка: файл без строки удаляется; файлы живых и '
+        'лежащих в корзине вложений остаются', () async {
+      final alive = await add('Живое.pdf');
+      final trashed = await add('В корзине.pdf', fakePdf('2'));
+      await phone.attachments.remove(trashed.id);
+      await phone.files.write('stray-id', fakePdf('сирота'));
+      await phone.study.markUploadFailed('stray-id', 'payload_too_large');
+      expect(await phone.attachments.sweepOrphans(), 1);
+      expect(phone.files.files.keys, unorderedEquals([alive.id, trashed.id]));
+      expect(await phone.study.uploadFailures(), isEmpty);
+    });
+
+    test('сверка не трогает файл, который прямо сейчас добавляется', () async {
+      final gate = Completer<void>();
+      final slow = _SlowStore(gate.future);
+      final service = AttachmentService(
+        repository: phone.study,
+        files: slow,
+        api: phone.api,
+      );
+      final adding = service.add(
+        fileName: 'a.pdf',
+        bytes: fakePdf(),
+        subjectId: subj,
+      );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(await service.sweepOrphans(), 0);
+      gate.complete();
+      final added = await adding;
+      expect(await slow.exists(added.id), isTrue);
+    });
+
+    test('purgeFiles не трогает файл, строка которого ещё есть', () async {
+      final a = await add();
+      await phone.attachments.purgeFiles([a.id]);
+      expect(await phone.files.exists(a.id), isTrue);
+    });
+  });
+
+  group('жизненный цикл вложений в приложении', () {
+    test('старт: сверка убирает файл без строки, хук очистки корзины '
+        'подключён и снимается', () async {
+      await phone.files.write('stray-id', fakePdf('сирота'));
+      final container = ProviderContainer(
+        overrides: [
+          syncAutostartProvider.overrideWithValue(true),
+          syncStoreProvider.overrideWithValue(phone.device.store),
+          attachmentServiceProvider.overrideWithValue(phone.attachments),
+          syncStatusProvider.overrideWith(_IdleStatus.new),
+        ],
+      )..read(attachmentLifecycleProvider);
+      expect(
+        phone.device.store.purgeHooks.keys,
+        contains(StudyRepository.attachmentsTable),
+      );
+      for (var i = 0; i < 100 && phone.files.files.isNotEmpty; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(phone.files.files, isEmpty);
+      container.dispose();
+      expect(phone.device.store.purgeHooks, isEmpty);
     });
   });
 
@@ -514,14 +694,68 @@ void main() {
       },
     );
 
+    test('удаление убирает и копию для просмотра; ids() видит файлы и '
+        'копии', () async {
+      await store.write('a3', Uint8List.fromList([1]));
+      final path = await store.exportForViewing('a3', 'Док.pdf');
+      await store.write('a4', Uint8List.fromList([2]));
+      expect(await store.ids(), unorderedEquals(['a3', 'a4']));
+      await store.delete('a3');
+      expect(File(path).existsSync(), isFalse);
+      expect(Directory('${dir.path}/view/a3').existsSync(), isFalse);
+      expect(await store.ids(), ['a4']);
+      // Копия без файла тоже видна сверке.
+      Directory('${dir.path}/view/ghost').createSync(recursive: true);
+      expect(await store.ids(), unorderedEquals(['a4', 'ghost']));
+      await store.delete('ghost');
+      expect(await store.ids(), ['a4']);
+    });
+
+    test('пустой каталог: ids() пуст', () async {
+      expect(await store.ids(), isEmpty);
+    });
+
     test('память: то же поведение', () async {
       final memory = MemoryAttachmentStore();
       await memory.write('x', Uint8List.fromList([1]));
       expect(await memory.exists('x'), isTrue);
       expect(await memory.read('x'), [1]);
       expect(await memory.exportForViewing('x', 'f.pdf'), '/memory/x/f.pdf');
+      expect(await memory.ids(), ['x']);
       await memory.delete('x');
       expect(await memory.exists('x'), isFalse);
+    });
+  });
+
+  group('имя копии для просмотра', () {
+    test('символы Windows, зарезервированные имена, точка и пробел в '
+        'конце, пустое имя', () {
+      expect(safeFileName('Отчёт.pdf'), 'Отчёт.pdf');
+      expect(
+        safeFileName(r'a:b*c?d"e<f>g|h/i\j.pdf'),
+        'a_b_c_d_e_f_g_h_i_j.pdf',
+      );
+      expect(safeFileName('a\u0001b.txt'), 'a_b.txt');
+      expect(safeFileName('имя.pdf. '), 'имя.pdf');
+      expect(safeFileName('...'), 'file');
+      expect(safeFileName('   '), 'file');
+      expect(safeFileName('CON.pdf'), '_CON.pdf');
+      expect(safeFileName('nul.txt'), '_nul.txt');
+      expect(safeFileName('Com1.docx'), '_Com1.docx');
+      expect(safeFileName('LPT9'), '_LPT9');
+      expect(safeFileName('console.pdf'), 'console.pdf');
+      expect(safeFileName('COM10.pdf'), 'COM10.pdf');
+    });
+
+    test('длиннее 255 байт режется с сохранением расширения', () {
+      final long = '${'я' * 200}.pdf'; // 400 байт в UTF-8
+      final safe = safeFileName(long);
+      expect(utf8.encode(safe).length, lessThanOrEqualTo(maxFileNameBytes));
+      expect(safe, endsWith('.pdf'));
+      expect(safe, startsWith('яяя'));
+      final noExt = safeFileName('б' * 300);
+      expect(utf8.encode(noExt).length, lessThanOrEqualTo(maxFileNameBytes));
+      expect(safeFileName('${'a' * 300} '), 'a' * 255);
     });
   });
 
@@ -692,4 +926,39 @@ class _FilesAdapter implements HttpClientAdapter {
 
   @override
   void close({bool force = false}) {}
+}
+
+class _IdleStatus extends SyncStatusNotifier {
+  @override
+  SyncStatus build() => const SyncStatus();
+}
+
+/// Файловый API, у которого первая загрузка ждёт сигнала.
+class _GatedApi extends FakeFilesApi {
+  _GatedApi({required super.metaOf, required this.gate});
+
+  final Future<void> gate;
+  bool _first = true;
+
+  @override
+  Future<UploadOutcome> upload(String attachmentId, Uint8List bytes) async {
+    if (_first) {
+      _first = false;
+      await gate;
+    }
+    return await super.upload(attachmentId, bytes);
+  }
+}
+
+/// Хранилище, где запись файла ждёт сигнала (добавление «в полёте»).
+class _SlowStore extends MemoryAttachmentStore {
+  _SlowStore(this.gate);
+
+  final Future<void> gate;
+
+  @override
+  Future<void> write(String id, Uint8List bytes) async {
+    files[id] = bytes;
+    await gate;
+  }
 }

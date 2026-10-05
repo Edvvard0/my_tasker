@@ -56,6 +56,7 @@ const SyncTableSpec studyBellsSpec = SyncTableSpec(
   ],
   parents: [SyncRelation('semester_id', 'study_semesters')],
   titleOf: _bellTitle,
+  inTrash: false,
 );
 
 /// `class_slots` — пары расписания (1.4).
@@ -129,6 +130,7 @@ const SyncTableSpec classOverridesSpec = SyncTableSpec(
   ],
   parents: [SyncRelation('slot_id', 'class_slots')],
   titleOf: _overrideTitle,
+  inTrash: false,
 );
 
 /// `study_attendance` — посещаемость (1.7).
@@ -143,6 +145,7 @@ const SyncTableSpec studyAttendanceSpec = SyncTableSpec(
   ],
   parents: [SyncRelation('slot_id', 'class_slots')],
   titleOf: _attendanceTitle,
+  inTrash: false,
 );
 
 /// `study_debts` — долги (1.8). `task_id` — мягкая ссылка на задачу.

@@ -1,10 +1,11 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_tasker/core/calendar_time/civil_date.dart';
 import 'package:my_tasker/core/calendar_time/wall_time.dart';
 import 'package:my_tasker/core/holidays/holiday_calendar.dart';
 import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/core/sync/sync_store.dart';
-import 'package:my_tasker/features/calendar/application/calendar_providers.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_models.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_service.dart';
 import 'package:my_tasker/features/study/domain/study_models.dart';
@@ -18,9 +19,15 @@ const int studyReminderHorizonDays = 14;
 const int studyReminderLimit = 40;
 
 /// Куда ведёт нажатие на напоминание «Был на паре?»:
-/// `study:<slot_id>|<дата по расписанию>`.
-String studyReminderPayload(String slotId, String scheduledDate) =>
-    'study:$slotId|$scheduledDate';
+/// `study:<slot_id>|<дата по расписанию>|<дата показа>`. У перенесённой пары
+/// дата показа — день переноса (занятие живёт там); без неё (старый формат
+/// `study:<slot_id>|<дата по расписанию>`) считается равной дате по
+/// расписанию.
+String studyReminderPayload(
+  String slotId,
+  String scheduledDate, [
+  String? shownDate,
+]) => 'study:$slotId|$scheduledDate|${shownDate ?? scheduledDate}';
 
 /// Напоминания «Был на паре?» (spec `stage7_study.md`, 3.2 и 6): после
 /// окончания каждого занятия, которое можно отметить (`trackable`) и ещё
@@ -80,6 +87,7 @@ List<PlannedReminder> planStudyReminders({
           payload: studyReminderPayload(
             lesson.slotId ?? '',
             lesson.scheduledDate,
+            lesson.date,
           ),
         ),
       );
@@ -98,8 +106,12 @@ class StudyReminderSource implements ExtraReminderSource {
 
   final SyncStore store;
 
-  /// Праздники РФ (встроенный файл; пока не загружен — пустой календарь).
-  final HolidayCalendar Function() holidays;
+  /// Праздники РФ (встроенный файл). Источник **асинхронный**: пока файл не
+  /// загружен (холодный старт, фоновый изолят WorkManager), планировать
+  /// нельзя — пустой календарь дал бы «Был на паре?» в праздник. Ошибка
+  /// загрузки — напоминания не планируются (лучше промолчать, чем спросить
+  /// в праздник).
+  final Future<HolidayCalendar> Function() holidays;
 
   @override
   List<String> get tables => const [
@@ -114,6 +126,18 @@ class StudyReminderSource implements ExtraReminderSource {
 
   @override
   Future<List<PlannedReminder>> plan(DateTime now, tz.Location zone) async {
+    final HolidayCalendar calendar;
+    try {
+      calendar = await holidays();
+    } on Object catch (error, stack) {
+      developer.log(
+        'Праздники не загружены: «Был на паре?» не планируется',
+        name: 'study_reminders',
+        error: error,
+        stackTrace: stack,
+      );
+      return const [];
+    }
     final semesters = [
       for (final r in await store.visibleRows('study_semesters'))
         Semester.fromRow(r),
@@ -144,7 +168,7 @@ class StudyReminderSource implements ExtraReminderSource {
         for (final r in await store.visibleRows('class_overrides'))
           ClassOverride.fromRow(r),
       ],
-      holidays: studyHolidays(holidays(), from, to),
+      holidays: studyHolidays(calendar, from, to),
     );
     final marks = [
       for (final r in await store.visibleRows('study_attendance'))
@@ -158,6 +182,6 @@ final Provider<StudyReminderSource> studyReminderSourceProvider =
     Provider<StudyReminderSource>(
       (ref) => StudyReminderSource(
         store: ref.watch(syncStoreProvider),
-        holidays: () => ref.read(holidaysProvider),
+        holidays: () => ref.read(holidayCalendarProvider.future),
       ),
     );

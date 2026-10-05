@@ -104,15 +104,20 @@ class _BellsEditorState extends ConsumerState<BellsEditor> {
     }
     _rows.clear();
     if (data == null) return;
-    var source = data.bellsOf(widget.semesterId);
+    // Звонки даты заменяют обычные по каждому номеру отдельно (spec 1.3):
+    // таблица — обычная сетка с подставленными звонками этой даты.
+    final byNumber = {
+      for (final b in data.bellsOf(widget.semesterId)) b.number: b,
+    };
     final iso = _dateIso;
     if (iso != null) {
-      final own = [
-        for (final b in data.dateBellsOf(widget.semesterId))
-          if (b.onDate == iso) b,
-      ];
-      if (own.isNotEmpty) source = own;
+      for (final b in data.dateBellsOf(widget.semesterId)) {
+        if (b.onDate == iso) byNumber[b.number] = b;
+      }
     }
+    final source = [
+      for (final n in byNumber.keys.toList()..sort()) byNumber[n]!,
+    ];
     for (final b in source) {
       _rows.add(_Row(b.number, b.startTime, b.endTime));
     }
@@ -192,6 +197,24 @@ class _BellsEditorState extends ConsumerState<BellsEditor> {
         ),
       );
     }
+    // «Только на дату»: запись нужна лишь для номеров, чьё время отличается
+    // от обычной сетки (замена идёт по каждому номеру отдельно); совпавшие с
+    // обычной сеткой строки даты убираются.
+    var toSave = grid;
+    if (_dateIso != null) {
+      final regular = {
+        for (final b
+            in ref.read(studyDataProvider).value?.bellsOf(widget.semesterId) ??
+                const <Bell>[])
+          b.number: b,
+      };
+      toSave = [
+        for (final b in grid)
+          if (regular[b.number]?.startTime != b.startTime ||
+              regular[b.number]?.endTime != b.endTime)
+            b,
+      ];
+    }
     setState(() {
       _error = null;
       _saving = true;
@@ -201,7 +224,7 @@ class _BellsEditorState extends ConsumerState<BellsEditor> {
           .read(studyRepositoryProvider)
           .replaceBells(
             semesterId: widget.semesterId,
-            grid: grid,
+            grid: toSave,
             onDate: _dateIso,
           );
       if (!mounted) return;

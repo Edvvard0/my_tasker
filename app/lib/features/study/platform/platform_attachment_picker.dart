@@ -3,9 +3,12 @@
 // без устройства не проверяются. Вся логика вложений — в `attachment_service`.
 
 import 'dart:io';
+import 'dart:typed_data' show BytesBuilder;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:my_tasker/features/study/domain/study_validation.dart'
+    show maxFileBytes;
 import 'package:my_tasker/features/study/platform/attachment_picker.dart';
 
 /// Камера — `image_picker` (Android и iOS); галерея и документы —
@@ -31,6 +34,9 @@ class PlatformAttachmentPicker implements AttachmentPicker {
           imageQuality: 90,
         );
         if (shot == null) return null;
+        if (await shot.length() > maxFileBytes) {
+          throw const AttachmentTooLargeException();
+        }
         final name = shot.name.contains('.') ? shot.name : '${shot.name}.jpg';
         return PickedAttachment(name: name, bytes: await shot.readAsBytes());
       case AttachmentSource.gallery:
@@ -38,12 +44,7 @@ class PlatformAttachmentPicker implements AttachmentPicker {
           dialogTitle: 'Фото',
           type: FileType.image,
         );
-        return file == null
-            ? null
-            : PickedAttachment(
-                name: file.name,
-                bytes: await file.readAsBytes(),
-              );
+        return file == null ? null : await _read(file);
       case AttachmentSource.document:
         final file = await FilePicker.pickFile(
           dialogTitle: 'Документ',
@@ -60,12 +61,26 @@ class PlatformAttachmentPicker implements AttachmentPicker {
             'zip',
           ],
         );
-        return file == null
-            ? null
-            : PickedAttachment(
-                name: file.name,
-                bytes: await file.readAsBytes(),
-              );
+        return file == null ? null : await _read(file);
     }
+  }
+
+  /// Размер проверяется до чтения: файл больше лимита в память не грузится.
+  /// Если размер неизвестен, содержимое читается потоком и обрывается на
+  /// лимите.
+  static Future<PickedAttachment> _read(PlatformFile file) async {
+    final size = file.lengthSync() ?? await file.length();
+    if (size != null) {
+      if (size > maxFileBytes) throw const AttachmentTooLargeException();
+      return PickedAttachment(name: file.name, bytes: await file.readAsBytes());
+    }
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in file.readAsByteStream()) {
+      builder.add(chunk);
+      if (builder.length > maxFileBytes) {
+        throw const AttachmentTooLargeException();
+      }
+    }
+    return PickedAttachment(name: file.name, bytes: builder.takeBytes());
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_tasker/core/sync/ids.dart' show isUuid7;
 import 'package:my_tasker/core/sync/registered_tables.dart';
 import 'package:my_tasker/core/sync/sync_engine.dart';
 import 'package:my_tasker/core/sync/sync_table.dart';
@@ -390,17 +391,21 @@ void main() {
         expect(tasks.single['notes'], contains('Математика'));
         expect((await pc.study.getDebt(debtId))!.taskId, taskId);
 
-        // Задачу удалили: следующее нажатие создаёт новую.
+        // Задачу удалили: следующее нажатие восстанавливает ту же задачу.
         await phone.device.store.softDelete('tasks', taskId);
         final again = await phone.study.createTaskForDebt(
           debtId,
           subjectName: 'Математика',
         );
-        expect(again, isNot(taskId));
+        expect(again, taskId);
         final task = TaskEntity.fromRow(
           (await phone.device.store.getRow('tasks', again))!,
         );
         expect(task.due.isNone, isFalse);
+        expect(
+          (await phone.device.store.getRow('tasks', taskId))!['deleted_at'],
+          isNull,
+        );
         // Долг без срока — задача без срока.
         final other = phone.study.newId();
         await phone.study.createDebt(
@@ -422,6 +427,91 @@ void main() {
         );
       },
     );
+  });
+
+  group('корзина', () {
+    test('служебные удаления (отметка, звонок, изменение) в общую корзину не '
+        'попадают; предмет и долг — попадают; повторная запись возвращает '
+        'строку', () async {
+      final sem = await semester(phone);
+      final subj = await subject(phone, sem);
+      final sl = await slot(phone, sem, subj);
+      await phone.study.saveBell(
+        semesterId: sem,
+        number: 1,
+        startTime: '08:30',
+        endTime: '10:00',
+      );
+      await phone.study.mark(sl, '2026-09-07', AttendanceStatus.absent);
+      await phone.study.saveOverride(
+        ClassOverride(
+          slotId: sl,
+          date: '2026-09-14',
+          action: OverrideAction.cancel,
+        ),
+      );
+      await phone.study.unmark(sl, '2026-09-07');
+      await phone.study.clearOverride(sl, '2026-09-14');
+      await phone.study.deleteBell(semesterId: sem, number: 1);
+      final debt = phone.study.newId();
+      await phone.study.createDebt(
+        StudyDebt(id: debt, subjectId: subj, title: 'ЛР 1'),
+      );
+      await phone.study.deleteDebt(debt);
+      final titles = [
+        for (final i in await phone.device.store.trashItems()) i.table,
+      ];
+      expect(titles, ['study_debts']);
+      // Отметка возвращается обычной записью (естественный ключ).
+      await phone.study.mark(sl, '2026-09-07', AttendanceStatus.present);
+      expect(
+        await phone.device.store.visibleRows('study_attendance'),
+        hasLength(1),
+      );
+    });
+  });
+
+  group('задача по долгу на двух устройствах', () {
+    test('«Создать задачу» офлайн на обоих: после синхронизации одна задача, '
+        'id детерминированный и годится для сервера (UUIDv7)', () async {
+      final sem = await semester(phone);
+      final subj = await subject(phone, sem, name: 'Математика');
+      final debtId = phone.study.newId();
+      await phone.study.createDebt(
+        StudyDebt(
+          id: debtId,
+          subjectId: subj,
+          title: 'ЛР 2',
+          dueDate: '2026-10-12',
+        ),
+      );
+      await syncBoth();
+      // Оба устройства офлайн нажимают «Создать задачу».
+      final onPhone = await phone.study.createTaskForDebt(
+        debtId,
+        subjectName: 'Математика',
+      );
+      final onPc = await pc.study.createTaskForDebt(
+        debtId,
+        subjectName: 'Математика',
+      );
+      expect(onPhone, onPc);
+      expect(onPhone, debtTaskId(debtId));
+      expect(isUuid7(onPhone), isTrue);
+      await syncBoth();
+      for (final d in [phone, pc]) {
+        final tasks = await d.device.store.visibleRows('tasks');
+        expect(tasks, hasLength(1));
+        expect(tasks.single['id'], onPhone);
+        expect((await d.study.getDebt(debtId))!.taskId, onPhone);
+      }
+      expect(server.row('tasks', onPhone)!['deleted_at'], isNull);
+    });
+
+    test('идентификатор зависит от долга и не меняется', () {
+      expect(debtTaskId('a'), debtTaskId('a'));
+      expect(debtTaskId('a'), isNot(debtTaskId('b')));
+    });
   });
 
   group('репозиторий', () {

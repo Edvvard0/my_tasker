@@ -111,6 +111,25 @@ class _OverrideEditorState extends ConsumerState<OverrideEditor> {
       setState(() => _error = 'Выберите дату, на которую переносим');
       return;
     }
+    if (_action == OverrideAction.move) {
+      final slot = ref.read(studyDataProvider).value?.slotById[widget.slotId];
+      final semester = slot == null
+          ? null
+          : ref.read(studyDataProvider).value?.semesterById[slot.semesterId];
+      final target = formatDate(_newDate!);
+      if (semester != null &&
+          (target.compareTo(semester.startDate) < 0 ||
+              target.compareTo(semester.endDate) > 0)) {
+        setState(
+          () => _error =
+              'Дата вне семестра «${semester.name}» (с '
+              '${dateLabel(semester.startDate)} по '
+              '${dateLabel(semester.endDate)}): пара в этот день не будет '
+              'показана',
+        );
+        return;
+      }
+    }
     final room = RoomTextField.value(_room);
     setState(() {
       _error = null;
@@ -175,6 +194,7 @@ class _OverrideEditorState extends ConsumerState<OverrideEditor> {
       );
     }
     final subjects = data.subjectsOf(slot.semesterId);
+    final semester = data.semesterById[slot.semesterId];
     final changing = _action != OverrideAction.cancel;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
@@ -233,6 +253,12 @@ class _OverrideEditorState extends ConsumerState<OverrideEditor> {
                         keyPrefix: 'override-date',
                         today: today,
                         value: _newDate,
+                        firstDate: semester == null
+                            ? null
+                            : parseDate(semester.startDate),
+                        lastDate: semester == null
+                            ? null
+                            : parseDate(semester.endDate),
                         onChanged: (d) => setState(() => _newDate = d),
                       ),
                     ),

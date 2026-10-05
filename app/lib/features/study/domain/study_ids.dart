@@ -36,3 +36,13 @@ String overrideId(String slotId, String date) =>
 /// Отметка посещаемости: `uuid5(ns("study_attendance"), "<slot>|<date>")`.
 String attendanceId(String slotId, String date) =>
     uuid5(tableNamespace(attendanceTable), '$slotId|$date');
+
+/// Задача «по долгу»: детерминированный id, чтобы «Создать задачу» на двух
+/// устройствах офлайн дало одну задачу. Основа —
+/// `uuid5(ns("tasks"), "study_debt|<debt_id>")`; таблица `tasks` на сервере
+/// принимает только UUIDv7, поэтому версия в id выставлена 7 (биты времени
+/// здесь — просто хеш и ничего не значат).
+String debtTaskId(String debtId) {
+  final id = uuid5(tableNamespace('tasks'), 'study_debt|$debtId');
+  return '${id.substring(0, 14)}7${id.substring(15)}';
+}

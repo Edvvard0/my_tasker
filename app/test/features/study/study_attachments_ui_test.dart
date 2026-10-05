@@ -1,10 +1,9 @@
-import 'dart:typed_data';
-
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/features/study/application/attachment_providers.dart';
 import 'package:my_tasker/features/study/application/study_providers.dart';
+import 'package:my_tasker/features/study/data/attachment_store.dart';
 import 'package:my_tasker/features/study/data/study_repository.dart';
 import 'package:my_tasker/features/study/domain/study_models.dart';
 import 'package:my_tasker/features/study/platform/attachment_picker.dart';
@@ -31,6 +30,17 @@ Attachment _attachmentNamed(ProviderContainer c, String name) => c
     .requireValue
     .attachments
     .firstWhere((a) => a.fileName == name);
+
+/// Хранилище в памяти со счётчиком чтений.
+class _CountingStore extends MemoryAttachmentStore {
+  int reads = 0;
+
+  @override
+  Future<Uint8List?> read(String id) {
+    reads++;
+    return super.read(id);
+  }
+}
 
 void main() {
   group('добавление файла', () {
@@ -105,6 +115,40 @@ void main() {
       expect(fakes.files.files, isEmpty);
     });
 
+    testWidgets('содержимое не подходит к типу: отказ сразу, файл не '
+        'сохраняется', (tester) async {
+      final fakes = StudyFakes();
+      final container = await _subject(tester, fakes, files: false);
+      fakes.picker.next = PickedAttachment(
+        name: 'Сканы.pdf',
+        bytes: Uint8List.fromList(List.filled(32, 7)),
+      );
+      await tapKey(tester, 'attachment-add');
+      await tapKey(tester, 'attach-source-document');
+      expect(find.textContaining('не подходит к его типу'), findsOneWidget);
+      expect(
+        container.read(studyDataProvider).requireValue.attachments,
+        isEmpty,
+      );
+      expect(fakes.files.files, isEmpty);
+    });
+
+    testWidgets('слишком большой файл: отказ до чтения в память', (
+      tester,
+    ) async {
+      final fakes = StudyFakes();
+      final container = await _subject(tester, fakes, files: false);
+      fakes.picker.error = const AttachmentTooLargeException();
+      await tapKey(tester, 'attachment-add');
+      await tapKey(tester, 'attach-source-document');
+      expect(find.text('Файл больше 25 МБ.'), findsOneWidget);
+      expect(
+        container.read(studyDataProvider).requireValue.attachments,
+        isEmpty,
+      );
+      expect(const AttachmentTooLargeException().toString(), contains('25'));
+    });
+
     testWidgets('файл в карточке долга: «фото заданий и документы»', (
       tester,
     ) async {
@@ -171,6 +215,32 @@ void main() {
       expect(state.failureOf(a.id), contains('Содержимое файла не совпало'));
       expect(state.failureOf('нет'), isNull);
       expect(state.uploading, isFalse);
+    });
+
+    testWidgets('окончательный отказ не повторяется сам; «Повторить загрузку» '
+        'в меню файла запускает заново', (tester) async {
+      final fakes = StudyFakes();
+      final container = await _subject(tester, fakes);
+      final a = _attachmentNamed(container, 'Методичка.pdf');
+      fakes.synced(a);
+      final tampered = Uint8List.fromList((await fakes.files.read(a.id))!);
+      tampered[tampered.length - 1] ^= 1;
+      await fakes.files.write(a.id, tampered);
+      int callsFor(Attachment x) =>
+          fakes.api.uploadCalls.where((id) => id == x.id).length;
+      final notifier = container.read(attachmentTransferProvider.notifier);
+      await tester.runAsync(notifier.kick);
+      expect(callsFor(a), 1);
+      // Следующие проходы (синхронизация, перезапуск) файл не шлют.
+      await tester.runAsync(notifier.kick);
+      await tester.runAsync(notifier.kick);
+      expect(callsFor(a), 1);
+      await tester.pumpAndSettle();
+      await tapKey(tester, 'attachment-menu-${a.id}');
+      await tapKey(tester, 'attachment-retry');
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+      expect(callsFor(a), 2);
     });
 
     testWidgets('сбой загрузки не роняет приложение: повтор позже', (
@@ -351,6 +421,70 @@ void main() {
       expect(fakes.opener.opened, isEmpty);
     });
 
+    testWidgets('просмотрщик читает файл один раз, а не при каждой '
+        'перерисовке', (tester) async {
+      final counting = _CountingStore();
+      final fakes = StudyFakes(files: counting);
+      final (container, demo) = await pumpStudyDemo(
+        tester,
+        fakes: fakes,
+        files: false,
+      );
+      late Attachment a;
+      await tester.runAsync(() async {
+        a = await container
+            .read(attachmentServiceProvider)
+            .add(fileName: 'Схема.png', bytes: tinyPng, subjectId: demo.math);
+      });
+      counting.reads = 0;
+      await goTo(tester, container, '/study/files/${a.id}');
+      expect(find.byKey(const Key('attachment-image')), findsOneWidget);
+      final afterOpen = counting.reads;
+      // Правка вложения перерисовывает экран, но файл не перечитывается.
+      await tester.runAsync(
+        () => container
+            .read(studyRepositoryProvider)
+            .renameAttachment(a.id, 'Схема 2.png'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Схема 2.png'), findsOneWidget);
+      expect(counting.reads, afterOpen);
+    });
+
+    testWidgets('HEIC на Windows открывается системным просмотрщиком, а не '
+        '«картинкой» приложения', (tester) async {
+      final fakes = StudyFakes();
+      final (container, demo) = await pumpStudyDemo(
+        tester,
+        at: (d) => '/study/subjects/${d.math}',
+        fakes: fakes,
+        files: false,
+      );
+      late Attachment a;
+      await tester.runAsync(() async {
+        a = await container
+            .read(attachmentServiceProvider)
+            .add(
+              fileName: 'Снимок.heic',
+              bytes: Uint8List.fromList([
+                0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63, //
+                ...List.filled(8, 0),
+              ]),
+              subjectId: demo.math,
+            );
+      });
+      await tester.pumpAndSettle();
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      try {
+        await tester.tap(find.byKey(Key('attachment-${a.id}')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('attachment-viewer')), findsNothing);
+        expect(fakes.opener.opened.single.$2, 'image/heic');
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
     testWidgets('просмотрщик: испорченная картинка и ошибка скачивания', (
       tester,
     ) async {
@@ -366,7 +500,11 @@ void main() {
         final service = container.read(attachmentServiceProvider);
         broken = await service.add(
           fileName: 'битая.png',
-          bytes: Uint8List.fromList(List.filled(20, 1)),
+          // Заголовок PNG есть (клиент пропускает), картинки — нет.
+          bytes: Uint8List.fromList([
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
+            ...List.filled(12, 1),
+          ]),
           subjectId: demo.math,
         );
         final repo = container.read(studyRepositoryProvider);
@@ -381,8 +519,17 @@ void main() {
         await repo.createAttachment(remote);
       });
       await goTo(tester, container, '/study/files/${broken.id}');
+      expect(find.byKey(const Key('attachment-undecodable')), findsOneWidget);
+      // Системный просмотрщик — запасной путь.
+      await tapKey(tester, 'attachment-open-external');
+      expect(fakes.opener.opened.single, (
+        '/memory/${broken.id}/битая.png',
+        'image/png',
+      ));
+      fakes.opener.result = DocumentOpenResult.noApp;
+      await tapKey(tester, 'attachment-open-external');
       expect(
-        find.text('Это не картинка, которую можно показать.'),
+        find.text('На устройстве нет программы для этого файла.'),
         findsOneWidget,
       );
       fakes.synced(remote);

@@ -51,19 +51,24 @@ class TaskTarget extends ReminderTarget {
 }
 
 /// Занятие «Был на паре?» (Этап 7): пара [slotId] на дату по расписанию
-/// [date].
+/// [date]; [shownDate] — день, в котором занятие показано (у перенесённой
+/// пары — день переноса); `null` — старое уведомление без этой даты.
 class StudyTarget extends ReminderTarget {
-  const StudyTarget(this.slotId, this.date);
+  const StudyTarget(this.slotId, this.date, [this.shownDate]);
 
   final String slotId;
   final String date;
+  final String? shownDate;
 
   @override
   bool operator ==(Object other) =>
-      other is StudyTarget && other.slotId == slotId && other.date == date;
+      other is StudyTarget &&
+      other.slotId == slotId &&
+      other.date == date &&
+      other.shownDate == shownDate;
 
   @override
-  int get hashCode => Object.hash(slotId, date);
+  int get hashCode => Object.hash(slotId, date, shownDate);
 }
 
 /// Напоминание «Сна» (Этап 8): утреннее «Как спал?» или вечерний чек-ин за
@@ -83,7 +88,7 @@ class SleepTarget extends ReminderTarget {
 }
 
 /// Разбирает `payload` уведомления (`event:<id>|<ключ>`, `task:<id>` или
-/// `study:<пара>|<дата>`, `sleep:<morning|evening>|<дата>`); `null` — не наше
+/// `study:<пара>|<дата по расписанию>[|<дата показа>]`, `sleep:<morning|evening>|<дата>`); `null` — не наше
 /// или битое.
 ReminderTarget? parseReminderPayload(String? payload) {
   if (payload == null) return null;
@@ -101,7 +106,13 @@ ReminderTarget? parseReminderPayload(String? payload) {
     final body = payload.substring(6);
     final bar = body.indexOf('|');
     if (bar <= 0 || bar == body.length - 1) return null;
-    return StudyTarget(body.substring(0, bar), body.substring(bar + 1));
+    final rest = body.substring(bar + 1);
+    final second = rest.indexOf('|');
+    if (second < 0) return StudyTarget(body.substring(0, bar), rest);
+    final scheduled = rest.substring(0, second);
+    final shown = rest.substring(second + 1);
+    if (scheduled.isEmpty || shown.isEmpty) return null;
+    return StudyTarget(body.substring(0, bar), scheduled, shown);
   }
   if (payload.startsWith('sleep:')) {
     final body = payload.substring(6);
@@ -185,6 +196,7 @@ final reminderTapHandlerProvider = Provider<void>((ref) {
           context,
           slotId: target.slotId,
           scheduledDate: target.date,
+          shownDate: target.shownDate,
         );
       case SleepTarget():
         // «Как спал?» — быстрый ввод сна; вечернее — экран чек-ина.

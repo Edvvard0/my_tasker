@@ -27,6 +27,15 @@ class PickedAttachment {
   final Uint8List bytes;
 }
 
+/// Выбранный файл больше лимита (25 МБ): выбор отклоняется **до** чтения
+/// содержимого в память.
+class AttachmentTooLargeException implements Exception {
+  const AttachmentTooLargeException();
+
+  @override
+  String toString() => 'Файл больше 25 МБ';
+}
+
 /// Выбор файла вложения: камера, галерея и документ. Реализация —
 /// `image_picker` (камера) и `file_picker`; тесты подставляют поддельный
 /// выбор. Недоступный источник (камера на Windows) в [sources] не входит.

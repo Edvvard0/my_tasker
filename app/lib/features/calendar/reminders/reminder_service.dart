@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/widgets.dart' show AppLifecycleListener;
 
@@ -110,8 +111,7 @@ class ReminderService {
         final input = await _readInput();
         planned = [
           ...planReminders(input),
-          for (final source in extraSources)
-            ...await source.plan(input.now, input.zone),
+          for (final source in extraSources) ...await _planExtra(source, input),
         ];
         await reconcileReminders(scheduler, planned);
       } while (_pending);
@@ -120,6 +120,26 @@ class ReminderService {
       final idle = _idle;
       _idle = null;
       idle?.complete();
+    }
+  }
+
+  /// Напоминания дополнительного источника; сбой источника изолирован:
+  /// пересчёт календаря и остальных источников продолжается, а этот
+  /// источник на текущий пересчёт пропускается.
+  Future<List<PlannedReminder>> _planExtra(
+    ExtraReminderSource source,
+    ReminderInput input,
+  ) async {
+    try {
+      return await source.plan(input.now, input.zone);
+    } on Object catch (error, stack) {
+      developer.log(
+        'Источник напоминаний ${source.runtimeType} не отработал',
+        name: 'reminders',
+        error: error,
+        stackTrace: stack,
+      );
+      return const [];
     }
   }
 

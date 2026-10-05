@@ -17,6 +17,8 @@ class DateChoiceRow extends StatelessWidget {
     this.noneLabel = 'Нет',
     this.keyPrefix = 'date',
     this.allowFuture = true,
+    this.firstDate,
+    this.lastDate,
     super.key,
   });
 
@@ -33,21 +35,31 @@ class DateChoiceRow extends StatelessWidget {
   /// «Пн» нет, календарь не листается дальше сегодняшнего дня.
   final bool allowFuture;
 
+  /// Границы календаря выбора (например, семестр): по умолчанию — весь
+  /// допустимый диапазон. Быстрые чипы границ не знают: итог проверяет
+  /// форма.
+  final DateTime? firstDate;
+  final DateTime? lastDate;
+
   DateTime get _nextMonday {
     final monday = mondayOf(today);
     return addDays(monday, 7);
   }
 
   Future<void> _pick(BuildContext context) async {
-    final last = allowFuture
+    var last = allowFuture
         ? DateTime(maxYear)
         : DateTime(today.year, today.month, today.day);
+    if (lastDate != null && lastDate!.isBefore(last)) last = lastDate!;
+    var first = DateTime(minYear);
+    if (firstDate != null && firstDate!.isAfter(first)) first = firstDate!;
     var initial = value ?? today;
     if (initial.isAfter(last)) initial = last;
+    if (initial.isBefore(first)) initial = first;
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(minYear),
+      firstDate: first,
       lastDate: last,
       locale: const Locale('ru'),
     );

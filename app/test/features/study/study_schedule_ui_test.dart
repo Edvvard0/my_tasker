@@ -244,6 +244,52 @@ void main() {
       );
     });
 
+    testWidgets('перенос на дату вне семестра: календарь ограничен семестром '
+        'и сохранение отклоняется с понятной ошибкой', (tester) async {
+      // Понедельник 28 декабря: семестр кончается 31 декабря, а «Пн» — 4
+      // января — уже вне его.
+      final container = await pumpStudy(
+        tester,
+        now: DateTime.utc(2026, 12, 28, 9),
+        seedWith: (c) async {
+          await seedStudyDemo(c);
+        },
+      );
+      await goTo(tester, container, '/study/schedule');
+      await tester.tap(find.text('Математический анализ'));
+      await tester.pumpAndSettle();
+      await tapKey(tester, 'lesson-override');
+      await tapKey(tester, 'override-action-move');
+      // Выбор из календаря ограничен семестром.
+      await tapKey(tester, 'override-date-pick');
+      final picker = tester.widget<CalendarDatePicker>(
+        find.byType(CalendarDatePicker),
+      );
+      expect(picker.firstDate, DateTime(2026, 9));
+      expect(picker.lastDate, DateTime(2026, 12, 31));
+      await tester.tap(find.text('Отмена'));
+      await tester.pumpAndSettle();
+      // Быстрый чип «Пн, 4 янв.» — вне семестра.
+      await tapKey(tester, 'override-date-monday');
+      await tapKey(tester, 'override-save');
+      expect(
+        find.textContaining('Дата вне семестра «Осень 2026»'),
+        findsOneWidget,
+      );
+      expect(
+        _data(container).overrides
+            .where((o) => o.action == OverrideAction.move),
+        isEmpty,
+      );
+      // Внутри семестра — сохраняется.
+      await tapKey(tester, 'override-date-tomorrow');
+      await tapKey(tester, 'override-save');
+      expect(
+        _data(container).dayOf('2026-12-28').lessons.single.movedTo,
+        '2026-12-29',
+      );
+    });
+
     testWidgets('перенос на другую дату', (tester) async {
       final (container, _) = await pumpStudyDemo(
         tester,
