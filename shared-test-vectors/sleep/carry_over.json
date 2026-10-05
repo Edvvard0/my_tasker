@@ -1,0 +1,755 @@
+{
+  "description": "plan_carry_over(date, decisions, tasks): what the evening check-in changes in tasks",
+  "cases": [
+    {
+      "name": "dated_task_to_tomorrow",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_date",
+          "due_date": "2026-10-05",
+          "status": null
+        }
+      ]
+    },
+    {
+      "name": "dated_task_to_a_date",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "date",
+            "date": "2026-10-11"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_date",
+          "due_date": "2026-10-11",
+          "status": null
+        }
+      ]
+    },
+    {
+      "name": "task_without_a_date_gets_one",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": null,
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_date",
+          "due_date": "2026-10-05",
+          "status": null
+        }
+      ]
+    },
+    {
+      "name": "inbox_becomes_todo",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "inbox",
+            "due_date": null,
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_date",
+          "due_date": "2026-10-05",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "name": "in_progress_stays_in_progress",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "in_progress",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_date",
+          "due_date": "2026-10-05",
+          "status": null
+        }
+      ]
+    },
+    {
+      "name": "timed_task_keeps_its_wall_clock_time",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": null,
+            "due_at": "2026-10-04T15:00:00Z",
+            "due_tz": "Europe/Moscow",
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_at",
+          "due_at": "2026-10-05T15:00:00Z",
+          "due_tz": "Europe/Moscow",
+          "status": null
+        }
+      ]
+    },
+    {
+      "name": "timed_task_in_another_zone_keeps_its_local_time",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "date",
+            "date": "2026-10-06"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": null,
+            "due_at": "2026-10-04T23:30:00Z",
+            "due_tz": "Asia/Vladivostok",
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_at",
+          "due_at": "2026-10-05T23:30:00Z",
+          "due_tz": "Asia/Vladivostok",
+          "status": null
+        }
+      ]
+    },
+    {
+      "name": "timed_task_over_the_utc_date_line",
+      "input": {
+        "date": "2026-10-03",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": null,
+            "due_at": "2026-10-04T03:00:00Z",
+            "due_tz": "America/Los_Angeles",
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_at",
+          "due_at": "2026-10-05T03:00:00Z",
+          "due_tz": "America/Los_Angeles",
+          "status": null
+        }
+      ]
+    },
+    {
+      "name": "timed_task_moved_across_the_spring_dst_switch",
+      "input": {
+        "date": "2026-03-07",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          },
+          {
+            "task_id": "b",
+            "to": "date",
+            "date": "2026-03-09"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": null,
+            "due_at": "2026-03-07T15:00:00Z",
+            "due_tz": "America/New_York",
+            "rrule": null
+          },
+          {
+            "id": "b",
+            "status": "todo",
+            "due_date": null,
+            "due_at": "2026-03-07T15:00:00Z",
+            "due_tz": "America/New_York",
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_at",
+          "due_at": "2026-03-08T14:00:00Z",
+          "due_tz": "America/New_York",
+          "status": null
+        },
+        {
+          "task_id": "b",
+          "action": "set_due_at",
+          "due_at": "2026-03-09T14:00:00Z",
+          "due_tz": "America/New_York",
+          "status": null
+        }
+      ]
+    },
+    {
+      "name": "wall_time_inside_the_dst_gap_moves_forward",
+      "input": {
+        "date": "2026-03-07",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": null,
+            "due_at": "2026-03-06T07:30:00Z",
+            "due_tz": "America/New_York",
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_at",
+          "due_at": "2026-03-08T07:30:00Z",
+          "due_tz": "America/New_York",
+          "status": null
+        }
+      ]
+    },
+    {
+      "name": "wall_time_inside_the_dst_overlap_is_the_first_one",
+      "input": {
+        "date": "2026-10-31",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": null,
+            "due_at": "2026-10-30T05:30:00Z",
+            "due_tz": "America/New_York",
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_at",
+          "due_at": "2026-11-01T05:30:00Z",
+          "due_tz": "America/New_York",
+          "status": null
+        }
+      ]
+    },
+    {
+      "name": "month_and_year_boundary",
+      "input": {
+        "date": "2026-12-31",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          },
+          {
+            "task_id": "b",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": "2026-12-31",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "b",
+            "status": "todo",
+            "due_date": null,
+            "due_at": "2026-12-31T20:59:00Z",
+            "due_tz": "Europe/Moscow",
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_date",
+          "due_date": "2027-01-01",
+          "status": null
+        },
+        {
+          "task_id": "b",
+          "action": "set_due_at",
+          "due_at": "2027-01-01T20:59:00Z",
+          "due_tz": "Europe/Moscow",
+          "status": null
+        }
+      ]
+    },
+    {
+      "name": "leap_day_is_tomorrow",
+      "input": {
+        "date": "2028-02-28",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": "2028-02-28",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_date",
+          "due_date": "2028-02-29",
+          "status": null
+        }
+      ]
+    },
+    {
+      "name": "date_not_after_the_checkin_date_is_refused",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "date",
+            "date": "2026-10-04"
+          },
+          {
+            "task_id": "b",
+            "to": "date",
+            "date": "2026-10-01"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "b",
+            "status": "todo",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "skip",
+          "reason": "not_in_future"
+        },
+        {
+          "task_id": "b",
+          "action": "skip",
+          "reason": "not_in_future"
+        }
+      ]
+    },
+    {
+      "name": "done_and_cancelled_tasks_are_closed",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          },
+          {
+            "task_id": "b",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "done",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "b",
+            "status": "cancelled",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "skip",
+          "reason": "closed"
+        },
+        {
+          "task_id": "b",
+          "action": "skip",
+          "reason": "closed"
+        }
+      ]
+    },
+    {
+      "name": "recurring_task_is_not_moved",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": "FREQ=DAILY"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "skip",
+          "reason": "recurring"
+        }
+      ]
+    },
+    {
+      "name": "unknown_task",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "ghost",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": []
+      },
+      "expected": [
+        {
+          "task_id": "ghost",
+          "action": "skip",
+          "reason": "not_found"
+        }
+      ]
+    },
+    {
+      "name": "same_task_twice",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          },
+          {
+            "task_id": "a",
+            "to": "date",
+            "date": "2026-10-09"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "set_due_date",
+          "due_date": "2026-10-05",
+          "status": null
+        },
+        {
+          "task_id": "a",
+          "action": "skip",
+          "reason": "duplicate"
+        }
+      ]
+    },
+    {
+      "name": "already_on_that_date_is_unchanged",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          },
+          {
+            "task_id": "b",
+            "to": "tomorrow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": "2026-10-05",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "b",
+            "status": "todo",
+            "due_date": null,
+            "due_at": "2026-10-05T10:00:00Z",
+            "due_tz": "Europe/Moscow",
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "a",
+          "action": "skip",
+          "reason": "unchanged"
+        },
+        {
+          "task_id": "b",
+          "action": "skip",
+          "reason": "unchanged"
+        }
+      ]
+    },
+    {
+      "name": "mixed_batch_keeps_the_order_of_decisions",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [
+          {
+            "task_id": "c",
+            "to": "tomorrow"
+          },
+          {
+            "task_id": "a",
+            "to": "tomorrow"
+          },
+          {
+            "task_id": "b",
+            "to": "date",
+            "date": "2026-10-20"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "b",
+            "status": "inbox",
+            "due_date": null,
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "c",
+            "status": "done",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ]
+      },
+      "expected": [
+        {
+          "task_id": "c",
+          "action": "skip",
+          "reason": "closed"
+        },
+        {
+          "task_id": "a",
+          "action": "set_due_date",
+          "due_date": "2026-10-05",
+          "status": null
+        },
+        {
+          "task_id": "b",
+          "action": "set_due_date",
+          "due_date": "2026-10-20",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "name": "no_decisions",
+      "input": {
+        "date": "2026-10-04",
+        "decisions": [],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "todo",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ]
+      },
+      "expected": []
+    }
+  ]
+}

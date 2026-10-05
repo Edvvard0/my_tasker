@@ -37,9 +37,11 @@ dev = [
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
+    "pyyaml==6.0.3",
     "ruff==0.16.9",
     "types-openpyxl==3.1.5.20260827",
     "types-python-dateutil==2.9.0.20260807",
+    "types-pyyaml==6.0.12.20260906",
 ]
 
 [tool.ruff]
@@ -53,6 +55,11 @@ ignore = ["PLR2004"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106", "S311", "S603", "S607", "PLR0913", "PLR0917", "SLF001", "RUF001", "RUF003"]
+"tests/monitoring_vectors_gen.py" = ["S104", "E501"]
+"tests/test_monitoring_*.py" = ["PT018", "E501"]
+"tests/monitoring_support.py" = ["E501"]
+"tests/test_sleep_*.py" = ["E501"]
+"tests/sleep_*.py" = ["E501"]
 "tests/ai/**" = ["PT018", "RUF015", "ASYNC110", "E501", "S608"]
 "src/tasker/money.py" = ["RUF001", "RUF003"]
 "src/tasker/migrations/**" = ["N999"]
@@ -65,6 +72,8 @@ ignore = ["PLR2004"]
 "src/tasker/files/**" = ["PLR0911"]
 "src/tasker/banks/**" = ["PLR0913", "PLR0917", "PLR0911", "PLR0912", "RUF001", "RUF002", "RUF003"]
 "src/tasker/study/**" = ["PLR0913", "PLR0917", "PLR0911", "PLR0912", "RUF001", "RUF002", "RUF003"]
+"src/tasker/sleep/**" = ["PLR0911", "PLR0912", "PLR0913", "PLR0917"]
+"src/tasker/monitoring/**" = ["PLR0911", "PLR0912", "PLR0913", "PLR0917", "RUF001", "RUF002", "RUF003"]
 "src/tasker/finance/presets.py" = ["RUF001", "RUF003"]
 "src/tasker/finance/tools.py" = ["RUF001", "RUF003"]
 "src/tasker/ai/agents.py" = ["RUF001", "RUF003"]

@@ -160,6 +160,7 @@ class Env:
     sessionmaker: async_sessionmaker[AsyncSession]
     rt: Runtime
     last_step: int = 0
+    app: Any = None
 
     def next_code(self) -> str:
         """A valid, never-yet-used TOTP code.
@@ -194,6 +195,10 @@ class Env:
         async with self.sessionmaker() as session:
             return (await session.execute(sa.text(query), params)).scalar()
 
+    async def execute_fetch(self, query: str, **params: Any) -> list[Any]:
+        async with self.sessionmaker() as session:
+            return list((await session.execute(sa.text(query), params)).all())
+
     async def execute(self, query: str, **params: Any) -> None:
         async with self.sessionmaker() as session, session.begin():
             await session.execute(sa.text(query), params)
@@ -226,7 +231,9 @@ async def make_env(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client,
         ):
-            yield Env(client, clock, url, settings, match.group(1), sessionmaker, app.state.rt)
+            yield Env(
+                client, clock, url, settings, match.group(1), sessionmaker, app.state.rt, app=app
+            )
     finally:
         await engine.dispose()
         await asyncio.sleep(0)

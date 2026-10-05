@@ -4,6 +4,8 @@ from tasker.ai.tables import AI_TABLES
 from tasker.banks.tables import BANKS_TABLES
 from tasker.calendar.tables import CALENDAR_TABLES
 from tasker.finance.tables import FINANCE_TABLES
+from tasker.monitoring.tables import MONITORING_TABLES
+from tasker.sleep.tables import SLEEP_TABLES
 from tasker.study.tables import STUDY_TABLES
 from tasker.sync.registry import SyncRegistry
 from tasker.sync.user_settings import user_settings
@@ -22,6 +24,10 @@ def build_registry() -> SyncRegistry:
     for spec in BANKS_TABLES:
         registry.register(spec)
     for spec in STUDY_TABLES:
+        registry.register(spec)
+    for spec in SLEEP_TABLES:
+        registry.register(spec)
+    for spec in MONITORING_TABLES:
         registry.register(spec)
     for spec in AI_TABLES:
         registry.register(spec)

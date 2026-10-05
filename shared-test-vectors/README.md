@@ -138,3 +138,26 @@
 | `rooms.json` | `op: parse` `{text}` → `{building, room}` или `null` (пусто, длиннее 20 символов); `op: format` `{building, room}` → строка («к1 28»); «к1 28», «К2 101», «1-28», «корп. 2 каб. 101», голые кабинеты, произвольный текст |
 | `bells.json` | `generate_bells {first_start, duration, breaks (число или список), count}` → список `{number, start_time, end_time}` или `{"error": true}` |
 | `cycle.json` | `week_number {semester, dates}` → список номеров недели цикла (опора `week1_start`, `cycle_length`, `week_shifts`) |
+
+## Домен `sleep`
+
+Сон и ритуалы: длительность и дата сна, средний сон, связь сна с задачами, серии ритуалов, перенос задач из чек-ина (спецификация: `docs/specs/stage8_sleep_rituals.md`, разделы 3–6). Строки — «JSON-строки» таблиц (`id` — строки; моменты `YYYY-MM-DDTHH:MM:SSZ`, даты `YYYY-MM-DD`, пояса IANA). Всё целочисленное: минуты и средние — вниз, доли — в базисных пунктах вниз; `null` там, где делить не на что. **Нужна база часовых поясов** (Dart: пакет `timezone`); расчёт «настенного» времени и переноса задач с временем при переходе на летнее время обязан совпасть с PEP 495 `fold = 0` (спецификация, 6). Исходные входы — `backend/tests/sleep_vectors_gen.py`, ожидаемое — эталон `backend/src/tasker/sleep/reference.py`; пересборка `cd backend && uv run python -m tests.sleep_vectors_gen`. Python: `backend/tests/test_sleep_vectors.py`; Dart: `app/test/`.
+
+| Файл | Что проверяет |
+|---|---|
+| `duration.json` | `entry_view`: `input {bed_at, wake_at, bed_tz, wake_tz}` → `{date, minutes, bed_local, wake_local}` или `{"error": true}` (длина ≤ 0 или > 24 ч, битый момент) |
+| `averages.json` | `average_sleep`: `input {entries, through, days}` → `{from, to, days, days_with_data, total_minutes, average_minutes}` (пропущенные дни не нули) |
+| `link.json` | `sleep_task_link`: `input {entries, tasks, through}` → `{from, to, threshold_minutes, short, normal, difference_bp, days_without_sleep, enough_data}`; группа — `{days, tasks, done, share_bp}`; задача — `{id, status, due_date, due_at, due_tz, rrule}` |
+| `streaks.json` | `ritual_streaks`: `input {morning, evening, through}` → `{morning, evening, both}`, каждая — `{current, best, last}` |
+| `carry_over.json` | `plan_carry_over`: `input {date, decisions, tasks}` → список по решениям: `{task_id, action: set_due_date/set_due_at/skip, due_date / due_at+due_tz, status, reason}` |
+
+## Домен `monitoring`
+
+Серверы: мониторинг и алерты Telegram (спецификация: `docs/specs/stage9_monitoring.md`, разделы 5, 6, 9). Время в `alerts` и `quiet` — целые Unix-секунды; доступность — базисные пункты вниз. Исходные входы — `backend/tests/monitoring_vectors_gen.py`, ожидаемое — эталон `backend/src/tasker/monitoring/` (`targets.py`, `alerts.py`, `stats.py`); пересборка `cd backend && uv run python -m tests.monitoring_vectors_gen`. Python: `backend/tests/test_monitoring_vectors.py`; Dart обязан пройти `targets.json` и `availability.json` (форма клиента проверяет адреса теми же правилами; доступность считает сервер, но расчёт общий); `alerts.json` и `quiet.json` — серверные правила, Dart их не реализует.
+
+| Файл | Что проверяет |
+|---|---|
+| `targets.json` | `input.op`: `host {value}` → `{valid, host}` или `{valid: false, reason}` (причины: `empty`, `too_long`, `bad_chars`, `non_global_ip`, `single_label`, `bad_label`, `bad_tld`, `reserved_name`); `url {value}` — те же плюс `scheme`, `userinfo`, `fragment`, `bad_port`, `bad_url`, `no_host`; `addresses {values}` → `{reason}` (`null`, `no_address`, `resolves_to_non_global`) |
+| `alerts.json` | `run_cycle` по сценарию: `input {policy, services {id: {critical}}, cycles [{now, quiet, observations [{service, check, at, ok, reason}], drop?}]}` → `{cycles [{now, messages}], incidents [{service, n, started_at, ended_at}], final {service: {status, flapping}}}`; сообщение — `{kind, services, refs, …}`; `drop` убирает сервисы перед циклом |
+| `quiet.json` | `is_quiet`: `input {now, tz, start, end}` → `{quiet}` |
+| `availability.json` | `availability_bp`: `input {buckets [{hour, total, ok}], now, hours}` → `{bp}` (`null` без проверок) |

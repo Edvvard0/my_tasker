@@ -1,0 +1,293 @@
+{
+  "description": "entry_view(row): the length in whole minutes, the date of the sleep and the wall-clock times of bed and wake; {error: true} for an invalid row",
+  "cases": [
+    {
+      "name": "night_over_midnight",
+      "input": {
+        "bed_at": "2026-10-01T20:30:00Z",
+        "wake_at": "2026-10-02T04:10:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "date": "2026-10-02",
+        "minutes": 460,
+        "bed_local": "23:30",
+        "wake_local": "07:10"
+      }
+    },
+    {
+      "name": "bed_after_local_midnight_same_local_date",
+      "input": {
+        "bed_at": "2026-10-02T22:00:00Z",
+        "wake_at": "2026-10-03T04:00:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "date": "2026-10-03",
+        "minutes": 360,
+        "bed_local": "01:00",
+        "wake_local": "07:00"
+      }
+    },
+    {
+      "name": "minutes_are_floored",
+      "input": {
+        "bed_at": "2026-10-01T20:00:00Z",
+        "wake_at": "2026-10-02T03:59:59Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "date": "2026-10-02",
+        "minutes": 479,
+        "bed_local": "23:00",
+        "wake_local": "06:59"
+      }
+    },
+    {
+      "name": "exactly_one_minute",
+      "input": {
+        "bed_at": "2026-10-02T03:59:00Z",
+        "wake_at": "2026-10-02T04:00:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "date": "2026-10-02",
+        "minutes": 1,
+        "bed_local": "06:59",
+        "wake_local": "07:00"
+      }
+    },
+    {
+      "name": "exactly_24_hours_is_valid",
+      "input": {
+        "bed_at": "2026-10-01T04:00:00Z",
+        "wake_at": "2026-10-02T04:00:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "date": "2026-10-02",
+        "minutes": 1440,
+        "bed_local": "07:00",
+        "wake_local": "07:00"
+      }
+    },
+    {
+      "name": "24_hours_and_one_second_is_invalid",
+      "input": {
+        "bed_at": "2026-10-01T03:59:59Z",
+        "wake_at": "2026-10-02T04:00:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "wake_equals_bed_is_invalid",
+      "input": {
+        "bed_at": "2026-10-02T04:00:00Z",
+        "wake_at": "2026-10-02T04:00:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "wake_before_bed_is_invalid",
+      "input": {
+        "bed_at": "2026-10-02T05:00:00Z",
+        "wake_at": "2026-10-02T04:00:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "malformed_moment_is_invalid",
+      "input": {
+        "bed_at": "2026-10-01 20:30",
+        "wake_at": "2026-10-02T04:10:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "name": "flight_east_moscow_to_vladivostok",
+      "input": {
+        "bed_at": "2026-10-01T20:30:00Z",
+        "wake_at": "2026-10-02T03:00:00Z",
+        "bed_tz": "Europe/Moscow",
+        "wake_tz": "Asia/Vladivostok"
+      },
+      "expected": {
+        "date": "2026-10-02",
+        "minutes": 390,
+        "bed_local": "23:30",
+        "wake_local": "13:00"
+      }
+    },
+    {
+      "name": "flight_west_vladivostok_to_moscow",
+      "input": {
+        "bed_at": "2026-10-01T14:00:00Z",
+        "wake_at": "2026-10-01T22:00:00Z",
+        "bed_tz": "Asia/Vladivostok",
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "date": "2026-10-02",
+        "minutes": 480,
+        "bed_local": "00:00",
+        "wake_local": "01:00"
+      }
+    },
+    {
+      "name": "date_is_the_local_date_of_waking_not_the_utc_date",
+      "input": {
+        "bed_at": "2026-10-01T18:00:00Z",
+        "wake_at": "2026-10-01T21:30:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "date": "2026-10-02",
+        "minutes": 210,
+        "bed_local": "21:00",
+        "wake_local": "00:30"
+      }
+    },
+    {
+      "name": "date_in_a_west_zone_is_the_previous_utc_day",
+      "input": {
+        "bed_at": "2026-10-02T04:00:00Z",
+        "wake_at": "2026-10-02T11:30:00Z",
+        "bed_tz": null,
+        "wake_tz": "America/Los_Angeles"
+      },
+      "expected": {
+        "date": "2026-10-02",
+        "minutes": 450,
+        "bed_local": "21:00",
+        "wake_local": "04:30"
+      }
+    },
+    {
+      "name": "spring_forward_berlin_the_night_is_one_hour_shorter",
+      "input": {
+        "bed_at": "2026-03-28T23:30:00Z",
+        "wake_at": "2026-03-29T05:30:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Berlin"
+      },
+      "expected": {
+        "date": "2026-03-29",
+        "minutes": 360,
+        "bed_local": "00:30",
+        "wake_local": "07:30"
+      }
+    },
+    {
+      "name": "fall_back_berlin_the_night_is_one_hour_longer",
+      "input": {
+        "bed_at": "2026-10-24T22:30:00Z",
+        "wake_at": "2026-10-25T06:30:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Berlin"
+      },
+      "expected": {
+        "date": "2026-10-25",
+        "minutes": 480,
+        "bed_local": "00:30",
+        "wake_local": "07:30"
+      }
+    },
+    {
+      "name": "half_hour_zone_kolkata",
+      "input": {
+        "bed_at": "2026-10-01T17:00:00Z",
+        "wake_at": "2026-10-02T00:30:00Z",
+        "bed_tz": null,
+        "wake_tz": "Asia/Kolkata"
+      },
+      "expected": {
+        "date": "2026-10-02",
+        "minutes": 450,
+        "bed_local": "22:30",
+        "wake_local": "06:00"
+      }
+    },
+    {
+      "name": "quarter_hour_zone_kathmandu",
+      "input": {
+        "bed_at": "2026-10-01T17:00:00Z",
+        "wake_at": "2026-10-02T00:30:00Z",
+        "bed_tz": null,
+        "wake_tz": "Asia/Kathmandu"
+      },
+      "expected": {
+        "date": "2026-10-02",
+        "minutes": 450,
+        "bed_local": "22:45",
+        "wake_local": "06:15"
+      }
+    },
+    {
+      "name": "bed_zone_defaults_to_wake_zone",
+      "input": {
+        "bed_at": "2026-10-01T20:30:00Z",
+        "wake_at": "2026-10-02T04:10:00Z",
+        "bed_tz": null,
+        "wake_tz": "Asia/Yekaterinburg"
+      },
+      "expected": {
+        "date": "2026-10-02",
+        "minutes": 460,
+        "bed_local": "01:30",
+        "wake_local": "09:10"
+      }
+    },
+    {
+      "name": "leap_day_night",
+      "input": {
+        "bed_at": "2028-02-28T21:00:00Z",
+        "wake_at": "2028-02-29T04:00:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "date": "2028-02-29",
+        "minutes": 420,
+        "bed_local": "00:00",
+        "wake_local": "07:00"
+      }
+    },
+    {
+      "name": "new_year_night",
+      "input": {
+        "bed_at": "2026-12-31T19:00:00Z",
+        "wake_at": "2026-12-31T21:00:00Z",
+        "bed_tz": null,
+        "wake_tz": "Europe/Moscow"
+      },
+      "expected": {
+        "date": "2027-01-01",
+        "minutes": 120,
+        "bed_local": "22:00",
+        "wake_local": "00:00"
+      }
+    }
+  ]
+}

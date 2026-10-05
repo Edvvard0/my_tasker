@@ -1,0 +1,432 @@
+{
+  "description": "ritual_streaks(morning, evening, through): current and best streak of the morning plan, the evening check-in and of days with both",
+  "cases": [
+    {
+      "name": "no_rituals_yet",
+      "input": {
+        "morning": [],
+        "evening": [],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "morning": {
+          "current": 0,
+          "best": 0,
+          "last": null
+        },
+        "evening": {
+          "current": 0,
+          "best": 0,
+          "last": null
+        },
+        "both": {
+          "current": 0,
+          "best": 0,
+          "last": null
+        }
+      }
+    },
+    {
+      "name": "only_today",
+      "input": {
+        "morning": [
+          "2026-10-07"
+        ],
+        "evening": [],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "morning": {
+          "current": 1,
+          "best": 1,
+          "last": "2026-10-07"
+        },
+        "evening": {
+          "current": 0,
+          "best": 0,
+          "last": null
+        },
+        "both": {
+          "current": 0,
+          "best": 0,
+          "last": null
+        }
+      }
+    },
+    {
+      "name": "today_not_done_yet_keeps_the_streak_alive",
+      "input": {
+        "morning": [
+          "2026-10-04",
+          "2026-10-05",
+          "2026-10-06"
+        ],
+        "evening": [
+          "2026-10-04",
+          "2026-10-05",
+          "2026-10-06"
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "morning": {
+          "current": 3,
+          "best": 3,
+          "last": "2026-10-06"
+        },
+        "evening": {
+          "current": 3,
+          "best": 3,
+          "last": "2026-10-06"
+        },
+        "both": {
+          "current": 3,
+          "best": 3,
+          "last": "2026-10-06"
+        }
+      }
+    },
+    {
+      "name": "a_missed_yesterday_breaks_it",
+      "input": {
+        "morning": [
+          "2026-10-03",
+          "2026-10-04",
+          "2026-10-05"
+        ],
+        "evening": [
+          "2026-10-03",
+          "2026-10-04",
+          "2026-10-05"
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "morning": {
+          "current": 0,
+          "best": 3,
+          "last": "2026-10-05"
+        },
+        "evening": {
+          "current": 0,
+          "best": 3,
+          "last": "2026-10-05"
+        },
+        "both": {
+          "current": 0,
+          "best": 3,
+          "last": "2026-10-05"
+        }
+      }
+    },
+    {
+      "name": "best_is_longer_than_current",
+      "input": {
+        "morning": [
+          "2026-10-01",
+          "2026-10-02",
+          "2026-10-03",
+          "2026-10-04",
+          "2026-10-05",
+          "2026-10-07"
+        ],
+        "evening": [
+          "2026-10-01",
+          "2026-10-02",
+          "2026-10-03",
+          "2026-10-04",
+          "2026-10-05",
+          "2026-10-06",
+          "2026-10-07"
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "morning": {
+          "current": 1,
+          "best": 5,
+          "last": "2026-10-07"
+        },
+        "evening": {
+          "current": 7,
+          "best": 7,
+          "last": "2026-10-07"
+        },
+        "both": {
+          "current": 1,
+          "best": 5,
+          "last": "2026-10-07"
+        }
+      }
+    },
+    {
+      "name": "dates_after_through_are_ignored",
+      "input": {
+        "morning": [
+          "2026-10-05",
+          "2026-10-06",
+          "2026-10-07",
+          "2026-10-08",
+          "2026-10-09"
+        ],
+        "evening": [
+          "2026-10-08",
+          "2026-10-09"
+        ],
+        "through": "2026-10-06"
+      },
+      "expected": {
+        "morning": {
+          "current": 2,
+          "best": 2,
+          "last": "2026-10-06"
+        },
+        "evening": {
+          "current": 0,
+          "best": 0,
+          "last": null
+        },
+        "both": {
+          "current": 0,
+          "best": 0,
+          "last": null
+        }
+      }
+    },
+    {
+      "name": "duplicates_count_once",
+      "input": {
+        "morning": [
+          "2026-10-05",
+          "2026-10-05",
+          "2026-10-06",
+          "2026-10-06",
+          "2026-10-07"
+        ],
+        "evening": [
+          "2026-10-07",
+          "2026-10-07"
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "morning": {
+          "current": 3,
+          "best": 3,
+          "last": "2026-10-07"
+        },
+        "evening": {
+          "current": 1,
+          "best": 1,
+          "last": "2026-10-07"
+        },
+        "both": {
+          "current": 1,
+          "best": 1,
+          "last": "2026-10-07"
+        }
+      }
+    },
+    {
+      "name": "both_is_the_intersection",
+      "input": {
+        "morning": [
+          "2026-10-01",
+          "2026-10-02",
+          "2026-10-03",
+          "2026-10-05",
+          "2026-10-06",
+          "2026-10-07"
+        ],
+        "evening": [
+          "2026-10-02",
+          "2026-10-03",
+          "2026-10-04",
+          "2026-10-06",
+          "2026-10-07"
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "morning": {
+          "current": 3,
+          "best": 3,
+          "last": "2026-10-07"
+        },
+        "evening": {
+          "current": 2,
+          "best": 3,
+          "last": "2026-10-07"
+        },
+        "both": {
+          "current": 2,
+          "best": 2,
+          "last": "2026-10-07"
+        }
+      }
+    },
+    {
+      "name": "streak_over_a_month_boundary",
+      "input": {
+        "morning": [
+          "2026-09-29",
+          "2026-09-30",
+          "2026-10-01",
+          "2026-10-02"
+        ],
+        "evening": [
+          "2026-09-30",
+          "2026-10-01",
+          "2026-10-02"
+        ],
+        "through": "2026-10-02"
+      },
+      "expected": {
+        "morning": {
+          "current": 4,
+          "best": 4,
+          "last": "2026-10-02"
+        },
+        "evening": {
+          "current": 3,
+          "best": 3,
+          "last": "2026-10-02"
+        },
+        "both": {
+          "current": 3,
+          "best": 3,
+          "last": "2026-10-02"
+        }
+      }
+    },
+    {
+      "name": "streak_over_a_leap_day",
+      "input": {
+        "morning": [
+          "2028-02-28",
+          "2028-02-29",
+          "2028-03-01"
+        ],
+        "evening": [
+          "2028-02-29",
+          "2028-03-01"
+        ],
+        "through": "2028-03-01"
+      },
+      "expected": {
+        "morning": {
+          "current": 3,
+          "best": 3,
+          "last": "2028-03-01"
+        },
+        "evening": {
+          "current": 2,
+          "best": 2,
+          "last": "2028-03-01"
+        },
+        "both": {
+          "current": 2,
+          "best": 2,
+          "last": "2028-03-01"
+        }
+      }
+    },
+    {
+      "name": "streak_over_the_new_year",
+      "input": {
+        "morning": [
+          "2026-12-30",
+          "2026-12-31",
+          "2027-01-01"
+        ],
+        "evening": [
+          "2026-12-31",
+          "2027-01-01"
+        ],
+        "through": "2027-01-01"
+      },
+      "expected": {
+        "morning": {
+          "current": 3,
+          "best": 3,
+          "last": "2027-01-01"
+        },
+        "evening": {
+          "current": 2,
+          "best": 2,
+          "last": "2027-01-01"
+        },
+        "both": {
+          "current": 2,
+          "best": 2,
+          "last": "2027-01-01"
+        }
+      }
+    },
+    {
+      "name": "garbage_dates_are_ignored",
+      "input": {
+        "morning": [
+          "nope",
+          "2026-13-01",
+          "2026-10-07",
+          "2026-10-06"
+        ],
+        "evening": [
+          ""
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "morning": {
+          "current": 2,
+          "best": 2,
+          "last": "2026-10-07"
+        },
+        "evening": {
+          "current": 0,
+          "best": 0,
+          "last": null
+        },
+        "both": {
+          "current": 0,
+          "best": 0,
+          "last": null
+        }
+      }
+    },
+    {
+      "name": "old_streak_is_best_but_not_current",
+      "input": {
+        "morning": [
+          "2026-10-01",
+          "2026-10-02",
+          "2026-10-03",
+          "2026-10-04"
+        ],
+        "evening": [
+          "2026-10-01",
+          "2026-10-02"
+        ],
+        "through": "2026-10-20"
+      },
+      "expected": {
+        "morning": {
+          "current": 0,
+          "best": 4,
+          "last": "2026-10-04"
+        },
+        "evening": {
+          "current": 0,
+          "best": 2,
+          "last": "2026-10-02"
+        },
+        "both": {
+          "current": 0,
+          "best": 2,
+          "last": "2026-10-02"
+        }
+      }
+    }
+  ]
+}

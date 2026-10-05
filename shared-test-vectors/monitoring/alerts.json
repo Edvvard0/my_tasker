@@ -1,0 +1,5929 @@
+{
+  "description": "run_cycle over a timeline: the messages of every cycle, the incidents and the final status of every service (anti-spam rules of the Telegram alerts)",
+  "cases": [
+    {
+      "name": "fall_alert_once_then_recovery",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 21,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 41,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 81,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 80,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 101,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 100,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 21,
+            "messages": []
+          },
+          {
+            "now": 41,
+            "messages": []
+          },
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 71,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 20,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 81,
+            "messages": []
+          },
+          {
+            "now": 101,
+            "messages": [
+              {
+                "kind": "recovered",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 80,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": 100
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "two_failures_are_not_enough",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 21,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 41,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 100,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 200,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 21,
+            "messages": []
+          },
+          {
+            "now": 41,
+            "messages": []
+          },
+          {
+            "now": 100,
+            "messages": []
+          },
+          {
+            "now": 200,
+            "messages": []
+          }
+        ],
+        "incidents": [],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "a_success_resets_the_failure_count",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 41,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 101,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 80,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 200,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 41,
+            "messages": []
+          },
+          {
+            "now": 101,
+            "messages": []
+          },
+          {
+            "now": 200,
+            "messages": []
+          }
+        ],
+        "incidents": [],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "the_alert_waits_for_the_group_delay",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 21,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 41,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 65,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 69,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 70,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 21,
+            "messages": []
+          },
+          {
+            "now": 41,
+            "messages": []
+          },
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 65,
+            "messages": []
+          },
+          {
+            "now": 69,
+            "messages": []
+          },
+          {
+            "now": 70,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 20,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "one_success_is_not_a_recovery",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 21,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 41,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 81,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 80,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 95,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 21,
+            "messages": []
+          },
+          {
+            "now": 41,
+            "messages": []
+          },
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 71,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 20,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 81,
+            "messages": []
+          },
+          {
+            "now": 95,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "recovery_inside_the_delay_is_silent",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 21,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 41,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 65,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 62,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 64,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 80,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 200,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 21,
+            "messages": []
+          },
+          {
+            "now": 41,
+            "messages": []
+          },
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 65,
+            "messages": []
+          },
+          {
+            "now": 80,
+            "messages": []
+          },
+          {
+            "now": 200,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": 64
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "no_repeat_while_down",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 21,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 41,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 70,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 370,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 670,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 970,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 1270,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 1570,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 1870,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 2170,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 2470,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 2770,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 3070,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 21,
+            "messages": []
+          },
+          {
+            "now": 41,
+            "messages": []
+          },
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 70,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 20,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 370,
+            "messages": []
+          },
+          {
+            "now": 670,
+            "messages": []
+          },
+          {
+            "now": 970,
+            "messages": []
+          },
+          {
+            "now": 1270,
+            "messages": []
+          },
+          {
+            "now": 1570,
+            "messages": []
+          },
+          {
+            "now": 1870,
+            "messages": []
+          },
+          {
+            "now": 2170,
+            "messages": []
+          },
+          {
+            "now": 2470,
+            "messages": []
+          },
+          {
+            "now": 2770,
+            "messages": []
+          },
+          {
+            "now": 3070,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "reminders_after_one_hour_then_every_four",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 21,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 41,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 3670,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 3671,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 10000,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 18070,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 18071,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 21,
+            "messages": []
+          },
+          {
+            "now": 41,
+            "messages": []
+          },
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 71,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 20,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 3670,
+            "messages": []
+          },
+          {
+            "now": 3671,
+            "messages": [
+              {
+                "kind": "reminder",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 3651,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 10000,
+            "messages": []
+          },
+          {
+            "now": 18070,
+            "messages": []
+          },
+          {
+            "now": 18071,
+            "messages": [
+              {
+                "kind": "reminder",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 18051,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "since_is_the_start_of_the_failure_streak",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 500,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 300,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 400,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 480,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 520,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 500,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 300,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 520,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 300,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "first_run_never_up_still_alerts",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 60,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 60,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 0,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "first_success_is_no_event",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 100,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 90,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 100,
+            "messages": []
+          }
+        ],
+        "incidents": [],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "two_checks_one_alert_one_recovery",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s1",
+                "check": "c2",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 121,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c2",
+                "at": 80,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c2",
+                "at": 100,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c2",
+                "at": 120,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 141,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 130,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 140,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 161,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c2",
+                "at": 150,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s1",
+                "check": "c2",
+                "at": 160,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 71,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 20,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 121,
+            "messages": []
+          },
+          {
+            "now": 141,
+            "messages": []
+          },
+          {
+            "now": 161,
+            "messages": [
+              {
+                "kind": "recovered",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 140,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": 160
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "a_check_that_fails_again_after_one_success_stays_down",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 91,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 80,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 90,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 200,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 71,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 20,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 91,
+            "messages": []
+          },
+          {
+            "now": 200,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "two_services_down_together_make_one_group_message",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          },
+          "s2": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 71,
+            "messages": [
+              {
+                "kind": "down_group",
+                "services": [
+                  "s1",
+                  "s2"
+                ],
+                "since": 20,
+                "suspect_monitor": false,
+                "refs": [
+                  "s1#1",
+                  "s2#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": null
+          },
+          {
+            "service": "s2",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          },
+          "s2": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "three_services_down_together_suspect_the_monitor",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          },
+          "s2": {
+            "critical": false
+          },
+          "s3": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s2",
+                "check": "c",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s3",
+                "check": "c",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s3",
+                "check": "c",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s3",
+                "check": "c",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s3",
+                "check": "c",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 71,
+            "messages": [
+              {
+                "kind": "down_group",
+                "services": [
+                  "s1",
+                  "s2",
+                  "s3"
+                ],
+                "since": 20,
+                "suspect_monitor": true,
+                "refs": [
+                  "s1#1",
+                  "s2#1",
+                  "s3#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": null
+          },
+          {
+            "service": "s2",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": null
+          },
+          {
+            "service": "s3",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          },
+          "s2": {
+            "status": "down",
+            "flapping": false
+          },
+          "s3": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "five_services_down_together",
+      "input": {
+        "policy": {},
+        "services": {
+          "a": {
+            "critical": false
+          },
+          "b": {
+            "critical": false
+          },
+          "c": {
+            "critical": false
+          },
+          "d": {
+            "critical": false
+          },
+          "e": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "a",
+                "check": "k",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "a",
+                "check": "k",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "a",
+                "check": "k",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "b",
+                "check": "k",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "b",
+                "check": "k",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "b",
+                "check": "k",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "c",
+                "check": "k",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "c",
+                "check": "k",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "c",
+                "check": "k",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "d",
+                "check": "k",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "d",
+                "check": "k",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "d",
+                "check": "k",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "e",
+                "check": "k",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "e",
+                "check": "k",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "e",
+                "check": "k",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 80,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": [
+              {
+                "kind": "down_group",
+                "services": [
+                  "a",
+                  "b",
+                  "c",
+                  "d",
+                  "e"
+                ],
+                "since": 0,
+                "suspect_monitor": true,
+                "refs": [
+                  "a#1",
+                  "b#1",
+                  "c#1",
+                  "d#1",
+                  "e#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 80,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "a",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          },
+          {
+            "service": "b",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          },
+          {
+            "service": "c",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          },
+          {
+            "service": "d",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          },
+          {
+            "service": "e",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "a": {
+            "status": "down",
+            "flapping": false
+          },
+          "b": {
+            "status": "down",
+            "flapping": false
+          },
+          "c": {
+            "status": "down",
+            "flapping": false
+          },
+          "d": {
+            "status": "down",
+            "flapping": false
+          },
+          "e": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "one_down_one_up_is_a_single_message",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          },
+          "s2": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 30,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 50,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 71,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 20,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          },
+          "s2": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "falls_in_different_cycles_stay_separate",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          },
+          "s2": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 141,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 80,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 100,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 120,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 151,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 0,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "messages": []
+          },
+          {
+            "now": 141,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s2"
+                ],
+                "since": 80,
+                "reasons": {
+                  "c2": "HTTP 502"
+                },
+                "refs": [
+                  "s2#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 151,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          },
+          {
+            "service": "s2",
+            "n": 1,
+            "started_at": 80,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          },
+          "s2": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "simultaneous_recoveries_make_one_group_message",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          },
+          "s2": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 120,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 100,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 110,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 100,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 110,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": [
+              {
+                "kind": "down_group",
+                "services": [
+                  "s1",
+                  "s2"
+                ],
+                "since": 0,
+                "suspect_monitor": false,
+                "refs": [
+                  "s1#1",
+                  "s2#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "messages": []
+          },
+          {
+            "now": 120,
+            "messages": [
+              {
+                "kind": "recovered_group",
+                "services": [
+                  "s1",
+                  "s2"
+                ],
+                "downtime": 110,
+                "refs": [
+                  "s1#1",
+                  "s2#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": 110
+          },
+          {
+            "service": "s2",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": 110
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          },
+          "s2": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "group_threshold_of_three_keeps_two_apart",
+      "input": {
+        "policy": {
+          "group_min": 3
+        },
+        "services": {
+          "s1": {
+            "critical": false
+          },
+          "s2": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 0,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              },
+              {
+                "kind": "down",
+                "services": [
+                  "s2"
+                ],
+                "since": 0,
+                "reasons": {
+                  "c2": "HTTP 502"
+                },
+                "refs": [
+                  "s2#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          },
+          {
+            "service": "s2",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          },
+          "s2": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "no_group_delay_alerts_in_the_same_cycle",
+      "input": {
+        "policy": {
+          "group_delay": 0
+        },
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 0,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "thresholds_of_one",
+      "input": {
+        "policy": {
+          "fail_threshold": 1,
+          "recover_threshold": 1
+        },
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 21,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 40,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 21,
+            "messages": []
+          },
+          {
+            "now": 40,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 20,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 61,
+            "messages": [
+              {
+                "kind": "recovered",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 40,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": 60
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "flapping_one_message_then_silence_then_stable",
+      "input": {
+        "policy": {
+          "fail_threshold": 1,
+          "recover_threshold": 1
+        },
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 101,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 100,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 111,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 201,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 200,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 301,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 300,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 311,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 401,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 400,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 500,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 2000,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 2201,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 101,
+            "messages": []
+          },
+          {
+            "now": 111,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 100,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 201,
+            "messages": [
+              {
+                "kind": "recovered",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 100,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 301,
+            "messages": []
+          },
+          {
+            "now": 311,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 300,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#2"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 401,
+            "messages": [
+              {
+                "kind": "flapping",
+                "services": [
+                  "s1"
+                ],
+                "changes": 4,
+                "refs": [
+                  "s1@401"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 500,
+            "messages": []
+          },
+          {
+            "now": 2000,
+            "messages": []
+          },
+          {
+            "now": 2201,
+            "messages": [
+              {
+                "kind": "stable",
+                "services": [
+                  "s1"
+                ],
+                "status": "up",
+                "refs": [
+                  "s1@2201"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 100,
+            "ended_at": 200
+          },
+          {
+            "service": "s1",
+            "n": 2,
+            "started_at": 300,
+            "ended_at": 400
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "flapping_that_ends_down_says_so_and_resumes_reminders",
+      "input": {
+        "policy": {
+          "fail_threshold": 1,
+          "recover_threshold": 1
+        },
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 101,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 100,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 111,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 201,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 200,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 301,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 300,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 311,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 401,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 400,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 501,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 500,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 520,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 2300,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 2301,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 5900,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 5901,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 101,
+            "messages": []
+          },
+          {
+            "now": 111,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 100,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 201,
+            "messages": [
+              {
+                "kind": "recovered",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 100,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 301,
+            "messages": []
+          },
+          {
+            "now": 311,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 300,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#2"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 401,
+            "messages": [
+              {
+                "kind": "flapping",
+                "services": [
+                  "s1"
+                ],
+                "changes": 4,
+                "refs": [
+                  "s1@401"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 501,
+            "messages": []
+          },
+          {
+            "now": 520,
+            "messages": []
+          },
+          {
+            "now": 2300,
+            "messages": [
+              {
+                "kind": "stable",
+                "services": [
+                  "s1"
+                ],
+                "status": "down",
+                "refs": [
+                  "s1@2300"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 2301,
+            "messages": []
+          },
+          {
+            "now": 5900,
+            "messages": [
+              {
+                "kind": "reminder",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 5400,
+                "refs": [
+                  "s1#3"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 5901,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 100,
+            "ended_at": 200
+          },
+          {
+            "service": "s1",
+            "n": 2,
+            "started_at": 300,
+            "ended_at": 400
+          },
+          {
+            "service": "s1",
+            "n": 3,
+            "started_at": 500,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "three_changes_are_not_flapping",
+      "input": {
+        "policy": {
+          "fail_threshold": 1,
+          "recover_threshold": 1
+        },
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 101,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 100,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 111,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 201,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 200,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 301,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 300,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 311,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 101,
+            "messages": []
+          },
+          {
+            "now": 111,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 100,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 201,
+            "messages": [
+              {
+                "kind": "recovered",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 100,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 301,
+            "messages": []
+          },
+          {
+            "now": 311,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 300,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#2"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 100,
+            "ended_at": 200
+          },
+          {
+            "service": "s1",
+            "n": 2,
+            "started_at": 300,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "outages_far_apart_are_separate_incidents",
+      "input": {
+        "policy": {
+          "fail_threshold": 1,
+          "recover_threshold": 1
+        },
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 101,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 100,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 111,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 201,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 200,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 3001,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 3000,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 3011,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 3101,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 3100,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 101,
+            "messages": []
+          },
+          {
+            "now": 111,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 100,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 201,
+            "messages": [
+              {
+                "kind": "recovered",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 100,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 3001,
+            "messages": []
+          },
+          {
+            "now": 3011,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 3000,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#2"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 3101,
+            "messages": [
+              {
+                "kind": "recovered",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 100,
+                "refs": [
+                  "s1#2"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 100,
+            "ended_at": 200
+          },
+          {
+            "service": "s1",
+            "n": 2,
+            "started_at": 3000,
+            "ended_at": 3100
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "flapping_notice_is_sent_once_however_long_it_lasts",
+      "input": {
+        "policy": {
+          "fail_threshold": 1,
+          "recover_threshold": 1
+        },
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 200,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 200,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 300,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 300,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 400,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 400,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 500,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 500,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 600,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 600,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 700,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 700,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 800,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 800,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 900,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 900,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 1000,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 1000,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 1100,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 1100,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 1200,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 1200,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 200,
+            "messages": []
+          },
+          {
+            "now": 300,
+            "messages": []
+          },
+          {
+            "now": 400,
+            "messages": []
+          },
+          {
+            "now": 500,
+            "messages": []
+          },
+          {
+            "now": 600,
+            "messages": [
+              {
+                "kind": "flapping",
+                "services": [
+                  "s1"
+                ],
+                "changes": 4,
+                "refs": [
+                  "s1@600"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 700,
+            "messages": []
+          },
+          {
+            "now": 800,
+            "messages": []
+          },
+          {
+            "now": 900,
+            "messages": []
+          },
+          {
+            "now": 1000,
+            "messages": []
+          },
+          {
+            "now": 1100,
+            "messages": []
+          },
+          {
+            "now": 1200,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 300,
+            "ended_at": 400
+          },
+          {
+            "service": "s1",
+            "n": 2,
+            "started_at": 500,
+            "ended_at": 600
+          },
+          {
+            "service": "s1",
+            "n": 3,
+            "started_at": 700,
+            "ended_at": 800
+          },
+          {
+            "service": "s1",
+            "n": 4,
+            "started_at": 900,
+            "ended_at": 1000
+          },
+          {
+            "service": "s1",
+            "n": 5,
+            "started_at": 1100,
+            "ended_at": 1200
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": true
+          }
+        }
+      }
+    },
+    {
+      "name": "quiet_hours_hold_the_alert_of_a_normal_service",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 100,
+            "quiet": true,
+            "observations": []
+          },
+          {
+            "now": 5000,
+            "quiet": true,
+            "observations": []
+          },
+          {
+            "now": 6000,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 6100,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 100,
+            "messages": []
+          },
+          {
+            "now": 5000,
+            "messages": []
+          },
+          {
+            "now": 6000,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 0,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 6100,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "quiet_hours_do_not_hold_a_critical_service",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": true
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": true,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 0,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "a_short_outage_inside_quiet_hours_is_silent",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 300,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 100,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 120,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 400,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": []
+          },
+          {
+            "now": 300,
+            "messages": []
+          },
+          {
+            "now": 400,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": 120
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "a_recovery_is_never_held_by_quiet_hours",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 200,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 100,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 120,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 0,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "messages": []
+          },
+          {
+            "now": 200,
+            "messages": [
+              {
+                "kind": "recovered",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 120,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": 120
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "quiet_hours_hold_a_reminder",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 3700,
+            "quiet": true,
+            "observations": []
+          },
+          {
+            "now": 9000,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 12000,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 23400,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 0,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "messages": []
+          },
+          {
+            "now": 3700,
+            "messages": []
+          },
+          {
+            "now": 9000,
+            "messages": [
+              {
+                "kind": "reminder",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 9000,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 12000,
+            "messages": []
+          },
+          {
+            "now": 23400,
+            "messages": [
+              {
+                "kind": "reminder",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 23400,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "quiet_hours_swallow_the_flapping_notice_and_its_end",
+      "input": {
+        "policy": {
+          "fail_threshold": 1,
+          "recover_threshold": 1
+        },
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 101,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 100,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 201,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 200,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 301,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 300,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 401,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 400,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 2500,
+            "quiet": true,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 101,
+            "messages": []
+          },
+          {
+            "now": 201,
+            "messages": []
+          },
+          {
+            "now": 301,
+            "messages": []
+          },
+          {
+            "now": 401,
+            "messages": []
+          },
+          {
+            "now": 2500,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 100,
+            "ended_at": 200
+          },
+          {
+            "service": "s1",
+            "n": 2,
+            "started_at": 300,
+            "ended_at": 400
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "quiet_flapping_that_ends_down_sends_the_held_alert_when_the_quiet_hours_end",
+      "input": {
+        "policy": {
+          "fail_threshold": 1,
+          "recover_threshold": 1
+        },
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 101,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 100,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 201,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 200,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 301,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 300,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 401,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 400,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 501,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 500,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 2500,
+            "quiet": true,
+            "observations": []
+          },
+          {
+            "now": 2600,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 101,
+            "messages": []
+          },
+          {
+            "now": 201,
+            "messages": []
+          },
+          {
+            "now": 301,
+            "messages": []
+          },
+          {
+            "now": 401,
+            "messages": []
+          },
+          {
+            "now": 501,
+            "messages": []
+          },
+          {
+            "now": 2500,
+            "messages": []
+          },
+          {
+            "now": 2600,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 500,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#3"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 100,
+            "ended_at": 200
+          },
+          {
+            "service": "s1",
+            "n": 2,
+            "started_at": 300,
+            "ended_at": 400
+          },
+          {
+            "service": "s1",
+            "n": 3,
+            "started_at": 500,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "a_critical_service_gets_the_flapping_notice_in_quiet_hours",
+      "input": {
+        "policy": {
+          "fail_threshold": 1,
+          "recover_threshold": 1
+        },
+        "services": {
+          "s1": {
+            "critical": true
+          }
+        },
+        "cycles": [
+          {
+            "now": 1,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 101,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 100,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 201,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 200,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 301,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 300,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 401,
+            "quiet": true,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 400,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 1,
+            "messages": []
+          },
+          {
+            "now": 101,
+            "messages": []
+          },
+          {
+            "now": 201,
+            "messages": []
+          },
+          {
+            "now": 301,
+            "messages": []
+          },
+          {
+            "now": 401,
+            "messages": [
+              {
+                "kind": "flapping",
+                "services": [
+                  "s1"
+                ],
+                "changes": 4,
+                "refs": [
+                  "s1@401"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 100,
+            "ended_at": 200
+          },
+          {
+            "service": "s1",
+            "n": 2,
+            "started_at": 300,
+            "ended_at": 400
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "up",
+            "flapping": true
+          }
+        }
+      }
+    },
+    {
+      "name": "observations_are_taken_in_time_order",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 100,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 60,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 120,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 100,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 20,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 120,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 20,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "a_deleted_service_is_dropped_without_a_message",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          },
+          "s2": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s2",
+                "check": "c2",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": [],
+            "drop": [
+              "s2"
+            ]
+          },
+          {
+            "now": 3700,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": [
+              {
+                "kind": "down_group",
+                "services": [
+                  "s1",
+                  "s2"
+                ],
+                "since": 0,
+                "suspect_monitor": false,
+                "refs": [
+                  "s1#1",
+                  "s2#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "messages": []
+          },
+          {
+            "now": 3700,
+            "messages": [
+              {
+                "kind": "reminder",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 3700,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          },
+          {
+            "service": "s2",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "silence_is_not_recovery",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 100,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 150,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 200,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 250,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 300,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 350,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 400,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 450,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 500,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 550,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 600,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 650,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 700,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 750,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 800,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 850,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 900,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 950,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 1000,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 1050,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 0,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "messages": []
+          },
+          {
+            "now": 100,
+            "messages": []
+          },
+          {
+            "now": 150,
+            "messages": []
+          },
+          {
+            "now": 200,
+            "messages": []
+          },
+          {
+            "now": 250,
+            "messages": []
+          },
+          {
+            "now": 300,
+            "messages": []
+          },
+          {
+            "now": 350,
+            "messages": []
+          },
+          {
+            "now": 400,
+            "messages": []
+          },
+          {
+            "now": 450,
+            "messages": []
+          },
+          {
+            "now": 500,
+            "messages": []
+          },
+          {
+            "now": 550,
+            "messages": []
+          },
+          {
+            "now": 600,
+            "messages": []
+          },
+          {
+            "now": 650,
+            "messages": []
+          },
+          {
+            "now": 700,
+            "messages": []
+          },
+          {
+            "now": 750,
+            "messages": []
+          },
+          {
+            "now": 800,
+            "messages": []
+          },
+          {
+            "now": 850,
+            "messages": []
+          },
+          {
+            "now": 900,
+            "messages": []
+          },
+          {
+            "now": 950,
+            "messages": []
+          },
+          {
+            "now": 1000,
+            "messages": []
+          },
+          {
+            "now": 1050,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    },
+    {
+      "name": "incident_numbers_count_up_per_service",
+      "input": {
+        "policy": {},
+        "services": {
+          "s1": {
+            "critical": false
+          }
+        },
+        "cycles": [
+          {
+            "now": 61,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 0,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 20,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 40,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "quiet": false,
+            "observations": []
+          },
+          {
+            "now": 121,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 100,
+                "ok": true,
+                "reason": null
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 110,
+                "ok": true,
+                "reason": null
+              }
+            ]
+          },
+          {
+            "now": 4000,
+            "quiet": false,
+            "observations": [
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 3900,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 3920,
+                "ok": false,
+                "reason": "HTTP 502"
+              },
+              {
+                "service": "s1",
+                "check": "c1",
+                "at": 3940,
+                "ok": false,
+                "reason": "HTTP 502"
+              }
+            ]
+          },
+          {
+            "now": 4020,
+            "quiet": false,
+            "observations": []
+          }
+        ]
+      },
+      "expected": {
+        "cycles": [
+          {
+            "now": 61,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 0,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 71,
+            "messages": []
+          },
+          {
+            "now": 121,
+            "messages": [
+              {
+                "kind": "recovered",
+                "services": [
+                  "s1"
+                ],
+                "downtime": 110,
+                "refs": [
+                  "s1#1"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 4000,
+            "messages": [
+              {
+                "kind": "down",
+                "services": [
+                  "s1"
+                ],
+                "since": 3900,
+                "reasons": {
+                  "c1": "HTTP 502"
+                },
+                "refs": [
+                  "s1#2"
+                ]
+              }
+            ]
+          },
+          {
+            "now": 4020,
+            "messages": []
+          }
+        ],
+        "incidents": [
+          {
+            "service": "s1",
+            "n": 1,
+            "started_at": 0,
+            "ended_at": 110
+          },
+          {
+            "service": "s1",
+            "n": 2,
+            "started_at": 3900,
+            "ended_at": null
+          }
+        ],
+        "final": {
+          "s1": {
+            "status": "down",
+            "flapping": false
+          }
+        }
+      }
+    }
+  ]
+}

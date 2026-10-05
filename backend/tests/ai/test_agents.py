@@ -46,6 +46,8 @@ async def test_bootstrap_seeds_six_agents_once(aienv: AiEnv) -> None:
         "get_study_schedule": "read",
         "get_study_absences": "read",
         "get_study_debts": "read",
+        "get_sleep_stats": "read",
+        "get_daily_rituals": "read",
     }
     create = [t for t in first["tools"] if t["name"] == "create_task"][0]
     assert create["parameters"]["required"] == ["title"]

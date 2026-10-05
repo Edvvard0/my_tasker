@@ -2,6 +2,7 @@ import asyncio
 import signal
 import sys
 
+import tasker.monitoring.jobs
 import tasker.sync.jobs  # noqa: F401  (registers the housekeeping job)
 from tasker.config import Settings
 from tasker.logging import configure_logging
@@ -19,7 +20,7 @@ async def amain() -> None:
 
 def main() -> int:
     settings = Settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, redact=settings.secret_values)
     asyncio.run(amain())
     return 0
 

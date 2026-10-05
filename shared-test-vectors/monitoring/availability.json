@@ -1,0 +1,287 @@
+{
+  "description": "availability_bp(buckets, now, hours): successful checks in basis points over hourly buckets",
+  "cases": [
+    {
+      "name": "no_checks",
+      "input": {
+        "buckets": [],
+        "now": 1791635696,
+        "hours": 24
+      },
+      "expected": {
+        "bp": null
+      }
+    },
+    {
+      "name": "all_ok",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1791633600,
+            "total": 60,
+            "ok": 60
+          },
+          {
+            "hour": 1791630000,
+            "total": 60,
+            "ok": 60
+          }
+        ],
+        "now": 1791635696,
+        "hours": 24
+      },
+      "expected": {
+        "bp": 10000
+      }
+    },
+    {
+      "name": "all_failed",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1791633600,
+            "total": 10,
+            "ok": 0
+          }
+        ],
+        "now": 1791635696,
+        "hours": 24
+      },
+      "expected": {
+        "bp": 0
+      }
+    },
+    {
+      "name": "half",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1791633600,
+            "total": 10,
+            "ok": 5
+          },
+          {
+            "hour": 1791622800,
+            "total": 10,
+            "ok": 5
+          }
+        ],
+        "now": 1791635696,
+        "hours": 24
+      },
+      "expected": {
+        "bp": 5000
+      }
+    },
+    {
+      "name": "floor_of_basis_points",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1791633600,
+            "total": 3,
+            "ok": 2
+          }
+        ],
+        "now": 1791635696,
+        "hours": 24
+      },
+      "expected": {
+        "bp": 6666
+      }
+    },
+    {
+      "name": "one_failure_in_ten_thousand",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1791630000,
+            "total": 9999,
+            "ok": 9998
+          }
+        ],
+        "now": 1791635696,
+        "hours": 24
+      },
+      "expected": {
+        "bp": 9998
+      }
+    },
+    {
+      "name": "the_current_bucket_counts",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1791633600,
+            "total": 1,
+            "ok": 0
+          }
+        ],
+        "now": 1791635696,
+        "hours": 24
+      },
+      "expected": {
+        "bp": 0
+      }
+    },
+    {
+      "name": "the_24th_bucket_counts",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1791550800,
+            "total": 10,
+            "ok": 10
+          },
+          {
+            "hour": 1791633600,
+            "total": 10,
+            "ok": 0
+          }
+        ],
+        "now": 1791635696,
+        "hours": 24
+      },
+      "expected": {
+        "bp": 5000
+      }
+    },
+    {
+      "name": "the_25th_bucket_does_not",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1791547200,
+            "total": 10,
+            "ok": 0
+          },
+          {
+            "hour": 1791633600,
+            "total": 10,
+            "ok": 10
+          }
+        ],
+        "now": 1791635696,
+        "hours": 24
+      },
+      "expected": {
+        "bp": 10000
+      }
+    },
+    {
+      "name": "a_future_bucket_is_ignored",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1791637200,
+            "total": 10,
+            "ok": 0
+          },
+          {
+            "hour": 1791633600,
+            "total": 10,
+            "ok": 10
+          }
+        ],
+        "now": 1791635696,
+        "hours": 24
+      },
+      "expected": {
+        "bp": 10000
+      }
+    },
+    {
+      "name": "seven_days",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1791032400,
+            "total": 60,
+            "ok": 59
+          },
+          {
+            "hour": 1791028800,
+            "total": 60,
+            "ok": 0
+          },
+          {
+            "hour": 1791597600,
+            "total": 60,
+            "ok": 60
+          }
+        ],
+        "now": 1791635696,
+        "hours": 168
+      },
+      "expected": {
+        "bp": 9916
+      }
+    },
+    {
+      "name": "thirty_days",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1789045200,
+            "total": 60,
+            "ok": 30
+          },
+          {
+            "hour": 1789041600,
+            "total": 60,
+            "ok": 0
+          },
+          {
+            "hour": 1791615600,
+            "total": 60,
+            "ok": 60
+          }
+        ],
+        "now": 1791635696,
+        "hours": 720
+      },
+      "expected": {
+        "bp": 7500
+      }
+    },
+    {
+      "name": "on_the_hour_exactly",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1791633600,
+            "total": 4,
+            "ok": 3
+          }
+        ],
+        "now": 1791633600,
+        "hours": 24
+      },
+      "expected": {
+        "bp": 7500
+      }
+    },
+    {
+      "name": "a_window_of_one_hour",
+      "input": {
+        "buckets": [
+          {
+            "hour": 1791633600,
+            "total": 10,
+            "ok": 9
+          },
+          {
+            "hour": 1791630000,
+            "total": 10,
+            "ok": 0
+          }
+        ],
+        "now": 1791635696,
+        "hours": 1
+      },
+      "expected": {
+        "bp": 9000
+      }
+    }
+  ]
+}

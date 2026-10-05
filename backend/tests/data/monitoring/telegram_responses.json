@@ -1,0 +1,15 @@
+{
+  "description": "Answers of the Telegram Bot API to sendMessage, in the documented shape (hand-written, no real chat): replace with real recordings in the build phase",
+  "responses": {
+    "ok": {"status": 200, "body": {"ok": true, "result": {"message_id": 17, "date": 1790000000, "text": "x", "chat": {"id": 1, "type": "private"}}}},
+    "too_many_requests": {"status": 429, "body": {"ok": false, "error_code": 429, "description": "Too Many Requests: retry after 17", "parameters": {"retry_after": 17}}},
+    "too_many_requests_without_parameters": {"status": 429, "body": {"ok": false, "error_code": 429, "description": "Too Many Requests"}},
+    "wrong_token": {"status": 401, "body": {"ok": false, "error_code": 401, "description": "Unauthorized"}},
+    "bot_blocked": {"status": 403, "body": {"ok": false, "error_code": 403, "description": "Forbidden: bot was blocked by the user"}},
+    "chat_not_found": {"status": 400, "body": {"ok": false, "error_code": 400, "description": "Bad Request: chat not found"}},
+    "message_too_long": {"status": 400, "body": {"ok": false, "error_code": 400, "description": "Bad Request: message is too long"}},
+    "bad_gateway": {"status": 502, "body": {"ok": false, "error_code": 502, "description": "Bad Gateway"}},
+    "html_error_page": {"status": 502, "body": null},
+    "ok_false_with_200": {"status": 200, "body": {"ok": false}}
+  }
+}

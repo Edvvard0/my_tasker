@@ -58,12 +58,14 @@ def test_the_registry_has_the_builtin_tools() -> None:
     assert sorted(TOOLS.names()) == [
         "create_task",
         "get_accounts",
+        "get_daily_rituals",
         "get_debts",
         "get_events",
         "get_finance_summary",
         "get_goals",
         "get_projects",
         "get_receivables",
+        "get_sleep_stats",
         "get_study_absences",
         "get_study_debts",
         "get_study_schedule",
@@ -84,6 +86,8 @@ def test_the_registry_has_the_builtin_tools() -> None:
         "get_study_schedule": "read",
         "get_study_absences": "read",
         "get_study_debts": "read",
+        "get_sleep_stats": "read",
+        "get_daily_rituals": "read",
     }
     assert TOOLS.get("nothing") is None
     spec = TOOLS.get("get_tasks")

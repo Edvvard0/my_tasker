@@ -1,0 +1,221 @@
+{
+  "description": "is_quiet(now, tz, start, end): inside the quiet hours or not",
+  "cases": [
+    {
+      "name": "evening_inside_the_night_window",
+      "input": {
+        "now": 1790886600,
+        "tz": "Europe/Moscow",
+        "start": "23:00",
+        "end": "08:00"
+      },
+      "expected": {
+        "quiet": true
+      }
+    },
+    {
+      "name": "after_midnight_inside_the_night_window",
+      "input": {
+        "now": 1790892000,
+        "tz": "Europe/Moscow",
+        "start": "23:00",
+        "end": "08:00"
+      },
+      "expected": {
+        "quiet": true
+      }
+    },
+    {
+      "name": "one_minute_before_the_start",
+      "input": {
+        "now": 1790884740,
+        "tz": "Europe/Moscow",
+        "start": "23:00",
+        "end": "08:00"
+      },
+      "expected": {
+        "quiet": false
+      }
+    },
+    {
+      "name": "the_start_minute_is_quiet",
+      "input": {
+        "now": 1790884800,
+        "tz": "Europe/Moscow",
+        "start": "23:00",
+        "end": "08:00"
+      },
+      "expected": {
+        "quiet": true
+      }
+    },
+    {
+      "name": "one_minute_before_the_end_is_quiet",
+      "input": {
+        "now": 1790917140,
+        "tz": "Europe/Moscow",
+        "start": "23:00",
+        "end": "08:00"
+      },
+      "expected": {
+        "quiet": true
+      }
+    },
+    {
+      "name": "the_end_minute_is_not_quiet",
+      "input": {
+        "now": 1790917200,
+        "tz": "Europe/Moscow",
+        "start": "23:00",
+        "end": "08:00"
+      },
+      "expected": {
+        "quiet": false
+      }
+    },
+    {
+      "name": "midday_is_not_quiet",
+      "input": {
+        "now": 1790845200,
+        "tz": "Europe/Moscow",
+        "start": "23:00",
+        "end": "08:00"
+      },
+      "expected": {
+        "quiet": false
+      }
+    },
+    {
+      "name": "window_inside_one_day",
+      "input": {
+        "now": 1790850600,
+        "tz": "Europe/Moscow",
+        "start": "13:00",
+        "end": "14:00"
+      },
+      "expected": {
+        "quiet": true
+      }
+    },
+    {
+      "name": "window_inside_one_day_outside",
+      "input": {
+        "now": 1790857800,
+        "tz": "Europe/Moscow",
+        "start": "13:00",
+        "end": "14:00"
+      },
+      "expected": {
+        "quiet": false
+      }
+    },
+    {
+      "name": "start_equals_end_is_never_quiet",
+      "input": {
+        "now": 1790886600,
+        "tz": "Europe/Moscow",
+        "start": "23:00",
+        "end": "23:00"
+      },
+      "expected": {
+        "quiet": false
+      }
+    },
+    {
+      "name": "no_window",
+      "input": {
+        "now": 1790886600,
+        "tz": "Europe/Moscow",
+        "start": null,
+        "end": null
+      },
+      "expected": {
+        "quiet": false
+      }
+    },
+    {
+      "name": "only_a_start_is_no_window",
+      "input": {
+        "now": 1790886600,
+        "tz": "Europe/Moscow",
+        "start": "23:00",
+        "end": null
+      },
+      "expected": {
+        "quiet": false
+      }
+    },
+    {
+      "name": "zone_of_the_window_matters",
+      "input": {
+        "now": 1790886600,
+        "tz": "Asia/Vladivostok",
+        "start": "23:00",
+        "end": "08:00"
+      },
+      "expected": {
+        "quiet": true
+      }
+    },
+    {
+      "name": "berlin_after_the_spring_switch",
+      "input": {
+        "now": 1774747800,
+        "tz": "Europe/Berlin",
+        "start": "03:15",
+        "end": "03:45"
+      },
+      "expected": {
+        "quiet": true
+      }
+    },
+    {
+      "name": "berlin_before_the_spring_switch",
+      "input": {
+        "now": 1774744200,
+        "tz": "Europe/Berlin",
+        "start": "03:15",
+        "end": "03:45"
+      },
+      "expected": {
+        "quiet": false
+      }
+    },
+    {
+      "name": "berlin_overlap_hour_first_pass",
+      "input": {
+        "now": 1792888200,
+        "tz": "Europe/Berlin",
+        "start": "02:15",
+        "end": "02:45"
+      },
+      "expected": {
+        "quiet": true
+      }
+    },
+    {
+      "name": "berlin_overlap_hour_second_pass",
+      "input": {
+        "now": 1792891800,
+        "tz": "Europe/Berlin",
+        "start": "02:15",
+        "end": "02:45"
+      },
+      "expected": {
+        "quiet": true
+      }
+    },
+    {
+      "name": "whole_day_window",
+      "input": {
+        "now": 1790856000,
+        "tz": "Europe/Moscow",
+        "start": "00:00",
+        "end": "23:59"
+      },
+      "expected": {
+        "quiet": true
+      }
+    }
+  ]
+}

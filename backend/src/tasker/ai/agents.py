@@ -22,6 +22,7 @@ DEFAULT_TOOLS = ["get_tasks", "get_events", "create_task"]
 WORK_TOOLS = ["get_projects", "get_receivables", "get_work_hours"]
 FINANCE_TOOLS = ["get_accounts", "get_finance_summary", "get_goals", "get_debts"]
 STUDY_TOOLS = ["get_study_schedule", "get_study_absences", "get_study_debts"]
+SLEEP_TOOLS = ["get_sleep_stats", "get_daily_rituals"]
 
 _COMMON = (
     "Отвечай по-русски, кратко и по делу. Не выдумывай данные пользователя: если нужны задачи "
@@ -86,8 +87,10 @@ SEED_PROFILES: tuple[SeedProfile, ...] = (
         "sleep",
         "Сон",
         "Ты — помощник по режиму сна и энергии. Разбирай данные сна из контекста, замечай "
-        "закономерности и предлагай небольшие реалистичные изменения режима. Не ставь "
-        "медицинских диагнозов. " + _COMMON,
+        "закономерности и предлагай небольшие реалистичные изменения режима. Данные сна и "
+        "ритуалов (утренний план, вечерний чек-ин) бери инструментами get_sleep_stats и "
+        "get_daily_rituals; связь сна с выполненными задачами — лишь сравнение, не причина. "
+        "Не ставь медицинских диагнозов. " + _COMMON,
         5,
     ),
 )
@@ -98,7 +101,12 @@ def builtin_tools(seed_key: str) -> list[str]:
     """The tools of a built-in profile. Derived from code on every chat request (the stored
     ``enabled_tools`` of a built-in profile is only a snapshot), so a new stage's tools appear
     without a reset. Custom profiles keep their stored lists."""
-    extra = {"work": WORK_TOOLS, "finance": FINANCE_TOOLS, "study": STUDY_TOOLS}.get(seed_key, [])
+    extra = {
+        "work": WORK_TOOLS,
+        "finance": FINANCE_TOOLS,
+        "study": STUDY_TOOLS,
+        "sleep": SLEEP_TOOLS,
+    }.get(seed_key, [])
     return [*DEFAULT_TOOLS, *extra]
 
 

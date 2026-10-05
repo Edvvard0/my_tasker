@@ -16,6 +16,8 @@ from tasker.errors import install_error_handlers
 from tasker.files import api as files_api
 from tasker.logging import configure_logging
 from tasker.middleware import RequestIdMiddleware
+from tasker.monitoring import api as monitoring_api
+from tasker.monitoring.runtime import MonitoringRuntime
 from tasker.runtime import build_runtime
 from tasker.sync import api as sync_api
 from tasker.sync.modules import build_registry
@@ -30,10 +32,7 @@ def create_app(
     clock: Clock | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
-    configure_logging(
-        settings.log_level,
-        redact=[settings.polza_api_key.get_secret_value()] if settings.polza_api_key else [],
-    )
+    configure_logging(settings.log_level, redact=settings.secret_values)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -46,11 +45,13 @@ def create_app(
         app.state.sessionmaker = sessionmaker
         app.state.rt = runtime
         app.state.ai = ai_runtime = AiRuntime(settings, runtime.clock)
+        app.state.monitoring = monitoring = MonitoringRuntime(settings)
         structlog.get_logger().info("api_started", app_env=settings.app_env)
         try:
             yield
         finally:
             await ai_runtime.aclose()
+            await monitoring.aclose()
             await runtime.hub.close()
             await engine.dispose()
 
@@ -72,4 +73,5 @@ def create_app(
     app.include_router(ai_api.router)
     app.include_router(banks_api.router)
     app.include_router(files_api.router)
+    app.include_router(monitoring_api.router)
     return app

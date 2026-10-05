@@ -1,0 +1,36 @@
+[
+  {
+    "name": "0192d5a0-0000-7000-8000-000000000001",
+    "group": "0192d5a0-0000-7000-8000-0000000000a1",
+    "key": "0192d5a0-0000-7000-8000-0000000000a1_0192d5a0-0000-7000-8000-000000000001",
+    "results": [
+      {"status": 200, "hostname": "example.com", "duration": 145000000, "conditionResults": [{"condition": "[STATUS] < 400", "success": true}], "success": true, "timestamp": "2026-10-04T10:00:00.123456Z"},
+      {"status": 200, "hostname": "example.com", "duration": 151000000, "conditionResults": [{"condition": "[STATUS] < 400", "success": true}], "success": true, "timestamp": "2026-10-04T10:00:20.5Z"},
+      {"status": 502, "hostname": "example.com", "duration": 90000000, "conditionResults": [{"condition": "[STATUS] < 400", "success": false}], "success": false, "timestamp": "2026-10-04T10:00:40Z"}
+    ]
+  },
+  {
+    "name": "0192d5a0-0000-7000-8000-000000000002",
+    "group": "0192d5a0-0000-7000-8000-0000000000a1",
+    "key": "0192d5a0-0000-7000-8000-0000000000a1_0192d5a0-0000-7000-8000-000000000002",
+    "results": [
+      {"hostname": "example.com", "duration": 5000000000, "errors": ["dial tcp 93.184.216.34:5432: i/o timeout"], "conditionResults": [{"condition": "[CONNECTED] == true", "success": false}], "success": false, "timestamp": "2026-10-04T10:00:41+00:00"},
+      {"hostname": "example.com", "duration": 12000000, "conditionResults": [{"condition": "[CONNECTED] == true", "success": true}], "success": true, "timestamp": "2026-10-04T13:00:42+03:00"}
+    ]
+  },
+  {
+    "name": "engine-self",
+    "key": "_engine-self",
+    "results": [
+      {"status": 200, "duration": 1000000, "success": true, "timestamp": "2026-10-04T10:00:00Z"}
+    ]
+  },
+  {
+    "name": "0192d5a0-0000-7000-8000-000000000003",
+    "results": [
+      {"status": 200, "duration": 1, "success": "yes", "timestamp": "2026-10-04T10:00:00Z"},
+      {"status": 200, "duration": 1, "success": true, "timestamp": "not a time"},
+      {"status": 200, "duration": -5, "success": true, "timestamp": "2026-10-04T10:00:03Z"}
+    ]
+  }
+]

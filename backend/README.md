@@ -39,6 +39,8 @@ uv run python -m tasker.worker                                          # worker
 
 - Банки: контракт `../docs/specs/stage6_banks.md`; правила уведомлений и словари — `../shared-data/banks/`; `POST /banks/statements/parse` разбирает CSV/XLSX/PDF-выписку в памяти и ничего не хранит (лимит `BANKS_STATEMENT_MAX_BYTES`, 10 МБ).
 - Учёба: контракт `../docs/specs/stage7_study.md`; вложения — `PUT`/`GET /files/{id}`, содержимое на диске в `FILES_DIR` за интерфейсом `tasker.files.store.FileStore` (лимит `FILES_MAX_BYTES`, 25 МБ); воркер удаляет файлы вместе с очисткой корзины. Бэкап базы файлы не покрывает.
+- Сон и ритуалы: контракт `../docs/specs/stage8_sleep_rituals.md` (таблицы `sleep_entries`, `daily_plans`, `evening_checkins`, по строке на дату; эталон `tasker.sleep.reference`; инструменты ИИ `get_sleep_stats`, `get_daily_rituals`).
+- Серверы: контракт `../docs/specs/stage9_monitoring.md` (движок проверок Gatus, антиспам и Telegram в worker, API `/monitoring/*`). Секреты `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` — только в env сервера; без них очередь сообщений копится. Прочие переменные: `MONITOR_ENGINE_URL`, `MONITOR_CONFIG_PATH`, `MONITOR_DNS_RESOLVER`, `MONITOR_TIMEZONE`, `MONITOR_QUIET_START`/`MONITOR_QUIET_END`, `TELEGRAM_API_BASE`.
 - `SHARED_DATA_DIR` — каталог `shared-data` (в контейнере монтируется только на чтение; по умолчанию берётся из репозитория).
 - Векторы: `uv run python -m tests.banks_vectors_gen`, `uv run python -m tests.study_vectors_gen`. Образец PDF-выписки пересобирается `uv run python -m tests.banks_samples_gen` (нужен шрифт DejaVu Sans).
 

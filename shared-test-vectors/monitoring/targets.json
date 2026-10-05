@@ -1,0 +1,1067 @@
+{
+  "description": "check_host / check_url / check_addresses (op host, url, addresses): where a check may point; {valid, host} or {valid: false, reason}, {reason} for addresses",
+  "cases": [
+    {
+      "name": "host_plain_name",
+      "input": {
+        "op": "host",
+        "value": "example.com"
+      },
+      "expected": {
+        "valid": true,
+        "host": "example.com"
+      }
+    },
+    {
+      "name": "host_subdomain",
+      "input": {
+        "op": "host",
+        "value": "sub.example.co.uk"
+      },
+      "expected": {
+        "valid": true,
+        "host": "sub.example.co.uk"
+      }
+    },
+    {
+      "name": "host_upper_case_is_lowered",
+      "input": {
+        "op": "host",
+        "value": "EXAMPLE.COM"
+      },
+      "expected": {
+        "valid": true,
+        "host": "example.com"
+      }
+    },
+    {
+      "name": "host_trailing_dot_is_dropped",
+      "input": {
+        "op": "host",
+        "value": "example.com."
+      },
+      "expected": {
+        "valid": true,
+        "host": "example.com"
+      }
+    },
+    {
+      "name": "host_punycode",
+      "input": {
+        "op": "host",
+        "value": "xn--80ak6aa92e.com"
+      },
+      "expected": {
+        "valid": true,
+        "host": "xn--80ak6aa92e.com"
+      }
+    },
+    {
+      "name": "host_sslip_style_name",
+      "input": {
+        "op": "host",
+        "value": "203-0-113-7.sslip.io"
+      },
+      "expected": {
+        "valid": true,
+        "host": "203-0-113-7.sslip.io"
+      }
+    },
+    {
+      "name": "host_name_that_looks_like_hex_but_has_a_real_tld",
+      "input": {
+        "op": "host",
+        "value": "0x7f000001.com"
+      },
+      "expected": {
+        "valid": true,
+        "host": "0x7f000001.com"
+      }
+    },
+    {
+      "name": "host_public_ipv4",
+      "input": {
+        "op": "host",
+        "value": "8.8.8.8"
+      },
+      "expected": {
+        "valid": true,
+        "host": "8.8.8.8"
+      }
+    },
+    {
+      "name": "host_public_ipv6",
+      "input": {
+        "op": "host",
+        "value": "2606:4700:4700::1111"
+      },
+      "expected": {
+        "valid": true,
+        "host": "2606:4700:4700::1111"
+      }
+    },
+    {
+      "name": "host_public_ipv6_in_brackets",
+      "input": {
+        "op": "host",
+        "value": "[2606:4700:4700::1111]"
+      },
+      "expected": {
+        "valid": true,
+        "host": "2606:4700:4700::1111"
+      }
+    },
+    {
+      "name": "host_mapped_public_ipv4",
+      "input": {
+        "op": "host",
+        "value": "::ffff:8.8.8.8"
+      },
+      "expected": {
+        "valid": true,
+        "host": "::ffff:8.8.8.8"
+      }
+    },
+    {
+      "name": "host_empty",
+      "input": {
+        "op": "host",
+        "value": ""
+      },
+      "expected": {
+        "valid": false,
+        "reason": "empty"
+      }
+    },
+    {
+      "name": "host_localhost",
+      "input": {
+        "op": "host",
+        "value": "localhost"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "single_label"
+      }
+    },
+    {
+      "name": "host_service_name_of_the_compose_network",
+      "input": {
+        "op": "host",
+        "value": "postgres"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "single_label"
+      }
+    },
+    {
+      "name": "host_single_label_api",
+      "input": {
+        "op": "host",
+        "value": "api"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "single_label"
+      }
+    },
+    {
+      "name": "host_loopback_v4",
+      "input": {
+        "op": "host",
+        "value": "127.0.0.1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_loopback_v4_other",
+      "input": {
+        "op": "host",
+        "value": "127.255.255.254"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_private_10",
+      "input": {
+        "op": "host",
+        "value": "10.0.0.5"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_private_172",
+      "input": {
+        "op": "host",
+        "value": "172.16.0.1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_private_192",
+      "input": {
+        "op": "host",
+        "value": "192.168.1.1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_cloud_metadata",
+      "input": {
+        "op": "host",
+        "value": "169.254.169.254"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_link_local_other",
+      "input": {
+        "op": "host",
+        "value": "169.254.1.1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_carrier_grade_nat",
+      "input": {
+        "op": "host",
+        "value": "100.64.0.1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_unspecified",
+      "input": {
+        "op": "host",
+        "value": "0.0.0.0"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_broadcast",
+      "input": {
+        "op": "host",
+        "value": "255.255.255.255"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_multicast",
+      "input": {
+        "op": "host",
+        "value": "224.0.0.1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_documentation_range",
+      "input": {
+        "op": "host",
+        "value": "192.0.2.1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_loopback_v6",
+      "input": {
+        "op": "host",
+        "value": "::1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_loopback_v6_in_brackets",
+      "input": {
+        "op": "host",
+        "value": "[::1]"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_link_local_v6",
+      "input": {
+        "op": "host",
+        "value": "fe80::1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_unique_local_v6",
+      "input": {
+        "op": "host",
+        "value": "fc00::1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_mapped_loopback",
+      "input": {
+        "op": "host",
+        "value": "::ffff:127.0.0.1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_mapped_private",
+      "input": {
+        "op": "host",
+        "value": "::ffff:10.0.0.1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "host_short_ipv4_form",
+      "input": {
+        "op": "host",
+        "value": "127.1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_tld"
+      }
+    },
+    {
+      "name": "host_hex_ipv4_form",
+      "input": {
+        "op": "host",
+        "value": "0x7f.0.0.1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_tld"
+      }
+    },
+    {
+      "name": "host_octal_ipv4_form",
+      "input": {
+        "op": "host",
+        "value": "0177.0.0.1"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_tld"
+      }
+    },
+    {
+      "name": "host_decimal_ipv4_form",
+      "input": {
+        "op": "host",
+        "value": "2130706433"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "single_label"
+      }
+    },
+    {
+      "name": "host_ipv4_in_brackets",
+      "input": {
+        "op": "host",
+        "value": "[1.2.3.4]"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_chars"
+      }
+    },
+    {
+      "name": "host_gcp_metadata_name",
+      "input": {
+        "op": "host",
+        "value": "metadata.google.internal"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "reserved_name"
+      }
+    },
+    {
+      "name": "host_dot_local",
+      "input": {
+        "op": "host",
+        "value": "printer.local"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "reserved_name"
+      }
+    },
+    {
+      "name": "host_dot_localhost",
+      "input": {
+        "op": "host",
+        "value": "app.localhost"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "reserved_name"
+      }
+    },
+    {
+      "name": "host_dot_lan",
+      "input": {
+        "op": "host",
+        "value": "nas.lan"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "reserved_name"
+      }
+    },
+    {
+      "name": "host_home_arpa",
+      "input": {
+        "op": "host",
+        "value": "x.home.arpa"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "reserved_name"
+      }
+    },
+    {
+      "name": "host_dot_corp",
+      "input": {
+        "op": "host",
+        "value": "wiki.corp"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "reserved_name"
+      }
+    },
+    {
+      "name": "host_dot_test",
+      "input": {
+        "op": "host",
+        "value": "service.test"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "reserved_name"
+      }
+    },
+    {
+      "name": "host_space_inside",
+      "input": {
+        "op": "host",
+        "value": "exa mple.com"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_chars"
+      }
+    },
+    {
+      "name": "host_with_a_path",
+      "input": {
+        "op": "host",
+        "value": "example.com/path"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_chars"
+      }
+    },
+    {
+      "name": "host_with_userinfo",
+      "input": {
+        "op": "host",
+        "value": "user@example.com"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_chars"
+      }
+    },
+    {
+      "name": "host_with_a_port",
+      "input": {
+        "op": "host",
+        "value": "example.com:80"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_chars"
+      }
+    },
+    {
+      "name": "host_with_a_percent",
+      "input": {
+        "op": "host",
+        "value": "example.com%2e"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_chars"
+      }
+    },
+    {
+      "name": "host_non_ascii",
+      "input": {
+        "op": "host",
+        "value": "пример.рф"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_chars"
+      }
+    },
+    {
+      "name": "host_leading_dash",
+      "input": {
+        "op": "host",
+        "value": "-bad.example.com"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_label"
+      }
+    },
+    {
+      "name": "host_empty_label",
+      "input": {
+        "op": "host",
+        "value": "a..example.com"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_label"
+      }
+    },
+    {
+      "name": "host_label_of_64_characters",
+      "input": {
+        "op": "host",
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_label"
+      }
+    },
+    {
+      "name": "host_one_letter_tld",
+      "input": {
+        "op": "host",
+        "value": "example.c"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_tld"
+      }
+    },
+    {
+      "name": "host_name_over_253_characters",
+      "input": {
+        "op": "host",
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "too_long"
+      }
+    },
+    {
+      "name": "host_brackets_around_a_name",
+      "input": {
+        "op": "host",
+        "value": "[example.com]"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_chars"
+      }
+    },
+    {
+      "name": "url_https_plain",
+      "input": {
+        "op": "url",
+        "value": "https://example.com"
+      },
+      "expected": {
+        "valid": true,
+        "host": "example.com"
+      }
+    },
+    {
+      "name": "url_http_with_path",
+      "input": {
+        "op": "url",
+        "value": "http://example.com/health"
+      },
+      "expected": {
+        "valid": true,
+        "host": "example.com"
+      }
+    },
+    {
+      "name": "url_port_and_query",
+      "input": {
+        "op": "url",
+        "value": "https://example.com:8443/a?b=c"
+      },
+      "expected": {
+        "valid": true,
+        "host": "example.com"
+      }
+    },
+    {
+      "name": "url_scheme_and_host_in_upper_case",
+      "input": {
+        "op": "url",
+        "value": "HTTP://Example.COM/x"
+      },
+      "expected": {
+        "valid": true,
+        "host": "example.com"
+      }
+    },
+    {
+      "name": "url_public_ipv6",
+      "input": {
+        "op": "url",
+        "value": "https://[2606:4700:4700::1111]/"
+      },
+      "expected": {
+        "valid": true,
+        "host": "2606:4700:4700::1111"
+      }
+    },
+    {
+      "name": "url_public_ipv4",
+      "input": {
+        "op": "url",
+        "value": "https://8.8.8.8/"
+      },
+      "expected": {
+        "valid": true,
+        "host": "8.8.8.8"
+      }
+    },
+    {
+      "name": "url_empty",
+      "input": {
+        "op": "url",
+        "value": ""
+      },
+      "expected": {
+        "valid": false,
+        "reason": "empty"
+      }
+    },
+    {
+      "name": "url_ftp",
+      "input": {
+        "op": "url",
+        "value": "ftp://example.com"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "scheme"
+      }
+    },
+    {
+      "name": "url_javascript",
+      "input": {
+        "op": "url",
+        "value": "javascript:alert(1)"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "scheme"
+      }
+    },
+    {
+      "name": "url_scheme_relative",
+      "input": {
+        "op": "url",
+        "value": "//example.com"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "scheme"
+      }
+    },
+    {
+      "name": "url_without_scheme",
+      "input": {
+        "op": "url",
+        "value": "example.com"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "scheme"
+      }
+    },
+    {
+      "name": "url_localhost",
+      "input": {
+        "op": "url",
+        "value": "http://localhost"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "single_label"
+      }
+    },
+    {
+      "name": "url_loopback",
+      "input": {
+        "op": "url",
+        "value": "http://127.0.0.1:8080/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "url_loopback_v6",
+      "input": {
+        "op": "url",
+        "value": "http://[::1]/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "url_metadata_service",
+      "input": {
+        "op": "url",
+        "value": "http://169.254.169.254/latest/meta-data/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "url_gcp_metadata_name",
+      "input": {
+        "op": "url",
+        "value": "http://metadata.google.internal/computeMetadata/v1/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "reserved_name"
+      }
+    },
+    {
+      "name": "url_private",
+      "input": {
+        "op": "url",
+        "value": "http://10.1.2.3/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "url_decimal_loopback",
+      "input": {
+        "op": "url",
+        "value": "http://2130706433/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "single_label"
+      }
+    },
+    {
+      "name": "url_hex_loopback",
+      "input": {
+        "op": "url",
+        "value": "http://0x7f.0.0.1/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_tld"
+      }
+    },
+    {
+      "name": "url_mapped_loopback",
+      "input": {
+        "op": "url",
+        "value": "http://[::ffff:127.0.0.1]/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "non_global_ip"
+      }
+    },
+    {
+      "name": "url_compose_service_name",
+      "input": {
+        "op": "url",
+        "value": "http://service/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "single_label"
+      }
+    },
+    {
+      "name": "url_internal_zone",
+      "input": {
+        "op": "url",
+        "value": "http://x.internal/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "reserved_name"
+      }
+    },
+    {
+      "name": "url_with_credentials",
+      "input": {
+        "op": "url",
+        "value": "https://user:pw@example.com/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "userinfo"
+      }
+    },
+    {
+      "name": "url_with_empty_credentials",
+      "input": {
+        "op": "url",
+        "value": "https://@example.com"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "userinfo"
+      }
+    },
+    {
+      "name": "url_with_a_fragment",
+      "input": {
+        "op": "url",
+        "value": "https://example.com/#top"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "fragment"
+      }
+    },
+    {
+      "name": "url_with_an_empty_fragment",
+      "input": {
+        "op": "url",
+        "value": "https://example.com/#"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "fragment"
+      }
+    },
+    {
+      "name": "url_port_zero",
+      "input": {
+        "op": "url",
+        "value": "https://example.com:0/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_port"
+      }
+    },
+    {
+      "name": "url_port_too_large",
+      "input": {
+        "op": "url",
+        "value": "https://example.com:99999/"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_port"
+      }
+    },
+    {
+      "name": "url_without_a_host",
+      "input": {
+        "op": "url",
+        "value": "http://"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "no_host"
+      }
+    },
+    {
+      "name": "url_empty_host_with_a_path",
+      "input": {
+        "op": "url",
+        "value": "http:///path"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "no_host"
+      }
+    },
+    {
+      "name": "url_with_a_space",
+      "input": {
+        "op": "url",
+        "value": "https://exa mple.com"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_chars"
+      }
+    },
+    {
+      "name": "url_with_a_backslash",
+      "input": {
+        "op": "url",
+        "value": "https://example.com\\@evil.test"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "bad_chars"
+      }
+    },
+    {
+      "name": "url_over_2000_characters",
+      "input": {
+        "op": "url",
+        "value": "https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "valid": false,
+        "reason": "too_long"
+      }
+    },
+    {
+      "name": "addresses_all_public",
+      "input": {
+        "op": "addresses",
+        "values": [
+          "93.184.216.34",
+          "2606:2800:220:1::1"
+        ]
+      },
+      "expected": {
+        "reason": null
+      }
+    },
+    {
+      "name": "addresses_one_private_among_public",
+      "input": {
+        "op": "addresses",
+        "values": [
+          "93.184.216.34",
+          "10.0.0.1"
+        ]
+      },
+      "expected": {
+        "reason": "resolves_to_non_global"
+      }
+    },
+    {
+      "name": "addresses_loopback_only",
+      "input": {
+        "op": "addresses",
+        "values": [
+          "127.0.0.1"
+        ]
+      },
+      "expected": {
+        "reason": "resolves_to_non_global"
+      }
+    },
+    {
+      "name": "addresses_none",
+      "input": {
+        "op": "addresses",
+        "values": []
+      },
+      "expected": {
+        "reason": "no_address"
+      }
+    },
+    {
+      "name": "addresses_mapped_private",
+      "input": {
+        "op": "addresses",
+        "values": [
+          "::ffff:192.168.0.1"
+        ]
+      },
+      "expected": {
+        "reason": "resolves_to_non_global"
+      }
+    },
+    {
+      "name": "addresses_with_a_scope",
+      "input": {
+        "op": "addresses",
+        "values": [
+          "fe80::1%eth0"
+        ]
+      },
+      "expected": {
+        "reason": "resolves_to_non_global"
+      }
+    }
+  ]
+}

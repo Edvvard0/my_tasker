@@ -1,0 +1,1335 @@
+{
+  "description": "sleep_task_link(entries, tasks, through): finished-task share after short and normal nights over the last 7 days",
+  "cases": [
+    {
+      "name": "nothing_at_all",
+      "input": {
+        "entries": [],
+        "tasks": [],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 0,
+          "tasks": 0,
+          "done": 0,
+          "share_bp": null
+        },
+        "normal": {
+          "days": 0,
+          "tasks": 0,
+          "done": 0,
+          "share_bp": null
+        },
+        "difference_bp": null,
+        "days_without_sleep": 0,
+        "enough_data": false
+      }
+    },
+    {
+      "name": "short_nights_finish_less",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T23:00:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-02",
+            "date": "2026-10-02",
+            "bed_at": "2026-10-01T22:30:00Z",
+            "wake_at": "2026-10-02T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-03",
+            "date": "2026-10-03",
+            "bed_at": "2026-10-02T20:00:00Z",
+            "wake_at": "2026-10-03T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-04",
+            "date": "2026-10-04",
+            "bed_at": "2026-10-03T20:30:00Z",
+            "wake_at": "2026-10-04T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-05",
+            "date": "2026-10-05",
+            "bed_at": "2026-10-04T20:10:00Z",
+            "wake_at": "2026-10-05T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-06",
+            "date": "2026-10-06",
+            "bed_at": "2026-10-05T20:40:00Z",
+            "wake_at": "2026-10-06T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-07",
+            "date": "2026-10-07",
+            "bed_at": "2026-10-06T19:40:00Z",
+            "wake_at": "2026-10-07T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "2026-10-01-0",
+            "status": "done",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-01-1",
+            "status": "todo",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-01-2",
+            "status": "todo",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-01-3",
+            "status": "todo",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-0",
+            "status": "done",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-1",
+            "status": "todo",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-0",
+            "status": "done",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-1",
+            "status": "done",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-2",
+            "status": "done",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-3",
+            "status": "todo",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-04-0",
+            "status": "done",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-04-1",
+            "status": "done",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-05-0",
+            "status": "done",
+            "due_date": "2026-10-05",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-05-1",
+            "status": "done",
+            "due_date": "2026-10-05",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-05-2",
+            "status": "done",
+            "due_date": "2026-10-05",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-05-3",
+            "status": "done",
+            "due_date": "2026-10-05",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-05-4",
+            "status": "todo",
+            "due_date": "2026-10-05",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 2,
+          "tasks": 6,
+          "done": 2,
+          "share_bp": 3333
+        },
+        "normal": {
+          "days": 3,
+          "tasks": 11,
+          "done": 9,
+          "share_bp": 8181
+        },
+        "difference_bp": 4848,
+        "days_without_sleep": 0,
+        "enough_data": true
+      }
+    },
+    {
+      "name": "threshold_is_exactly_six_hours",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T22:01:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-02",
+            "date": "2026-10-02",
+            "bed_at": "2026-10-01T22:00:00Z",
+            "wake_at": "2026-10-02T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "2026-10-01-0",
+            "status": "todo",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-01-1",
+            "status": "todo",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-0",
+            "status": "done",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-1",
+            "status": "done",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 1,
+          "tasks": 2,
+          "done": 0,
+          "share_bp": 0
+        },
+        "normal": {
+          "days": 1,
+          "tasks": 2,
+          "done": 2,
+          "share_bp": 10000
+        },
+        "difference_bp": 10000,
+        "days_without_sleep": 0,
+        "enough_data": false
+      }
+    },
+    {
+      "name": "shares_are_floored_basis_points",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T23:00:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-02",
+            "date": "2026-10-02",
+            "bed_at": "2026-10-01T23:00:00Z",
+            "wake_at": "2026-10-02T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-03",
+            "date": "2026-10-03",
+            "bed_at": "2026-10-02T21:00:00Z",
+            "wake_at": "2026-10-03T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-04",
+            "date": "2026-10-04",
+            "bed_at": "2026-10-03T21:00:00Z",
+            "wake_at": "2026-10-04T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "2026-10-01-0",
+            "status": "done",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-01-1",
+            "status": "todo",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-01-2",
+            "status": "todo",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-0",
+            "status": "todo",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-1",
+            "status": "todo",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-2",
+            "status": "todo",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-0",
+            "status": "done",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-1",
+            "status": "done",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-2",
+            "status": "todo",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-04-0",
+            "status": "done",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-04-1",
+            "status": "done",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-04-2",
+            "status": "todo",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 2,
+          "tasks": 6,
+          "done": 1,
+          "share_bp": 1666
+        },
+        "normal": {
+          "days": 2,
+          "tasks": 6,
+          "done": 4,
+          "share_bp": 6666
+        },
+        "difference_bp": 5000,
+        "days_without_sleep": 0,
+        "enough_data": true
+      }
+    },
+    {
+      "name": "one_group_only_gives_no_difference",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T20:00:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-02",
+            "date": "2026-10-02",
+            "bed_at": "2026-10-01T20:10:00Z",
+            "wake_at": "2026-10-02T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-03",
+            "date": "2026-10-03",
+            "bed_at": "2026-10-02T20:20:00Z",
+            "wake_at": "2026-10-03T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "2026-10-01-0",
+            "status": "done",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-01-1",
+            "status": "todo",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-0",
+            "status": "done",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-1",
+            "status": "done",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 0,
+          "tasks": 0,
+          "done": 0,
+          "share_bp": null
+        },
+        "normal": {
+          "days": 2,
+          "tasks": 4,
+          "done": 3,
+          "share_bp": 7500
+        },
+        "difference_bp": null,
+        "days_without_sleep": 0,
+        "enough_data": false
+      }
+    },
+    {
+      "name": "days_without_tasks_take_no_part",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T23:00:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-02",
+            "date": "2026-10-02",
+            "bed_at": "2026-10-01T23:00:00Z",
+            "wake_at": "2026-10-02T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-03",
+            "date": "2026-10-03",
+            "bed_at": "2026-10-02T20:00:00Z",
+            "wake_at": "2026-10-03T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-04",
+            "date": "2026-10-04",
+            "bed_at": "2026-10-03T20:00:00Z",
+            "wake_at": "2026-10-04T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-05",
+            "date": "2026-10-05",
+            "bed_at": "2026-10-04T20:00:00Z",
+            "wake_at": "2026-10-05T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "2026-10-01-0",
+            "status": "done",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-01-1",
+            "status": "todo",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-0",
+            "status": "done",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-1",
+            "status": "done",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 1,
+          "tasks": 2,
+          "done": 1,
+          "share_bp": 5000
+        },
+        "normal": {
+          "days": 1,
+          "tasks": 2,
+          "done": 2,
+          "share_bp": 10000
+        },
+        "difference_bp": 5000,
+        "days_without_sleep": 0,
+        "enough_data": false
+      }
+    },
+    {
+      "name": "days_with_tasks_but_without_sleep_are_counted_aside",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T23:00:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-03",
+            "date": "2026-10-03",
+            "bed_at": "2026-10-02T20:00:00Z",
+            "wake_at": "2026-10-03T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "2026-10-01-0",
+            "status": "done",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-01-1",
+            "status": "todo",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-0",
+            "status": "done",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-1",
+            "status": "todo",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-0",
+            "status": "done",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-1",
+            "status": "done",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-04-0",
+            "status": "todo",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 1,
+          "tasks": 2,
+          "done": 1,
+          "share_bp": 5000
+        },
+        "normal": {
+          "days": 1,
+          "tasks": 2,
+          "done": 2,
+          "share_bp": 10000
+        },
+        "difference_bp": 5000,
+        "days_without_sleep": 2,
+        "enough_data": false
+      }
+    },
+    {
+      "name": "cancelled_and_recurring_tasks_do_not_count",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T23:00:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-02",
+            "date": "2026-10-02",
+            "bed_at": "2026-10-01T20:00:00Z",
+            "wake_at": "2026-10-02T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "done",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "b",
+            "status": "cancelled",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "c",
+            "status": "todo",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": "FREQ=DAILY"
+          },
+          {
+            "id": "d",
+            "status": "in_progress",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "e",
+            "status": "done",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": "FREQ=WEEKLY"
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 1,
+          "tasks": 1,
+          "done": 1,
+          "share_bp": 10000
+        },
+        "normal": {
+          "days": 1,
+          "tasks": 1,
+          "done": 0,
+          "share_bp": 0
+        },
+        "difference_bp": -10000,
+        "days_without_sleep": 0,
+        "enough_data": false
+      }
+    },
+    {
+      "name": "inbox_and_in_progress_count_as_not_done",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T23:00:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "a",
+            "status": "inbox",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "b",
+            "status": "in_progress",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "c",
+            "status": "done",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 1,
+          "tasks": 3,
+          "done": 1,
+          "share_bp": 3333
+        },
+        "normal": {
+          "days": 0,
+          "tasks": 0,
+          "done": 0,
+          "share_bp": null
+        },
+        "difference_bp": null,
+        "days_without_sleep": 0,
+        "enough_data": false
+      }
+    },
+    {
+      "name": "a_timed_task_belongs_to_its_local_date",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T23:00:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-02",
+            "date": "2026-10-02",
+            "bed_at": "2026-10-01T20:00:00Z",
+            "wake_at": "2026-10-02T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "late",
+            "status": "done",
+            "due_date": null,
+            "due_at": "2026-10-01T22:30:00Z",
+            "due_tz": "Europe/Moscow",
+            "rrule": null
+          },
+          {
+            "id": "early",
+            "status": "todo",
+            "due_date": null,
+            "due_at": "2026-10-01T22:30:00Z",
+            "due_tz": "America/New_York",
+            "rrule": null
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 1,
+          "tasks": 1,
+          "done": 0,
+          "share_bp": 0
+        },
+        "normal": {
+          "days": 1,
+          "tasks": 1,
+          "done": 1,
+          "share_bp": 10000
+        },
+        "difference_bp": 10000,
+        "days_without_sleep": 0,
+        "enough_data": false
+      }
+    },
+    {
+      "name": "tasks_outside_the_week_are_left_out",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T23:00:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-02",
+            "date": "2026-10-02",
+            "bed_at": "2026-10-01T20:00:00Z",
+            "wake_at": "2026-10-02T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "old-0",
+            "status": "done",
+            "due_date": "2026-09-30",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "new-0",
+            "status": "done",
+            "due_date": "2026-10-08",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-01-0",
+            "status": "done",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 1,
+          "tasks": 1,
+          "done": 1,
+          "share_bp": 10000
+        },
+        "normal": {
+          "days": 0,
+          "tasks": 0,
+          "done": 0,
+          "share_bp": null
+        },
+        "difference_bp": null,
+        "days_without_sleep": 0,
+        "enough_data": false
+      }
+    },
+    {
+      "name": "tasks_without_a_date_are_left_out",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T23:00:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "x",
+            "status": "done",
+            "due_date": null,
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "y",
+            "status": "done",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 1,
+          "tasks": 1,
+          "done": 1,
+          "share_bp": 10000
+        },
+        "normal": {
+          "days": 0,
+          "tasks": 0,
+          "done": 0,
+          "share_bp": null
+        },
+        "difference_bp": null,
+        "days_without_sleep": 0,
+        "enough_data": false
+      }
+    },
+    {
+      "name": "enough_data_needs_two_days_in_each_group",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T23:00:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-02",
+            "date": "2026-10-02",
+            "bed_at": "2026-10-01T22:50:00Z",
+            "wake_at": "2026-10-02T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-03",
+            "date": "2026-10-03",
+            "bed_at": "2026-10-02T20:00:00Z",
+            "wake_at": "2026-10-03T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-04",
+            "date": "2026-10-04",
+            "bed_at": "2026-10-03T19:50:00Z",
+            "wake_at": "2026-10-04T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "2026-10-01-0",
+            "status": "todo",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-0",
+            "status": "done",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-0",
+            "status": "done",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-04-0",
+            "status": "done",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 2,
+          "tasks": 2,
+          "done": 1,
+          "share_bp": 5000
+        },
+        "normal": {
+          "days": 2,
+          "tasks": 2,
+          "done": 2,
+          "share_bp": 10000
+        },
+        "difference_bp": 5000,
+        "days_without_sleep": 0,
+        "enough_data": true
+      }
+    },
+    {
+      "name": "normal_nights_finish_less_gives_a_negative_difference",
+      "input": {
+        "entries": [
+          {
+            "id": "sleep-2026-10-01",
+            "date": "2026-10-01",
+            "bed_at": "2026-09-30T23:00:00Z",
+            "wake_at": "2026-10-01T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-02",
+            "date": "2026-10-02",
+            "bed_at": "2026-10-01T23:00:00Z",
+            "wake_at": "2026-10-02T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-03",
+            "date": "2026-10-03",
+            "bed_at": "2026-10-02T20:00:00Z",
+            "wake_at": "2026-10-03T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          },
+          {
+            "id": "sleep-2026-10-04",
+            "date": "2026-10-04",
+            "bed_at": "2026-10-03T20:00:00Z",
+            "wake_at": "2026-10-04T04:00:00Z",
+            "bed_tz": null,
+            "wake_tz": "Europe/Moscow"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "2026-10-01-0",
+            "status": "done",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-01-1",
+            "status": "done",
+            "due_date": "2026-10-01",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-0",
+            "status": "done",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-02-1",
+            "status": "done",
+            "due_date": "2026-10-02",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-0",
+            "status": "todo",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-03-1",
+            "status": "todo",
+            "due_date": "2026-10-03",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-04-0",
+            "status": "done",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          },
+          {
+            "id": "2026-10-04-1",
+            "status": "todo",
+            "due_date": "2026-10-04",
+            "due_at": null,
+            "due_tz": null,
+            "rrule": null
+          }
+        ],
+        "through": "2026-10-07"
+      },
+      "expected": {
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "threshold_minutes": 360,
+        "short": {
+          "days": 2,
+          "tasks": 4,
+          "done": 4,
+          "share_bp": 10000
+        },
+        "normal": {
+          "days": 2,
+          "tasks": 4,
+          "done": 1,
+          "share_bp": 2500
+        },
+        "difference_bp": -7500,
+        "days_without_sleep": 0,
+        "enough_data": true
+      }
+    }
+  ]
+}
