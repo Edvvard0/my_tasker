@@ -68,7 +68,8 @@ class HttpMonitoringApi implements MonitoringApi {
       etag: etag,
     );
     if (result.notModified) return const PulseFetch.notModified();
-    final body = result.body ?? const <String, Object?>{};
+    final body = result.body;
+    if (body == null || body.isEmpty) throw _emptySnapshot();
     return PulseFetch.fresh(PulseSnapshot.fromJson(body), result.etag, body);
   }
 
@@ -76,6 +77,7 @@ class HttpMonitoringApi implements MonitoringApi {
   Future<PulseFetch> refresh() async {
     final client = await _need();
     final body = await client.postJson('/monitoring/refresh');
+    if (body.isEmpty) throw _emptySnapshot();
     return PulseFetch.fresh(PulseSnapshot.fromJson(body), null, body);
   }
 
@@ -112,6 +114,10 @@ class HttpMonitoringApi implements MonitoringApi {
     );
   }
 }
+
+/// `200` без тела — не снимок: его нельзя показывать и класть в кэш.
+ApiException _emptySnapshot() =>
+    const ApiException(kind: ApiErrorKind.malformed, status: 200);
 
 final Provider<MonitoringApi> monitoringApiProvider = Provider<MonitoringApi>(
   (ref) => HttpMonitoringApi(ref.read(apiClientResolverProvider)),

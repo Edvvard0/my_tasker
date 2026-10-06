@@ -341,6 +341,107 @@ void main() {
       expect(e!.source, SleepSource.morningNotification);
     });
 
+    testWidgets('запись на день, где сон уже есть, спрашивает подтверждение', (
+      tester,
+    ) async {
+      final c = await pumpSleep(
+        tester,
+        seedWith: (c) async {
+          await seedNight(
+            c.read(sleepRepositoryProvider),
+            '2026-10-05',
+            quality: 4,
+          );
+        },
+      );
+      Future<SleepEntry?> entry() async => await tester.runAsync<SleepEntry?>(
+        () => c.read(sleepRepositoryProvider).getEntry('2026-10-05'),
+      );
+      final context = tester.element(find.byKey(const Key('sleep-overview')));
+      unawaited(showSleepEntryForTest(context));
+      await settleDb(tester);
+      await tester.tap(find.byKey(const Key('sleep-save')));
+      await settleDb(tester);
+      expect(find.byKey(const Key('confirm-dialog')), findsOneWidget);
+      expect(
+        find.text('Запись на эту дату уже есть — заменить?'),
+        findsOneWidget,
+      );
+      // Отказ: запись цела, форма открыта, кнопка снова доступна.
+      await tester.tap(find.byKey(const Key('confirm-cancel')));
+      await settleDb(tester);
+      expect((await entry())!.quality, 4);
+      expect(find.byKey(const Key('sleep-save')), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('sleep-save')))
+            .onPressed,
+        isNotNull,
+      );
+      // Согласие: запись заменена данными формы.
+      await tester.tap(find.byKey(const Key('sleep-save')));
+      await settleDb(tester);
+      await tester.tap(find.byKey(const Key('confirm-ok')));
+      await settleDb(tester);
+      expect((await entry())!.quality, isNull);
+      expect(find.byKey(const Key('sleep-save')), findsNothing);
+    });
+
+    testWidgets('правка своей записи подтверждения не просит', (tester) async {
+      final c = await pumpSleep(tester, seedWith: _week);
+      await tester.tap(find.byKey(const Key('sleep-edit')));
+      await settleDb(tester);
+      await tester.tap(find.byKey(const Key('sleep-quality-5')));
+      await tester.tap(find.byKey(const Key('sleep-save')));
+      await settleDb(tester);
+      expect(find.byKey(const Key('confirm-dialog')), findsNothing);
+      final e = await tester.runAsync(
+        () => c.read(sleepRepositoryProvider).getEntry('2026-10-05'),
+      );
+      expect(e!.quality, 5);
+    });
+
+    testWidgets('неоднозначный час при переводе часов: повторное сохранение '
+        'того же времени не сдвигает момент', (tester) async {
+      // 25 октября 2026 в Берлине часы идут назад: 02:30 бывает дважды.
+      // Отбой — второе 02:30 (01:30 UTC), подъём — 07:00 (06:00 UTC).
+      final bedAt = DateTime.utc(2026, 10, 25, 1, 30);
+      final wakeAt = DateTime.utc(2026, 10, 25, 6);
+      final c = await pumpSleep(
+        tester,
+        now: DateTime.utc(2026, 10, 26, 9),
+        seedWith: (c) async {
+          await c
+              .read(sleepRepositoryProvider)
+              .saveSleep(bedAt: bedAt, wakeAt: wakeAt, wakeTz: 'Europe/Berlin');
+        },
+      );
+      final context = tester.element(find.byKey(const Key('sleep-overview')));
+      unawaited(showSleepEntryForTest(context, date: '2026-10-25'));
+      await settleDb(tester);
+      expect(find.text('Сон: 4 ч 30 мин'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('sleep-quality-3')));
+      await tester.tap(find.byKey(const Key('sleep-save')));
+      await settleDb(tester);
+      final e = (await tester.runAsync(
+        () => c.read(sleepRepositoryProvider).getEntry('2026-10-25'),
+      ))!;
+      expect(e.bedAt, bedAt);
+      expect(e.wakeAt, wakeAt);
+      expect(e.quality, 3);
+      // Изменённое время считается заново, как обычно.
+      unawaited(showSleepEntryForTest(context, date: '2026-10-25'));
+      await settleDb(tester);
+      await tester.enterText(find.byKey(const Key('sleep-bed')), '01:00');
+      await tester.tap(find.byKey(const Key('sleep-save')));
+      await settleDb(tester);
+      final moved = (await tester.runAsync(
+        () => c.read(sleepRepositoryProvider).getEntry('2026-10-25'),
+      ))!;
+      expect(moved.bedAt, DateTime.utc(2026, 10, 24, 23));
+      expect(moved.wakeAt, wakeAt);
+    });
+
     testWidgets('запись, удалённая на другом устройстве, — сообщение', (
       tester,
     ) async {

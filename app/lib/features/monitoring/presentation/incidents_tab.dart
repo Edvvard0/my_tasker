@@ -117,16 +117,20 @@ class _IncidentsTabState extends ConsumerState<IncidentsTab> {
             Align(
               child: ElevatedButton(
                 key: const Key('incidents-more'),
-                onPressed: state.loadingMore || state.offline
-                    ? null
-                    : controller.loadMore,
+                // Не блокируем по `offline`: после сетевой ошибки кнопка
+                // становится «Повторить» и пробует снова.
+                onPressed: state.loadingMore ? null : controller.loadMore,
                 child: state.loadingMore
                     ? const SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Показать ещё'),
+                    : Text(
+                        state.offline || state.error != null
+                            ? 'Повторить'
+                            : 'Показать ещё',
+                      ),
               ),
             ),
         ],

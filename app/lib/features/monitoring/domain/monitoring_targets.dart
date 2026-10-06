@@ -402,10 +402,8 @@ _Split? _urlSplit(String url) {
     final open = netloc.contains('[');
     final close = netloc.contains(']');
     if (open != close) return null;
-    if (open && close) {
-      final bracketedHost = netloc.split('[')[1].split(']')[0];
-      if (!_bracketedHostOk(bracketedHost)) return null;
-    }
+    if (open && close && !_bracketedNetlocOk(netloc)) return null;
+    if (_nfkcBreaksNetloc(netloc)) return null;
   }
   var hasFragment = false;
   final hash = rest.indexOf('#');
@@ -420,6 +418,40 @@ _Split? _urlSplit(String url) {
     endsWithHash: url.endsWith('#'),
   );
 }
+
+/// `urllib.parse._check_bracketed_netloc` (Python 3.13): перед `[` ничего
+/// быть не может, после `]` сразу конец netloc или `:порт`, а внутри скобок —
+/// IPv6. Если скобки есть, проверяется и хост без скобок (`[::1]@a.com` — ошибка).
+bool _bracketedNetlocOk(String netloc) {
+  final at = netloc.lastIndexOf('@');
+  final hostAndPort = at >= 0 ? netloc.substring(at + 1) : netloc;
+  final open = hostAndPort.indexOf('[');
+  String hostname;
+  if (open >= 0) {
+    if (open > 0) return false; // текст перед «[»
+    final bracketed = hostAndPort.substring(open + 1);
+    final close = bracketed.indexOf(']');
+    hostname = close >= 0 ? bracketed.substring(0, close) : bracketed;
+    final after = close >= 0 ? bracketed.substring(close + 1) : '';
+    if (after.isNotEmpty && !after.startsWith(':')) return false;
+  } else {
+    final c = hostAndPort.indexOf(':');
+    hostname = c >= 0 ? hostAndPort.substring(0, c) : hostAndPort;
+  }
+  return _bracketedHostOk(hostname);
+}
+
+/// Символы, которые после NFKC превращаются в `/ ? # @ :` (U+2047, U+2100,
+/// U+FF03, U+FF0F…): Python `_checknetloc` отвергает такой netloc как
+/// `ValueError`. Список получен перебором Unicode 15 в Python 3.13.
+const Set<int> _nfkcSeparators = {
+  0x2047, 0x2048, 0x2049, 0x2100, 0x2101, 0x2105, 0x2106, 0x2a74, 0xfe13, //
+  0xfe16, 0xfe55, 0xfe56, 0xfe5f, 0xfe6b, 0xff03, 0xff0f, 0xff1a, 0xff1f,
+  0xff20,
+};
+
+bool _nfkcBreaksNetloc(String netloc) =>
+    netloc.runes.any(_nfkcSeparators.contains);
 
 /// `urllib.parse._check_bracketed_host`: содержимое скобок — IPv6 (с зоной)
 /// или IPvFuture; IPv4 в скобках — ошибка.

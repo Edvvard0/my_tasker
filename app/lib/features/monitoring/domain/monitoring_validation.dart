@@ -16,8 +16,14 @@ const int maxInterval = 3600;
 const int maxTimeout = 30;
 
 /// Одно слово, которое движок сравнивает буквально: без пробелов, звёздочек,
-/// скобок, кавычек и подобных знаков (`KEYWORD_PATTERN` сервера).
-final RegExp keywordPattern = RegExp(r'''^[^\s*()\[\]'"\\<>=!$`]{1,100}$''');
+/// скобок, кавычек и подобных знаков (`KEYWORD_PATTERN` сервера). Пробельные
+/// символы перечислены как у Python `\s` для `str` (есть U+001C…U+001F и
+/// U+0085, нет U+FEFF — у Dart `\s` наоборот); длина считается в символах
+/// Unicode, как у Python.
+final RegExp keywordPattern = RegExp(
+  r'''^[^\t-\r\x1c-\x20\x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000*()\[\]'"\\<>=!$`]{1,100}$''',
+  unicode: true,
+);
 
 /// Ожидаемое значение DNS: один «токен» (`EXPECTED_VALUE_PATTERN`).
 final RegExp expectedValuePattern = RegExp(r'^[A-Za-z0-9._:/-]{1,253}$');

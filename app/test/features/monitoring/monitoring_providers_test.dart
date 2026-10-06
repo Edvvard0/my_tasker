@@ -259,6 +259,154 @@ void main() {
     });
   });
 
+  group('«Пульс»: пауза опроса', () {
+    test('пауза останавливает таймер, возобновление — запрос сразу', () async {
+      make(poll: const Duration(milliseconds: 25));
+      container.listen(pulseProvider, (_, _) {});
+      await pump(100);
+      final notifier = container.read(pulseProvider.notifier)
+        ..pause(pausedByLifecycle);
+      await pump(30);
+      final calls = api.pulseEtags.length;
+      await pump(150);
+      expect(api.pulseEtags.length, calls);
+      // Возобновление не ждёт следующего тика: условный запрос сразу.
+      notifier.resume(pausedByLifecycle);
+      await pump(5);
+      expect(api.pulseEtags.length, calls + 1);
+      expect(api.pulseEtags.last, '"v1"');
+      await pump(100);
+      expect(api.pulseEtags.length, greaterThan(calls + 2));
+    });
+
+    test('причины паузы складываются: опрос идёт, когда сняты все', () async {
+      make(poll: const Duration(milliseconds: 25));
+      container.listen(pulseProvider, (_, _) {});
+      await pump(100);
+      final notifier = container.read(pulseProvider.notifier)
+        ..pause(pausedByLifecycle)
+        ..pause(pausedByHiddenBranch);
+      await pump(30);
+      final calls = api.pulseEtags.length;
+      notifier.resume(pausedByLifecycle);
+      await pump(100);
+      expect(api.pulseEtags.length, calls);
+      notifier.resume(pausedByHiddenBranch);
+      await pump(100);
+      expect(api.pulseEtags.length, greaterThan(calls + 1));
+      // Лишнее «возобновить» безвредно.
+      notifier.resume(pausedByLifecycle);
+    });
+
+    test('пауза до конца первой загрузки: таймер не стартует, '
+        'возобновление запускает его', () async {
+      make(poll: const Duration(milliseconds: 25));
+      container.listen(pulseProvider, (_, _) {});
+      container.read(pulseProvider.notifier).pause(pausedByHiddenBranch);
+      await pump(150);
+      expect(api.pulseEtags, hasLength(1));
+      container.read(pulseProvider.notifier).resume(pausedByHiddenBranch);
+      await pump(120);
+      expect(api.pulseEtags.length, greaterThan(2));
+    });
+  });
+
+  group('«Пульс»: гонки запросов и кэш', () {
+    test('условный запрос, начатый до «Проверить сейчас», не затирает '
+        'свежий снимок, кэш и ETag', () async {
+      final gated = _GatedPulseApi(
+        snapshot: pulseBody(
+          services: [pulseService(id: 's1', name: 'Старый')],
+        ),
+      );
+      make(fake: gated);
+      container.listen(pulseProvider, (_, _) {});
+      await pump();
+      final notifier = container.read(pulseProvider.notifier);
+      // Опрос ушёл и ждёт ответа (со старым снимком и тегом v-old).
+      gated
+        ..holdNext = true
+        ..etag = '"v-old"';
+      final stale = notifier.load();
+      await pump(5);
+      // Пока он в пути, «Проверить сейчас» приносит новый снимок.
+      gated.snapshot = pulseBody(
+        services: [
+          pulseService(
+            id: 's1',
+            name: 'Новый',
+            status: 'down',
+            downSince: '2026-10-05T11:39:00Z',
+          ),
+        ],
+      );
+      expect((await notifier.refreshNow()).ok, isTrue);
+      expect(
+        container.read(pulseProvider).snapshot!.services.single.name,
+        'Новый',
+      );
+      // Теперь приходит ответ опоздавшего запроса.
+      gated.gate.complete();
+      await stale;
+      final state = container.read(pulseProvider);
+      expect(state.snapshot!.services.single.name, 'Новый');
+      final cached = await container.read(pulseCacheProvider).readPulse();
+      expect(cached!.snapshot.services.single.name, 'Новый');
+      expect(cached.etag, isNull);
+      // ETag не подменён старым: следующий опрос идёт без условия.
+      gated.holdNext = false;
+      await notifier.load();
+      expect(gated.pulseEtags.last, isNull);
+    });
+
+    test('304 переписывает только момент подтверждения, не снимок', () async {
+      make();
+      container.listen(pulseProvider, (_, _) {});
+      await pump();
+      final settings = container.read(localSettingsRepositoryProvider);
+      final before = await settings.read(PulseCache.pulseKey);
+      expect(await settings.read(PulseCache.asOfKey), isNull);
+      now = now.add(const Duration(minutes: 3));
+      await container.read(pulseProvider.notifier).load();
+      expect(api.pulseEtags.last, '"v1"');
+      expect(await settings.read(PulseCache.pulseKey), before);
+      expect(await settings.read(PulseCache.asOfKey), isNotNull);
+      final cached = await container.read(pulseCacheProvider).readPulse();
+      expect(cached!.asOf, now);
+      expect(container.read(pulseProvider).asOf, now);
+      // Новый снимок вытесняет подтверждение.
+      now = now.add(const Duration(minutes: 1));
+      api
+        ..etag = '"v2"'
+        ..snapshot = pulseBody(
+          services: [pulseService(id: 's2', name: 'Бот')],
+        );
+      await container.read(pulseProvider.notifier).load();
+      expect(await settings.read(PulseCache.asOfKey), isNull);
+      expect((await container.read(pulseCacheProvider).readPulse())!.asOf, now);
+    });
+
+    test('200 с пустым телом не затирает кэш и снимок', () async {
+      make(fake: _GatedPulseApi(snapshot: const {}));
+      final cache = container.read(pulseCacheProvider);
+      await cache.writePulse(
+        raw: pulseBody(
+          services: [pulseService(id: 's1', name: 'Сайт')],
+        ),
+        asOf: DateTime.utc(2026, 10, 5, 8),
+        etag: '"v1"',
+      );
+      final settings = container.read(localSettingsRepositoryProvider);
+      final before = await settings.read(PulseCache.pulseKey);
+      container.listen(pulseProvider, (_, _) {});
+      await pump();
+      final state = container.read(pulseProvider);
+      expect(state.error, isNotNull);
+      expect(state.snapshot!.services.single.name, 'Сайт');
+      expect(await settings.read(PulseCache.pulseKey), before);
+    });
+  });
+
   group('«Проверить сейчас»', () {
     test(
       'обновляет снимок и кэш; частые нажатия не уходят на сервер',
@@ -515,6 +663,27 @@ void main() {
       expect(state.offline, isFalse);
     });
 
+    test('«Показать ещё» после сетевой ошибки пробует снова, offline '
+        'сбрасывается при нажатии', () async {
+      final paging = _PagingApi(data);
+      make(fake: paging);
+      container.listen(incidentsProvider(null), (_, _) {});
+      await pump();
+      final notifier = container.read(incidentsProvider(null).notifier);
+      paging.error = offlineError;
+      await notifier.loadMore();
+      expect(container.read(incidentsProvider(null)).offline, isTrue);
+      // Связь вернулась: повтор проходит, лента дописана, пометки нет.
+      paging.error = null;
+      final retry = notifier.loadMore();
+      expect(container.read(incidentsProvider(null)).offline, isFalse);
+      expect(container.read(incidentsProvider(null)).loadingMore, isTrue);
+      await retry;
+      final state = container.read(incidentsProvider(null));
+      expect(state.offline, isFalse);
+      expect(state.items, hasLength(4));
+    });
+
     test(
       'копия страницы не дублирует инциденты при повторной подгрузке',
       () async {
@@ -633,5 +802,28 @@ class _SlowTelegramApi extends FakeMonitoringApi {
     telegramCalls++;
     await gate.future;
     return const TelegramTestResult(ok: true);
+  }
+}
+
+/// Ответ `pulse()` можно придержать, пока тест не откроет [gate]; с пустым
+/// [snapshot] отдаёт `200` с пустым телом.
+class _GatedPulseApi extends FakeMonitoringApi {
+  _GatedPulseApi({super.snapshot});
+
+  Completer<void> gate = Completer<void>();
+  bool holdNext = false;
+
+  @override
+  Future<PulseFetch> pulse({String? etag}) async {
+    pulseEtags.add(etag);
+    if (holdNext) {
+      holdNext = false;
+      final body = snapshot!;
+      final tag = this.etag;
+      await gate.future;
+      return PulseFetch.fresh(PulseSnapshot.fromJson(body), tag, body);
+    }
+    final body = snapshot!;
+    return PulseFetch.fresh(PulseSnapshot.fromJson(body), this.etag, body);
   }
 }

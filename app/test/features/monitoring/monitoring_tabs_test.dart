@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/core/format/ru_format.dart';
+import 'package:my_tasker/core/sync/sync_providers.dart';
 import 'package:my_tasker/features/monitoring/domain/monitoring_models.dart';
 
 import '../../support/monitoring_env.dart';
@@ -117,6 +119,41 @@ void main() {
         api.incidentCalls[1].cursor,
         const IncidentCursor('2026-10-05T10:00:00Z', 'b'),
       );
+    });
+
+    testWidgets('«Показать ещё» после обрыва связи не блокируется: '
+        '«Повторить» догружает ленту', (tester) async {
+      final api = _api(
+        pages: [
+          incidentPage(
+            [incidentJson(id: 'a', startedAt: '2026-10-05T10:00:00Z')],
+            nextBefore: '2026-10-05T10:00:00Z',
+            nextBeforeId: 'a',
+          ),
+          incidentPage([
+            incidentJson(id: 'b', startedAt: '2026-10-05T09:00:00Z'),
+          ]),
+        ],
+      );
+      await pumpMonitoring(tester, api: api, size: const Size(390, 1400));
+      await tapKey(tester, 'pulse-tab-incidents');
+      await settleMonitoring(tester);
+      api.error = offlineError;
+      await tapKey(tester, 'incidents-more');
+      await settleMonitoring(tester);
+      final more = find.byKey(const Key('incidents-more'));
+      expect(
+        find.descendant(of: more, matching: find.text('Повторить')),
+        findsOneWidget,
+      );
+      expect(tester.widget<ElevatedButton>(more).onPressed, isNotNull);
+      // Связь вернулась: нажатие снова идёт на сервер и догружает ленту.
+      api.error = null;
+      await tapKey(tester, 'incidents-more');
+      await settleMonitoring(tester);
+      expect(find.byKey(const Key('incident-b')), findsOneWidget);
+      expect(more, findsNothing);
+      expect(find.byKey(const Key('incidents-stale')), findsNothing);
     });
 
     testWidgets('фильтр по сервису: запрос с service_id', (tester) async {
@@ -267,6 +304,32 @@ void main() {
       },
     );
 
+    testWidgets('без связи «Отправить тест» неактивна, со связью — снова '
+        'доступна', (tester) async {
+      final api = _api(self: _self());
+      final status = _FakeStatus();
+      await pumpMonitoring(
+        tester,
+        api: api,
+        overrides: [syncStatusProvider.overrideWith(() => status)],
+      );
+      await tapKey(tester, 'pulse-tab-selfCheck');
+      await settleMonitoring(tester);
+      VoidCallback? onPressed() => tester
+          .widget<ElevatedButton>(find.byKey(const Key('telegram-test')))
+          .onPressed;
+      expect(onPressed(), isNotNull);
+      expect(find.byKey(const Key('self-telegram-offline')), findsNothing);
+      status.setOnline(online: false);
+      await tester.pump();
+      expect(onPressed(), isNull);
+      expect(find.byKey(const Key('self-telegram-offline')), findsOneWidget);
+      status.setOnline(online: true);
+      await tester.pump();
+      expect(onPressed(), isNotNull);
+      expect(api.telegramCalls, 0);
+    });
+
     testWidgets(
       'Telegram не настроен: кнопка «Отправить тест» неактивна, объяснение',
       (tester) async {
@@ -388,4 +451,13 @@ void main() {
       },
     );
   });
+}
+
+/// Состояние синхронизации без настоящего движка: управляется только связь.
+class _FakeStatus extends Notifier<SyncStatus> implements SyncStatusNotifier {
+  @override
+  SyncStatus build() => const SyncStatus();
+
+  void setOnline({required bool online}) =>
+      state = state.copyWith(online: online);
 }

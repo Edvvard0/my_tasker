@@ -102,6 +102,41 @@ void main() {
       expect(checkUrl('example.com:8080').reason, 'scheme');
     });
 
+    test('мусор вокруг скобок IPv6 — bad_url, как у Python 3.13', () {
+      for (final bad in [
+        'http://[2001:4860:4860::8888]x/',
+        'http://a[::1]',
+        'http://u@a[::1]/',
+        'http://[::1]]',
+        'http://[::1][::1]/',
+        'http://[::1]@a.com/',
+        'http://[]/',
+        'http://[::1/',
+        'http://::1]/',
+        'http://[2001:4860:4860::8888%]/',
+      ]) {
+        expect(checkUrl(bad).reason, 'bad_url', reason: bad);
+      }
+      expect(checkUrl('http://[2001:4860:4860::8888]/').valid, isTrue);
+      expect(checkUrl('http://[2001:4860:4860::8888]:8080/x').valid, isTrue);
+      expect(checkUrl('http://u@[2001:4860:4860::8888]/').reason, 'userinfo');
+    });
+
+    test('символы, которые после NFKC дают / ? # @ :, — bad_url', () {
+      for (final bad in [
+        'http://a\u2047b.com/', // ??
+        'http://a\uff0fb.com/', // полноширинная «/»
+        'http://a\uff03b.com/', // полноширинная «#»
+        'http://a\u2100b.com/', // «a/c»
+        'http://example.com\uff1a80/',
+        'http://example.com\uff20/',
+      ]) {
+        expect(checkUrl(bad).reason, 'bad_url', reason: bad);
+      }
+      // Вне netloc те же символы безвредны для разбора.
+      expect(checkUrl('http://example.com/a\uff0fb').valid, isTrue);
+    });
+
     test('IPv6: сжатие, IPv4-хвост и «лишние» двоеточия', () {
       expect(checkHost('2606:4700:4700::1111').valid, isTrue);
       expect(checkHost('2606:4700:4700:0:0:0:0:1111').valid, isTrue);

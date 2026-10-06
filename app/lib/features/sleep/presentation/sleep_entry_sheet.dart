@@ -18,6 +18,7 @@ import 'package:my_tasker/features/calendar/domain/calendar_validation.dart';
 import 'package:my_tasker/features/calendar/presentation/widgets/form_pickers.dart';
 import 'package:my_tasker/features/sleep/application/sleep_providers.dart';
 import 'package:my_tasker/features/sleep/data/sleep_repository.dart';
+import 'package:my_tasker/features/sleep/domain/sleep_calc.dart' show sleepDate;
 import 'package:my_tasker/features/sleep/domain/sleep_format.dart';
 import 'package:my_tasker/features/sleep/domain/sleep_habits.dart';
 import 'package:my_tasker/features/sleep/domain/sleep_models.dart';
@@ -76,6 +77,11 @@ class _SleepEntrySheetState extends ConsumerState<SleepEntrySheet> {
   bool _missing = false;
   bool _saving = false;
   SleepEntry? _original;
+  // Время записи при открытии формы (минуты суток): если текст не менялся,
+  // исходные моменты сохраняются как есть (иначе неоднозначный час при
+  // переводе часов назад сдвинулся бы на час).
+  int? _originalBedMin;
+  int? _originalWakeMin;
   DateTime _wakeDate = DateTime.utc(1970);
   int? _quality;
   String? _error;
@@ -130,6 +136,8 @@ class _SleepEntrySheetState extends ConsumerState<SleepEntrySheet> {
       _wakeDate = parseDate(e.date) ?? _wakeDate;
       _bed.text = view.bedLocal;
       _wake.text = view.wakeLocal;
+      _originalBedMin = parseClockInput(view.bedLocal);
+      _originalWakeMin = parseClockInput(view.wakeLocal);
       _note.text = e.note ?? '';
       _quality = e.quality;
       _loading = false;
@@ -141,7 +149,7 @@ class _SleepEntrySheetState extends ConsumerState<SleepEntrySheet> {
     final bedMin = parseClockInput(_bed.text);
     final wakeMin = parseClockInput(_wake.text);
     if (bedMin == null || wakeMin == null) return null;
-    final wake = wallToUtc(
+    var wake = wallToUtc(
       _wakeZone,
       _wakeDate.year,
       _wakeDate.month,
@@ -149,11 +157,24 @@ class _SleepEntrySheetState extends ConsumerState<SleepEntrySheet> {
       wakeMin ~/ 60,
       wakeMin % 60,
     );
+    final original = _original;
+    if (original != null &&
+        _wakeDate == parseDate(original.date) &&
+        wakeMin == _originalWakeMin &&
+        _wakeZone.name == original.wakeTz) {
+      wake = original.wakeAt;
+    }
     final day = dateOnly(utcToWall(_bedZone, wake));
     DateTime at(DateTime d) =>
         wallToUtc(_bedZone, d.year, d.month, d.day, bedMin ~/ 60, bedMin % 60);
     var bed = at(day);
     if (!bed.isBefore(wake)) bed = at(addDays(day, -1));
+    if (original != null &&
+        wake == original.wakeAt &&
+        bedMin == _originalBedMin &&
+        _bedZone.name == (original.bedTz ?? original.wakeTz)) {
+      bed = original.bedAt;
+    }
     return (bed: bed, wake: wake);
   }
 
@@ -176,19 +197,36 @@ class _SleepEntrySheetState extends ConsumerState<SleepEntrySheet> {
       _error = null;
       _saving = true;
     });
+    final repo = ref.read(sleepRepositoryProvider);
     try {
-      final date = await ref
-          .read(sleepRepositoryProvider)
-          .saveSleep(
-            bedAt: m.bed,
-            wakeAt: m.wake,
-            wakeTz: _wakeZone.name,
-            bedTz: _bedZone.name,
-            source: _original?.source ?? widget.source,
-            quality: _quality,
-            note: _note.text,
-            replacesDate: widget.date,
-          );
+      // Запись на другой день, где уже есть сон, молча не затираем.
+      final target = sleepDate(formatInstant(m.wake), _wakeZone.name);
+      if (target != null &&
+          target != widget.date &&
+          await repo.getEntry(target) != null) {
+        if (!mounted) return;
+        final replace = await showConfirmDialog(
+          context,
+          title: 'Заменить запись сна?',
+          message: 'Запись на эту дату уже есть — заменить?',
+          confirmLabel: 'Заменить',
+          danger: true,
+        );
+        if (!replace || !mounted) {
+          if (mounted) setState(() => _saving = false);
+          return;
+        }
+      }
+      final date = await repo.saveSleep(
+        bedAt: m.bed,
+        wakeAt: m.wake,
+        wakeTz: _wakeZone.name,
+        bedTz: _bedZone.name,
+        source: _original?.source ?? widget.source,
+        quality: _quality,
+        note: _note.text,
+        replacesDate: widget.date,
+      );
       if (!mounted) return;
       Navigator.of(context).pop(date);
     } on ValidationError catch (e) {

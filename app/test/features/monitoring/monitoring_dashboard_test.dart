@@ -357,6 +357,55 @@ void main() {
     );
   });
 
+  group('опрос «Пульса» не идёт, пока экран не виден', () {
+    const poll = Duration(seconds: 20);
+
+    testWidgets('приложение свёрнуто или скрыто в трей: пауза, возврат — '
+        'запрос сразу', (tester) async {
+      final api = FakeMonitoringApi(snapshot: _demo());
+      final container = await pumpMonitoring(tester, api: api, pulsePoll: poll);
+      await tester.pump(const Duration(seconds: 41));
+      expect(api.pulseEtags.length, greaterThanOrEqualTo(3));
+
+      for (final away in [AppLifecycleState.paused, AppLifecycleState.hidden]) {
+        tester.binding.handleAppLifecycleStateChanged(away);
+        await tester.pump();
+        final running = api.pulseEtags.length;
+        await tester.pump(const Duration(seconds: 90));
+        expect(api.pulseEtags.length, running, reason: '$away');
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        // Условный запрос сразу, с тегом снимка.
+        expect(api.pulseEtags.length, running + 1, reason: '$away');
+        expect(api.pulseEtags.last, '"v1"');
+        await tester.pump(const Duration(seconds: 21));
+        expect(api.pulseEtags.length, greaterThan(running + 1));
+      }
+      await tester.pumpWidget(const SizedBox());
+      container.dispose(); // иначе таймер доживёт до конца теста
+    });
+
+    testWidgets('ветка оболочки неактивна (Offstage): опрос стоит, при '
+        'возврате — запрос сразу', (tester) async {
+      final api = FakeMonitoringApi(snapshot: _demo());
+      final container = await pumpMonitoring(tester, api: api, pulsePoll: poll);
+      await tester.pump(const Duration(seconds: 21));
+      await goTo(tester, container, '/today');
+      // Экран «Серверов» остался в дереве, но не виден.
+      expect(find.byKey(const Key('pulse-screen')), findsNothing);
+      final before = api.pulseEtags.length;
+      await tester.pump(const Duration(seconds: 120));
+      expect(api.pulseEtags.length, before);
+      await goTo(tester, container, '/work/servers');
+      await tester.pump();
+      expect(api.pulseEtags.length, before + 1);
+      await tester.pumpWidget(const SizedBox());
+      container.dispose(); // иначе таймер доживёт до конца теста
+    });
+  });
+
   group('«Проверить сейчас»', () {
     testWidgets('обновляет карточки; повторное нажатие сразу — подсказка', (
       tester,

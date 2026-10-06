@@ -24,6 +24,9 @@ import 'package:my_tasker/features/work/presentation/work_forms.dart'
 
 /// Нижняя панель формы: «Удалить» слева (у существующей строки) и
 /// «Сохранить» справа.
+const String _deletedElsewhere = 'Запись удалена на другом устройстве.';
+const String _saveFailed = 'Не удалось сохранить. Повторите ещё раз.';
+
 class _EditorActions extends StatelessWidget {
   const _EditorActions({
     required this.keyPrefix,
@@ -198,12 +201,19 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
       if (!mounted) return;
       Navigator.of(context).pop(draft.id);
     } on ValidationError catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.message;
-        _saving = false;
-      });
+      _failSave(e.message);
+    } on Object catch (e) {
+      // `StateError` — строку удалил другой клиент, пока форма была открыта.
+      _failSave(e is StateError ? _deletedElsewhere : _saveFailed);
     }
+  }
+
+  void _failSave(String message) {
+    if (!mounted) return;
+    setState(() {
+      _error = message;
+      _saving = false;
+    });
   }
 
   Future<void> _delete() async {
@@ -412,12 +422,19 @@ class _ServiceEditorState extends ConsumerState<ServiceEditor> {
       if (!mounted) return;
       Navigator.of(context).pop(draft.id);
     } on ValidationError catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.message;
-        _saving = false;
-      });
+      _failSave(e.message);
+    } on Object catch (e) {
+      // `StateError` — строку удалил другой клиент, пока форма была открыта.
+      _failSave(e is StateError ? _deletedElsewhere : _saveFailed);
     }
+  }
+
+  void _failSave(String message) {
+    if (!mounted) return;
+    setState(() {
+      _error = message;
+      _saving = false;
+    });
   }
 
   Future<void> _delete() async {
@@ -708,12 +725,19 @@ class _CheckEditorState extends ConsumerState<CheckEditor> {
       if (!mounted) return;
       Navigator.of(context).pop(draft.id);
     } on ValidationError catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.message;
-        _saving = false;
-      });
+      _failSave(e.message);
+    } on Object catch (e) {
+      // `StateError` — строку удалил другой клиент, пока форма была открыта.
+      _failSave(e is StateError ? _deletedElsewhere : _saveFailed);
     }
+  }
+
+  void _failSave(String message) {
+    if (!mounted) return;
+    setState(() {
+      _error = message;
+      _saving = false;
+    });
   }
 
   Future<void> _delete() async {

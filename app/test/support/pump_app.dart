@@ -47,7 +47,8 @@ const desktopSize = Size(1440, 900);
 /// [clock] — своё «текущее время», которое можно двигать во время теста;
 /// [opener] — свой способ открыть БД (например, «сломанную»);
 /// [defaultAiApi] — поддельный API ИИ по умолчанию (экраны ИИ не ходят в сеть);
-/// [secretStore] — защищённое хранилище PIN «Финансов» (по умолчанию память).
+/// [secretStore] — защищённое хранилище PIN «Финансов» (по умолчанию память);
+/// [pulsePoll] — как часто «Пульс» сам обновляется (по умолчанию не обновляется).
 Future<ProviderContainer> pumpApp(
   WidgetTester tester, {
   Size size = phoneSize,
@@ -64,6 +65,7 @@ Future<ProviderContainer> pumpApp(
   AppDatabaseOpener? opener,
   bool defaultAiApi = true,
   SecretStore? secretStore,
+  Duration? pulsePoll,
 }) async {
   tester.view
     ..physicalSize = size
@@ -99,7 +101,7 @@ Future<ProviderContainer> pumpApp(
       // Экраны ИИ не ходят в настоящую сеть: поддельный API по умолчанию.
       if (defaultAiApi) aiApiProvider.overrideWithValue(FakeAiApi()),
       // «Пульс» не обновляет себя по таймеру: висящий таймер роняет тест.
-      pulsePollIntervalProvider.overrideWithValue(null),
+      pulsePollIntervalProvider.overrideWithValue(pulsePoll),
       // Замок «Финансов»: PIN лежит в памяти, а не в защищённом хранилище ОС.
       secretStoreProvider.overrideWithValue(secretStore ?? MemorySecretStore()),
       ...overrides,

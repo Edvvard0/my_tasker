@@ -106,6 +106,53 @@ void main() {
     });
   });
 
+  group('запись удалена на другом устройстве, пока открыта форма', () {
+    Future<void> check(
+      WidgetTester tester, {
+      required String openKey,
+      required String prefix,
+      required Future<void> Function(MonitoringRepository repo) remove,
+    }) async {
+      final c = await _pump(tester);
+      await tapKey(tester, openKey);
+      await settleMonitoring(tester);
+      await tester.runAsync(() => remove(c.read(monitoringRepositoryProvider)));
+      await _save(tester, prefix);
+      expect(find.byKey(Key('$prefix-error')), findsOneWidget);
+      expect(find.text('Запись удалена на другом устройстве.'), findsOneWidget);
+      // Форма не зависла: кнопка снова нажимается.
+      final save = tester.widget<FilledButton>(find.byKey(Key('$prefix-save')));
+      expect(save.onPressed, isNotNull);
+    }
+
+    testWidgets('сервер', (tester) async {
+      await check(
+        tester,
+        openKey: 'server-edit-$srvA',
+        prefix: 'server',
+        remove: (r) => r.deleteServer(srvA),
+      );
+    });
+
+    testWidgets('сервис', (tester) async {
+      await check(
+        tester,
+        openKey: 'service-edit-$svcA',
+        prefix: 'service',
+        remove: (r) => r.deleteService(svcA),
+      );
+    });
+
+    testWidgets('проверка', (tester) async {
+      await check(
+        tester,
+        openKey: 'check-edit-$chkA',
+        prefix: 'check',
+        remove: (r) => r.deleteCheck(chkA),
+      );
+    });
+  });
+
   group('редактор сервера', () {
     testWidgets(
       'адрес из внутренней сети: ошибка под полем сразу и при сохранении',

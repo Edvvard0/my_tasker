@@ -45,19 +45,26 @@ class PulseCache {
   static const String pulseKey = 'monitoring.pulse_cache';
   static const String incidentsKey = 'monitoring.incidents_cache';
 
+  /// Момент последнего подтверждения снимка (`304`): отдельный ключ, чтобы не
+  /// перечитывать и не переписывать весь снимок каждые 20 секунд.
+  static const String asOfKey = 'monitoring.pulse_as_of';
+
   Future<CachedPulse?> readPulse() async {
     try {
       final text = await _settings.read(pulseKey);
       if (text == null) return null;
       final json = (jsonDecode(text) as Map).cast<String, Object?>();
       final raw = (json['snapshot']! as Map).cast<String, Object?>();
-      final asOf = DateTime.tryParse(json['as_of']! as String);
+      var asOf = DateTime.tryParse(json['as_of']! as String)?.toUtc();
       if (asOf == null) return null;
+      // Подтверждение `304` новее записи снимка, если оно было позже неё.
+      final confirmed = await _readConfirmedAt();
+      if (confirmed != null && confirmed.isAfter(asOf)) asOf = confirmed;
       return CachedPulse(
         snapshot: PulseSnapshot.fromJson(raw),
         raw: raw,
         etag: json['etag'] as String?,
-        asOf: asOf.toUtc(),
+        asOf: asOf,
       );
     } on Object {
       return null;
@@ -68,21 +75,28 @@ class PulseCache {
     required Map<String, Object?> raw,
     required DateTime asOf,
     String? etag,
-  }) => _settings.write(
-    pulseKey,
-    jsonEncode({
-      'etag': etag,
-      'as_of': asOf.toUtc().toIso8601String(),
-      'snapshot': raw,
-    }),
-  );
-
-  /// Сервер подтвердил (`304`), что кэшированный снимок актуален.
-  Future<void> touchPulse(DateTime asOf) async {
-    final current = await readPulse();
-    if (current == null) return;
-    await writePulse(raw: current.raw, asOf: asOf, etag: current.etag);
+  }) async {
+    await _settings.write(
+      pulseKey,
+      jsonEncode({
+        'etag': etag,
+        'as_of': asOf.toUtc().toIso8601String(),
+        'snapshot': raw,
+      }),
+    );
+    // Новый снимок вытесняет старое подтверждение `304`.
+    await _settings.delete(asOfKey);
   }
+
+  Future<DateTime?> _readConfirmedAt() async {
+    final text = await _settings.read(asOfKey);
+    return text == null ? null : DateTime.tryParse(text)?.toUtc();
+  }
+
+  /// Сервер подтвердил (`304`), что кэшированный снимок актуален: пишется
+  /// только момент подтверждения, сам снимок не трогается.
+  Future<void> touchPulse(DateTime asOf) =>
+      _settings.write(asOfKey, asOf.toUtc().toIso8601String());
 
   Future<CachedIncidents?> readIncidents() async {
     try {

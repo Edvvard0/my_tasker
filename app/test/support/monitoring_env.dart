@@ -269,6 +269,7 @@ Future<ProviderContainer> pumpMonitoring(
   DateTime? now,
   Future<void> Function(ProviderContainer container)? seedWith,
   List<Override> overrides = const [],
+  Duration? pulsePoll,
 }) async {
   final container = await pumpApp(
     tester,
@@ -276,6 +277,7 @@ Future<ProviderContainer> pumpMonitoring(
     location: location,
     now: now ?? monitoringNow,
     settle: false,
+    pulsePoll: pulsePoll,
     overrides: [monitoringApiProvider.overrideWithValue(api), ...overrides],
   );
   if (seedWith != null) await tester.runAsync(() => seedWith(container));

@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_tasker/core/calendar_time/calendar_ids.dart';
 import 'package:my_tasker/core/calendar_time/civil_date.dart';
+import 'package:my_tasker/core/config/clock.dart';
+import 'package:my_tasker/core/sync/sync_providers.dart';
+import 'package:my_tasker/core/sync/sync_store.dart';
 import 'package:my_tasker/features/calendar/data/calendar_repository.dart';
 import 'package:my_tasker/features/calendar/domain/calendar_models.dart';
 import 'package:my_tasker/features/calendar/reminders/reminder_taps.dart';
@@ -383,6 +386,96 @@ void main() {
       expect(task.due.date, DateTime.utc(2026, 10, 9));
     });
 
+    testWidgets('повторное сохранение чек-ина не стирает прежние решения '
+        'о переносе', (tester) async {
+      late _Ids ids;
+      final c = await pumpSleep(
+        tester,
+        location: '/sleep/evening',
+        now: sleepEvening,
+        seedWith: (c) async => ids = await _seed(c),
+      );
+      Future<void> save() async {
+        await tester.ensureVisible(find.byKey(const Key('checkin-save')));
+        await tester.tap(find.byKey(const Key('checkin-save')));
+        await settleDb(tester);
+      }
+
+      // Первое сохранение: просроченную — на завтра.
+      await tester.tap(find.byKey(Key('checkin-tomorrow-${ids.overdue}')));
+      await tester.pump();
+      await tester.tap(find.byKey(Key('checkin-keep-${ids.today}')));
+      await tester.pump();
+      await save();
+      expect(find.byKey(const Key('sleep-overview')), findsOneWidget);
+      // Вечером открыли чек-ин снова: перенесённой задачи среди открытых уже
+      // нет; переносим вторую и сохраняем.
+      await goTo(tester, c, '/sleep/evening');
+      await settleDb(tester);
+      expect(find.byKey(Key('checkin-task-${ids.overdue}')), findsNothing);
+      await tester.ensureVisible(
+        find.byKey(Key('checkin-tomorrow-${ids.today}')),
+      );
+      await tester.tap(find.byKey(Key('checkin-tomorrow-${ids.today}')));
+      await tester.pump();
+      await save();
+      final checkin = (await tester.runAsync(
+        () => c.read(sleepRepositoryProvider).getCheckin('2026-10-05'),
+      ))!;
+      expect(
+        {for (final d in checkin.carryOver) d.taskId},
+        {ids.overdue, ids.today},
+        reason: 'решение первого сохранения осталось в журнале',
+      );
+      // Третье сохранение без изменений ничего не теряет.
+      await goTo(tester, c, '/sleep/evening');
+      await settleDb(tester);
+      await save();
+      final again = (await tester.runAsync(
+        () => c.read(sleepRepositoryProvider).getCheckin('2026-10-05'),
+      ))!;
+      expect(again.carryOver, hasLength(2));
+    });
+
+    testWidgets('задача удалена на другом устройстве: понятная ошибка, '
+        'кнопка снова доступна', (tester) async {
+      late _Ids ids;
+      await pumpSleep(
+        tester,
+        location: '/sleep/evening',
+        now: sleepEvening,
+        seedWith: (c) async => ids = await _seed(c),
+        overrides: [
+          sleepRepositoryProvider.overrideWith(
+            (ref) => _GoneTaskRepository(
+              store: ref.watch(syncStoreProvider),
+              tasks: ref.watch(taskRepositoryProvider),
+              now: ref.watch(clockProvider),
+            ),
+          ),
+        ],
+      );
+      await tester.tap(find.byKey(Key('checkin-tomorrow-${ids.overdue}')));
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('checkin-save')));
+      await tester.tap(find.byKey(const Key('checkin-save')));
+      await settleDb(tester);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('checkin-error')),
+          matching: find.textContaining('удалена на другом устройстве'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('checkin-save')))
+            .onPressed,
+        isNotNull,
+      );
+      expect(find.byKey(const Key('evening-checkin')), findsOneWidget);
+    });
+
     testWidgets('нечего переносить и нечего отмечать', (tester) async {
       await pumpSleep(tester, location: '/sleep/evening', now: sleepEvening);
       expect(find.byKey(const Key('checkin-done-empty')), findsOneWidget);
@@ -572,4 +665,16 @@ void main() {
       expect(find.byKey(const Key('evening-checkin')), findsOneWidget);
     });
   });
+}
+
+/// Перенос падает так, как если бы задачу удалил другой клиент.
+class _GoneTaskRepository extends SleepRepository {
+  _GoneTaskRepository({required SyncStore store, super.tasks, super.now})
+    : super(store);
+
+  @override
+  Future<CarryOutcome> applyCarryOver(
+    String checkinDate,
+    List<CarryDecision> decisions,
+  ) async => throw StateError('Задачи нет');
 }

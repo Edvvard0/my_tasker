@@ -97,6 +97,26 @@ void main() {
       expect(adapter.requests.single.headers['If-None-Match'], '"abc"');
     });
 
+    test('200 без тела — не снимок: ошибка, а не пустой «Пульс»', () async {
+      for (final body in [null, <String, Object?>{}]) {
+        final adapter = _Adapter([_ok(body)]);
+        await expectLater(
+          _api(adapter).pulse(),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.kind,
+              'kind',
+              ApiErrorKind.malformed,
+            ),
+          ),
+        );
+        await expectLater(
+          _api(_Adapter([_ok(body)])).refresh(),
+          throwsA(isA<ApiException>()),
+        );
+      }
+    });
+
     test('«Проверить сейчас» — POST, ответ — снимок без тега', () async {
       final adapter = _Adapter([_ok(_snapshot())]);
       final fetch = await _api(adapter).refresh();

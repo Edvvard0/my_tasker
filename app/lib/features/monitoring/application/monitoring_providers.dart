@@ -207,14 +207,31 @@ bool _isRateLimited(Object e) =>
 
 Duration? _retryAfter(Object e) => e is ApiException ? e.retryAfter : null;
 
+/// Причина паузы опроса: приложение свёрнуто в фон / скрыто в трей.
+const String pausedByLifecycle = 'lifecycle';
+
+/// Причина паузы опроса: экран «Пульса» остался в другой ветке оболочки
+/// (`Offstage`, `TickerMode` выключен).
+const String pausedByHiddenBranch = 'hidden_branch';
+
 /// Снимок «Пульса»: сначала кэш (показывается сразу, офлайн-first), затем
-/// условный запрос; без сети остаётся кэш с пометкой.
+/// условный запрос; без сети остаётся кэш с пометкой. Опрос раз в
+/// [pulsePollIntervalProvider] идёт, только пока экран виден и приложение на
+/// переднем плане ([pause] / [resume]).
 class PulseController extends Notifier<PulseState> {
   String? _etag;
   Timer? _timer;
   bool _disposed = false;
   bool _fetching = false;
+  bool _started = false;
   DateTime? _nextRefreshAt;
+
+  /// Поколение снимка: растёт, когда «Проверить сейчас» записал новый снимок.
+  /// Условный запрос, начатый раньше, отбрасывает свой результат: он старее.
+  int _generation = 0;
+
+  /// Причины, по которым опрос стоит; пока их нет, таймер работает.
+  final Set<String> _pauses = {};
 
   @override
   PulseState build() {
@@ -237,28 +254,59 @@ class PulseController extends Notifier<PulseState> {
     }
     await load();
     if (_disposed) return;
+    _started = true;
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = null;
     final interval = ref.read(pulsePollIntervalProvider);
-    if (interval != null) {
-      _timer = Timer.periodic(interval, (_) => unawaited(load()));
-    }
+    if (_disposed || interval == null || _pauses.isNotEmpty) return;
+    _timer = Timer.periodic(interval, (_) => unawaited(load()));
+  }
+
+  /// Останавливает опрос по причине [reason] (свёрнутое приложение, экран в
+  /// скрытой ветке оболочки). Несколько причин складываются.
+  void pause(String reason) {
+    _pauses.add(reason);
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  /// Снимает причину [reason]; когда причин не осталось, сразу делает
+  /// условный запрос (данные могли устареть) и запускает таймер заново.
+  void resume(String reason) {
+    if (!_pauses.remove(reason) || _pauses.isNotEmpty || _disposed) return;
+    if (!_started) return; // `_start` сам запустит таймер
+    unawaited(load());
+    _startTimer();
   }
 
   /// Условный запрос снимка. `304` — кэш актуален; сетевая ошибка — остаётся
-  /// кэш с пометкой «нет сети».
+  /// кэш с пометкой «нет сети». Результат запроса, обогнанного «Проверить
+  /// сейчас», отбрасывается.
   Future<void> load() async {
     if (_fetching || _disposed) return;
     _fetching = true;
+    final generation = _generation;
     try {
       final result = await ref.read(monitoringApiProvider).pulse(etag: _etag);
-      if (_disposed) return;
+      if (_disposed || generation != _generation) return;
+      final raw = result.raw;
+      if (!result.isNotModified && (raw == null || raw.isEmpty)) {
+        // `200` с пустым телом — не снимок: кэш не трогаем.
+        throw const ApiException(kind: ApiErrorKind.malformed, status: 200);
+      }
       final now = _now();
       final cache = ref.read(pulseCacheProvider);
       if (result.isNotModified) {
         if (state.snapshot != null) await cache.touchPulse(now);
+        if (_disposed || generation != _generation) return;
       } else {
+        await cache.writePulse(raw: raw!, etag: result.etag, asOf: now);
+        if (_disposed || generation != _generation) return;
         _etag = result.etag;
-        await cache.writePulse(raw: result.raw!, etag: result.etag, asOf: now);
-        if (_disposed) return;
         state = state.copyWith(snapshot: result.snapshot);
       }
       state = state.copyWith(
@@ -268,7 +316,7 @@ class PulseController extends Notifier<PulseState> {
         error: null,
       );
     } on Object catch (e) {
-      if (_disposed) return;
+      if (_disposed || generation != _generation) return;
       final offline = _isNetwork(e);
       state = state.copyWith(
         loading: false,
@@ -304,10 +352,16 @@ class PulseController extends Notifier<PulseState> {
     try {
       final result = await ref.read(monitoringApiProvider).refresh();
       if (_disposed) return const ActionResult(ActionOutcome.done);
+      final raw = result.raw;
+      if (raw == null || raw.isEmpty) {
+        throw const ApiException(kind: ApiErrorKind.malformed, status: 200);
+      }
       final at = _now();
-      _etag = null;
       _nextRefreshAt = at.add(refreshCooldown);
-      await ref.read(pulseCacheProvider).writePulse(raw: result.raw!, asOf: at);
+      // Условные запросы, начатые до этого момента, теперь устарели.
+      _generation++;
+      _etag = null;
+      await ref.read(pulseCacheProvider).writePulse(raw: raw, asOf: at);
       if (_disposed) return const ActionResult(ActionOutcome.done);
       state = state.copyWith(
         snapshot: result.snapshot,
@@ -455,7 +509,8 @@ class IncidentsController extends Notifier<IncidentsState> {
   Future<void> loadMore() async {
     final cursor = state.next;
     if (cursor == null || state.loadingMore || state.loading) return;
-    state = state.copyWith(loadingMore: true, error: null);
+    // Нажатие сбрасывает «нет связи»: исход покажет сам запрос.
+    state = state.copyWith(loadingMore: true, error: null, offline: false);
     try {
       final page = await ref
           .read(monitoringApiProvider)

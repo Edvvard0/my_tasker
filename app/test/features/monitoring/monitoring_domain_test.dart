@@ -144,6 +144,20 @@ void main() {
       );
     });
 
+    test(
+      'ключевое слово: пробельные символы как у Python, длина в символах',
+      () {
+        // Серверный `\s` (Python) — это U+001C…U+001F и U+0085, но не U+FEFF.
+        for (final bad in ['a\u0085b', 'a\u001cb', 'a\u001fb', 'a\u00a0b']) {
+          expect(keywordPattern.hasMatch(bad), isFalse, reason: bad);
+        }
+        expect(keywordPattern.hasMatch('a\ufeffb'), isTrue);
+        expect(keywordPattern.hasMatch('😀' * 100), isTrue);
+        expect(keywordPattern.hasMatch('😀' * 101), isFalse);
+        expect(keywordPattern.hasMatch(''), isFalse);
+      },
+    );
+
     test('ключевое слово, ожидаемое значение, коды и дни', () {
       expect(
         checkProblem(_check(url: 'https://example.com', keyword: 'two words')),

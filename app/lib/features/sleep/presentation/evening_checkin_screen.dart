@@ -143,9 +143,19 @@ class _CheckinFormState extends ConsumerState<_CheckinForm> {
     });
     final repo = ref.read(sleepRepositoryProvider);
     final openIds = {for (final e in day.open) e.task.id};
+    // Переносим только то, что ещё не закрыто и не повторяется...
     final decisions = [
       for (final d in _carry.values)
         if (openIds.contains(d.taskId)) d,
+    ];
+    // ...а в журнал намерения кладём и прежние решения по задачам, которые
+    // уже перенесены (их нет среди открытых): повторное сохранение чек-ина
+    // не стирает историю.
+    final earlier = widget.sleep.checkinByDate[widget.sleep.today]?.carryOver;
+    final journal = [
+      for (final d in earlier ?? const <CarryDecision>[])
+        if (!openIds.contains(d.taskId)) d,
+      ...decisions,
     ];
     try {
       await repo.saveCheckin(
@@ -153,7 +163,9 @@ class _CheckinFormState extends ConsumerState<_CheckinForm> {
         doneTaskIds: [
           for (final e in day.done.take(maxCheckinTasks)) e.task.id,
         ],
-        carryOver: decisions,
+        carryOver: journal.length > maxCheckinTasks
+            ? journal.sublist(journal.length - maxCheckinTasks)
+            : journal,
         rating: _rating,
         note: _note.text,
       );
@@ -172,12 +184,24 @@ class _CheckinFormState extends ConsumerState<_CheckinForm> {
       );
       sleepBack(context);
     } on ValidationError catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.message;
-        _saving = false;
-      });
+      _failSave(e.message);
+    } on Object catch (e) {
+      // Например, задачу удалили на другом устройстве, пока шло сохранение.
+      _failSave(
+        e is StateError
+            ? 'Задача удалена на другом устройстве. Обновите список и '
+                  'сохраните ещё раз.'
+            : 'Не удалось сохранить чек-ин. Повторите ещё раз.',
+      );
     }
+  }
+
+  void _failSave(String message) {
+    if (!mounted) return;
+    setState(() {
+      _error = message;
+      _saving = false;
+    });
   }
 
   @override

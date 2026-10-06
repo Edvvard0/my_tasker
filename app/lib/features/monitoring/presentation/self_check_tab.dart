@@ -4,6 +4,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:my_tasker/core/config/clock.dart';
 import 'package:my_tasker/core/format/ru_format.dart';
 import 'package:my_tasker/core/network/api_client.dart';
+import 'package:my_tasker/core/sync/sync_providers.dart'
+    show syncStatusProvider;
 import 'package:my_tasker/core/theme/app_spacing.dart';
 import 'package:my_tasker/core/theme/app_theme.dart';
 import 'package:my_tasker/core/widgets/app_card.dart';
@@ -89,6 +91,8 @@ class _SelfCheckTabState extends ConsumerState<SelfCheckTab> {
     final now = ref.watch(clockProvider)();
     final data = ref.watch(monitorDataProvider).value;
     final sending = ref.watch(telegramTestProvider);
+    // Без сети тест уйти не может: как «Проверить сейчас» на дашборде.
+    final online = ref.watch(syncStatusProvider.select((st) => st.online));
     final c = context.colors;
     final t = context.text;
     final polled = parseMoment(s.lastPollAt);
@@ -223,7 +227,9 @@ class _SelfCheckTabState extends ConsumerState<SelfCheckTab> {
               const SizedBox(height: AppSpacing.s3),
               ElevatedButton.icon(
                 key: const Key('telegram-test'),
-                onPressed: s.telegramConfigured && !sending ? _test : null,
+                onPressed: s.telegramConfigured && !sending && online
+                    ? _test
+                    : null,
                 icon: sending
                     ? const SizedBox(
                         width: 16,
@@ -233,6 +239,15 @@ class _SelfCheckTabState extends ConsumerState<SelfCheckTab> {
                     : const Icon(LucideIcons.send, size: 16),
                 label: const Text('Отправить тестовое сообщение'),
               ),
+              if (s.telegramConfigured && !online)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.s2),
+                  child: Text(
+                    'Нет связи с сервером: тест недоступен.',
+                    key: const Key('self-telegram-offline'),
+                    style: t.caption.copyWith(color: c.textTertiary),
+                  ),
+                ),
               if (!s.telegramConfigured)
                 Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.s2),

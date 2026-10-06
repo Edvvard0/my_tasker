@@ -28,8 +28,45 @@ class PulseDashboard extends ConsumerStatefulWidget {
   ConsumerState<PulseDashboard> createState() => _PulseDashboardState();
 }
 
-class _PulseDashboardState extends ConsumerState<PulseDashboard> {
+class _PulseDashboardState extends ConsumerState<PulseDashboard>
+    with WidgetsBindingObserver {
   String? _notice;
+  PulseController get _pulse => ref.read(pulseProvider.notifier);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Экран в скрытой ветке оболочки (`Offstage`) не опрашивает сервер.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (TickerMode.valuesOf(context).enabled) {
+      _pulse.resume(pausedByHiddenBranch);
+    } else {
+      _pulse.pause(pausedByHiddenBranch);
+    }
+  }
+
+  /// Свёрнутое или скрытое в трей приложение не опрашивает сервер; возврат
+  /// сразу обновляет снимок.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _pulse.pause(pausedByLifecycle);
+    } else if (state == AppLifecycleState.resumed) {
+      _pulse.resume(pausedByLifecycle);
+    }
+  }
 
   Future<void> _refresh() async {
     final result = await ref.read(pulseProvider.notifier).refreshNow();
