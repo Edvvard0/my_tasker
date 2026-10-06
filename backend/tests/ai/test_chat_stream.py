@@ -1,12 +1,13 @@
 """Text streaming, persistence as synced rows, and the pre-flight errors."""
 
+import asyncio
 import json
 import uuid
 
 from tasker.ai import agents
 from tasker.ids import uuid7
 from tasker.sync.user_settings import settings_id
-from tests.ai.fake_upstream import FakeUpstream, text_reply
+from tests.ai.fake_upstream import FakeUpstream, sleep, text_reply
 from tests.ai.support import KEY, AiEnv, Sse, chat_body, make_ai_env, make_conversation, run_chat
 
 
@@ -364,3 +365,38 @@ async def test_builtin_profiles_take_their_tools_from_code_not_from_storage(
         "get_receivables",
         "get_work_hours",
     ]
+
+
+async def test_two_simultaneous_requests_with_one_id_start_one_answer(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    slow = text_reply(["один"])
+    slow.steps.insert(0, sleep(0.4))
+    fake.queue(slow, text_reply(["два"]))
+    body = chat_body(conversation)
+
+    first, second = await asyncio.gather(run_chat(phone, body), run_chat(phone, body))
+
+    assert sorted([first.status, second.status]) == [200, 409]
+    refused = first if first.status == 409 else second
+    error = json.loads(refused.text)["error"]
+    assert error["code"] == "message_exists" and error["details"] == {"status": "running"}
+    await aienv.settle()
+    assert len(fake.chat_requests) == 1  # one provider call, one saved message, one charge
+    assert await aienv.env.scalar("SELECT count(*) FROM ai_messages") == 1
+    assert await aienv.env.scalar("SELECT count(*) FROM ai_spend") == 1
+    assert aienv.ai.reserved == {}
+
+
+async def test_a_refused_request_gives_its_id_back(aienv: AiEnv, fake: FakeUpstream) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    body = chat_body(conversation, model="nobody/nothing")
+    assert (await run_chat(phone, body)).status == 404
+    assert aienv.ai.reserved == {}
+    body["model"] = "openai/gpt-4o"  # the same id may be used again
+    assert (await run_chat(phone, body)).last[0] == "done"
+    await aienv.settle()
+    assert aienv.ai.reserved == {} and aienv.ai.runs == {}

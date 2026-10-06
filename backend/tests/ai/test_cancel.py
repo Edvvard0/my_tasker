@@ -155,3 +155,52 @@ async def test_the_same_message_id_cannot_run_twice(aienv: AiEnv, fake: FakeUpst
     await phone.post(f"/ai/chat/{body['assistant_message_id']}/cancel")
     await asyncio.wait_for(stream, timeout=10)
     await aienv.settle()
+
+
+async def test_cancelling_twice_still_saves_the_answer_once(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    """The client closing the stream after an explicit cancel is a second cancel: no effect."""
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    fake.queue(endless())
+    body = chat_body(conversation)
+    stream = asyncio.create_task(run_chat(phone, body))
+    while not fake.chat_requests:
+        await asyncio.sleep(0.02)
+    await asyncio.sleep(0.3)
+    run = aienv.ai.runs[uuid.UUID(body["assistant_message_id"])]
+
+    assert run.cancel() is True
+    for _ in range(300):  # more cancels while the first one is being settled and saved
+        run.cancel()
+        await asyncio.sleep(0)
+    await asyncio.wait_for(stream, timeout=10)
+
+    rows = await saved_rows(aienv)
+    assert [(r["id"], r["status"]) for r in rows] == [(body["assistant_message_id"], "cancelled")]
+    assert await aienv.env.scalar("SELECT count(*) FROM ai_spend") == 1
+    assert aienv.ai.runs == {} and aienv.ai.reserved == {}
+
+
+async def test_a_raw_cancel_of_the_task_while_it_is_saving_loses_nothing(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    fake.queue(endless())
+    body = chat_body(conversation)
+    stream = asyncio.create_task(run_chat(phone, body))
+    while not fake.chat_requests:
+        await asyncio.sleep(0.02)
+    await asyncio.sleep(0.3)
+    task = aienv.ai.runs[uuid.UUID(body["assistant_message_id"])].task
+    assert task is not None
+
+    for _ in range(300):  # not through ``ChatRun.cancel``: any cancellation of the task
+        task.cancel()
+        await asyncio.sleep(0)
+    await asyncio.wait_for(stream, timeout=10)
+
+    assert [r["status"] for r in await saved_rows(aienv)] == ["cancelled"]
+    assert await aienv.env.scalar("SELECT count(*) FROM ai_spend") == 1

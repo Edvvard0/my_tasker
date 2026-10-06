@@ -28,6 +28,11 @@ class Prices:
     input: Decimal | None = None
     output: Decimal | None = None
 
+    @property
+    def known(self) -> bool:
+        """Both prices are known: only then is the cost of a call computable."""
+        return self.input is not None and self.output is not None
+
 
 def to_decimal(value: object) -> Decimal | None:
     """A finite, non-negative ``Decimal`` from a JSON number or numeric string, else ``None``."""
@@ -92,11 +97,15 @@ def _round(amount_rub: Decimal, rounding: str) -> int:
 
 
 def reported_cost_kopecks(usage: Mapping[str, Any]) -> int | None:
-    """The cost the provider itself put into ``usage`` (rubles), in kopecks (half up)."""
+    """The cost the provider itself put into ``usage`` (rubles), in kopecks, rounded up.
+
+    Up, not half up: calls cheaper than half a kopeck are common and must not be free (the ledger
+    stores whole kopecks).
+    """
     for key in _USAGE_COST_KEYS:
         value = to_decimal(usage.get(key))
         if value is not None:
-            return _round(value, ROUND_HALF_UP)
+            return _round(value, ROUND_CEILING)
     return None
 
 
@@ -108,6 +117,11 @@ def computed_cost_kopecks(prompt_tokens: int, completion_tokens: int, prices: Pr
     if prices.output is not None:
         total += Decimal(completion_tokens) * prices.output / MILLION
     return _round(total, ROUND_CEILING)
+
+
+def call_reserve_kopecks(prompt_chars: int, max_completion_tokens: int, prices: Prices) -> int:
+    """The most one call can cost: the prompt (estimated) and a full-length completion."""
+    return computed_cost_kopecks(estimate_tokens(prompt_chars), max_completion_tokens, prices)
 
 
 def display_price_kopecks_per_mtok(price: Decimal | None) -> int | None:

@@ -29,6 +29,10 @@ class AiRuntime:
         self.upstream = upstream or UpstreamClient(settings)
         self.catalog = ModelCatalog(self.upstream, settings.polza_models_ttl_seconds, now=clock.now)
         self.runs: dict[uuid.UUID, ChatRun] = {}
+        # Answers in progress, by assistant message id, from the first line of the pre-flight
+        # checks to the end of the run: the claim on the id and the money held back for the
+        # answer (kopecks), so that parallel requests cannot all pass the limit together.
+        self.reserved: dict[uuid.UUID, int] = {}
         self._background: set[asyncio.Task[Any]] = set()
 
     def spawn(self, coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
@@ -37,6 +41,23 @@ class AiRuntime:
         self._background.add(task)
         task.add_done_callback(self._background.discard)
         return task
+
+    def claim(self, message_id: uuid.UUID) -> bool:
+        """Take the id for a new answer; ``False`` if an answer with it is in progress."""
+        if message_id in self.reserved:
+            return False
+        self.reserved[message_id] = 0
+        return True
+
+    def reserve(self, message_id: uuid.UUID, kopecks: int) -> None:
+        if message_id in self.reserved:
+            self.reserved[message_id] = kopecks
+
+    def release(self, message_id: uuid.UUID) -> None:
+        self.reserved.pop(message_id, None)
+
+    def reserved_by_others(self, message_id: uuid.UUID) -> int:
+        return sum(kopecks for key, kopecks in self.reserved.items() if key != message_id)
 
     async def shielded[T](self, make: Callable[[], Awaitable[T]]) -> T:
         """Run ``make()`` to completion even if the caller is cancelled meanwhile."""

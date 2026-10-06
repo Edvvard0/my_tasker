@@ -165,13 +165,33 @@ def enum_column(
     )
 
 
+def json_size_bytes(value: Any) -> int:
+    """UTF-8 size of the compact JSON text of ``value`` (non-ASCII characters written as they are).
+
+    The one measure of a JSON column that is set with ``utf8=True``: the validator and the code that
+    shapes a value to fit the column (the AI answer, stage 3) must use this very function.
+    """
+    encoded = json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+    return len(encoded.encode("utf-8"))
+
+
 def json_column(
-    name: str, *, max_bytes: int = 16384, nullable: bool = False, required: bool = True
+    name: str,
+    *,
+    max_bytes: int = 16384,
+    nullable: bool = False,
+    required: bool = True,
+    utf8: bool = False,
 ) -> ColumnSpec:
+    """A JSONB column of bounded size.
+
+    ``utf8=False`` (the default, every table before stage 3) measures the ASCII-escaped text, where
+    one Cyrillic letter costs 6 bytes; ``utf8=True`` measures :func:`json_size_bytes`.
+    """
     return ColumnSpec(
         name,
         JSONB(none_as_null=False),
-        _JsonAdapter(max_bytes),
+        _JsonAdapter(max_bytes, utf8=utf8),
         nullable=nullable,
         required=required,
     )
@@ -180,16 +200,20 @@ def json_column(
 class _JsonAdapter:
     """Duck-typed adapter: any JSON value whose serialised size is bounded."""
 
-    def __init__(self, max_bytes: int) -> None:
+    def __init__(self, max_bytes: int, *, utf8: bool = False) -> None:
         self._max_bytes = max_bytes
+        self._utf8 = utf8
 
     def validate_python(self, value: Any) -> Any:
         try:
             require_storable_json(value)
-            encoded = json.dumps(value, allow_nan=False, separators=(",", ":"))
+            if self._utf8:
+                size = json_size_bytes(value)
+            else:
+                size = len(json.dumps(value, allow_nan=False, separators=(",", ":")).encode())
         except (TypeError, RecursionError) as exc:
             raise ValueError("not a JSON value") from exc
-        if len(encoded.encode()) > self._max_bytes:
+        if size > self._max_bytes:
             raise ValueError(f"value is larger than {self._max_bytes} bytes")
         return value
 

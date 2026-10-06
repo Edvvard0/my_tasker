@@ -44,6 +44,7 @@ PART_TYPES = ("text", "tool_call", "tool_result", "proposal")
 MAX_PROMPT_LENGTH = 20_000
 MAX_PARTS = 400
 MAX_PARTS_BYTES = 1_048_576
+PROPOSAL_ARGUMENTS_BYTES = 16_384  # UTF-8 bytes of the compact JSON (``json_size_bytes``)
 MAX_TOOLS = 32
 MAX_PRESET_SOURCES = 32
 ID_SEED_PATTERN = r"^[a-z][a-z_]{0,31}$"
@@ -110,7 +111,7 @@ ai_agent_profiles: SyncTableSpec = define_sync_table(
         text_column("system_prompt", min_length=1, max_length=MAX_PROMPT_LENGTH),
         int_column("prompt_version", ge=1, le=1_000_000),
         text_column("default_model", max_length=200, nullable=True, required=False),
-        json_column("enabled_tools", max_bytes=4096),
+        json_column("enabled_tools", max_bytes=4096, utf8=True),
         uuid_column("default_context_preset_id", nullable=True, required=False),
         int_column("position", ge=0, le=1000),
     ),
@@ -161,7 +162,7 @@ ai_context_presets: SyncTableSpec = define_sync_table(
     "ai_context_presets",
     (
         text_column("name", min_length=1, max_length=100),
-        json_column("sources", max_bytes=16384),
+        json_column("sources", max_bytes=16384, utf8=True),
         bool_column("sensitive"),
     ),
     validators=(_preset_valid,),
@@ -233,7 +234,7 @@ ai_messages: SyncTableSpec = define_sync_table(
         reference_column("conversation_id", "ai_conversations", immutable=True),
         _immutable(enum_column("role", MESSAGE_ROLES)),
         text_column("text", max_length=400_000),
-        json_column("parts", max_bytes=MAX_PARTS_BYTES),
+        json_column("parts", max_bytes=MAX_PARTS_BYTES, utf8=True),
         enum_column("status", MESSAGE_STATUSES),
         text_column("model", max_length=200, nullable=True, required=False),
         uuid_column("agent_id", nullable=True, required=False),
@@ -273,8 +274,10 @@ ai_tool_proposals: SyncTableSpec = define_sync_table(
             "entity_type", min_length=1, max_length=64, pattern=NAME_PATTERN, immutable=True
         ),
         uuid_column("entity_id", immutable=True),
-        _immutable(json_column("original_arguments", max_bytes=16384)),
-        json_column("arguments", max_bytes=16384),
+        _immutable(
+            json_column("original_arguments", max_bytes=PROPOSAL_ARGUMENTS_BYTES, utf8=True)
+        ),
+        json_column("arguments", max_bytes=PROPOSAL_ARGUMENTS_BYTES, utf8=True),
         enum_column("status", PROPOSAL_STATUSES),
         text_column("reject_reason", max_length=1000, nullable=True, required=False),
         datetime_column("decided_at", nullable=True, required=False),

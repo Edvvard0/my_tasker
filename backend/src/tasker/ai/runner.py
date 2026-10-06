@@ -15,24 +15,27 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import structlog
-from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 
 from tasker.ai import pricing, spend
 from tasker.ai.catalog import ModelInfo
 from tasker.ai.chat import ChatInput
 from tasker.ai.runtime import AiRuntime
-from tasker.ai.serverwrite import ServerWriteError, WriteOp, write_rows
-from tasker.ai.tables import ai_messages, ai_tool_proposals
+from tasker.ai.serverwrite import WriteOp, write_rows
+from tasker.ai.tables import PROPOSAL_ARGUMENTS_BYTES, ai_messages, ai_tool_proposals
 from tasker.ai.tools import TOOLS, ToolArgumentError, ToolContext, ToolSpec, clip_result
 from tasker.ai.upstream import UpstreamError
 from tasker.ids import uuid7
 from tasker.runtime import Runtime
+from tasker.sync.registry import json_size_bytes
+from tasker.textcheck import require_storable_json
 
 log = structlog.get_logger("ai.runner")
 MAX_TEXT = 390_000
-MAX_PARTS_JSON = 900_000
+MAX_PARTS_JSON = 900_000  # UTF-8 bytes (``json_size_bytes``), below the column limit
 PREVIEW_CHARS = 200
+OMITTED = "[omitted: too large]"
+BIG_ARGUMENTS_BYTES = 500
 
 
 class LoopFailure(Exception):  # noqa: N818 - control flow, carries an event code
@@ -87,6 +90,43 @@ class _State:
     finish_reason: str | None = None
 
 
+def storable(value: Any) -> Any:
+    """``value`` without what PostgreSQL cannot store: NUL characters and lone surrogates."""
+    if isinstance(value, str):
+        return value.replace("\x00", "").encode("utf-8", "replace").decode("utf-8")
+    if isinstance(value, list):
+        return [storable(item) for item in value]
+    if isinstance(value, dict):
+        return {storable(key): storable(item) for key, item in value.items()}
+    return value
+
+
+def fit_parts(parts: list[dict[str, Any]], limit: int = MAX_PARTS_JSON) -> list[dict[str, Any]]:
+    """``parts`` shrunk until their size by the column's own measure (``json_size_bytes``) fits.
+
+    Order of sacrifice: tool results, then bulky tool-call arguments, then the longest texts. The
+    answer is always saved, whatever the language (Cyrillic costs 2 bytes a letter, not 1).
+    """
+    if json_size_bytes(parts) <= limit:
+        return parts
+    fitted = [dict(part) for part in parts]
+    for part in fitted:
+        if part["type"] == "tool_result":
+            part["content"] = OMITTED
+        elif part["type"] == "tool_call":
+            if json_size_bytes(part.get("arguments")) > BIG_ARGUMENTS_BYTES:
+                part["arguments"] = {"omitted": "too large"}
+            if isinstance(part.get("raw_arguments"), str):
+                part["raw_arguments"] = part["raw_arguments"][:200]
+    while json_size_bytes(fitted) > limit:
+        texts = [part for part in fitted if part["type"] == "text" and part["text"]]
+        if not texts:  # pragma: no cover - 400 parts of bounded size cannot reach the limit
+            break
+        longest = max(texts, key=lambda part: len(part["text"]))
+        longest["text"] = longest["text"][: len(longest["text"]) // 2]
+    return fitted
+
+
 def _int_field(usage: dict[str, Any], *names: str) -> int | None:
     for name in names:
         value = pricing.to_decimal(usage.get(name))
@@ -105,6 +145,7 @@ class ChatRun:
         self.task: asyncio.Task[None] | None = None
         self._state = _State()
         self._call: _Call | None = None
+        self._cancelling = False
         self._started = time.perf_counter()
         self._created_at = rt.clock.now()
         info: ModelInfo | None = chat.model
@@ -115,14 +156,18 @@ class ChatRun:
     # ------------------------------------------------------------------ lifecycle
 
     def start(self) -> asyncio.Task[None]:
-        self.ai.runs[self.message_id] = self
-        self.task = self.ai.spawn(self.run())
+        if self.task is None:
+            self.ai.runs[self.message_id] = self
+            self.task = self.ai.spawn(self.run())
         return self.task
 
     def cancel(self) -> bool:
+        """Ask the running answer to stop; asking again changes nothing (still ``True``)."""
         if self.task is None or self.task.done():
             return False
-        self.task.cancel()
+        if not self._cancelling:
+            self._cancelling = True
+            self.task.cancel()
         return True
 
     def _emit(self, event: str, /, **data: Any) -> None:
@@ -151,18 +196,26 @@ class ChatRun:
             log.error("chat_run_failed", error_type=type(exc).__name__, exc_info=True)
             status, code, message, retryable = "error", "internal_error", "Internal error", True
         try:
-            await self._finish(status, code, message, retryable)
+            # Its own task: a further cancellation (the client closing the connection after an
+            # explicit cancel, shutdown) must not skip the spend and the saved message.
+            finishing = self.ai.spawn(self._finish(status, code, message, retryable))
+            while not finishing.done():
+                try:
+                    await asyncio.shield(finishing)
+                except asyncio.CancelledError:
+                    continue
         finally:
             self.ai.runs.pop(self.message_id, None)
+            self.ai.release(self.message_id)
             self.queue.put_nowait(None)
 
     async def _finish(self, status: str, code: str | None, message: str, retryable: bool) -> None:
         saved = False
         try:
-            await self.ai.shielded(self._settle_call)
-            await self.ai.shielded(lambda: self._persist(status, code))
+            await self._settle_call()
+            await self._persist(status, code)
             saved = True
-        except (ServerWriteError, SQLAlchemyError, OSError) as exc:
+        except Exception as exc:  # whatever went wrong, the client gets an event
             log.error("chat_persist_failed", error_type=type(exc).__name__)
             status, code, message, retryable = (
                 "error",
@@ -170,8 +223,6 @@ class ChatRun:
                 "The answer could not be saved",
                 True,
             )
-        except asyncio.CancelledError:
-            return  # cancelled again (shutdown): the shielded writes continue on their own
         state = self._state
         if status == "error":
             self._emit(
@@ -260,14 +311,21 @@ class ChatRun:
     async def _check_limit(self) -> None:
         zone = ZoneInfo(self.rt.settings.ai_billing_timezone)
         async with self.rt.sessionmaker() as session, session.begin():
-            exceeded = await spend.check_limit(session, self.rt.clock.now(), zone)
+            exceeded = await spend.check_limit(
+                session,
+                self.rt.clock.now(),
+                zone,
+                reserved=self.ai.reserved_by_others(self.message_id),
+            )
         if exceeded is not None:
             raise LoopFailure("limit_exceeded", "The monthly AI spending limit is reached")
 
     # ------------------------------------------------------------------ one model call
 
     async def _call_model(self, payload: dict[str, Any]) -> _Iteration:
-        call = self._call = _Call(prompt_chars=len(json.dumps(payload["messages"])))
+        call = self._call = _Call(
+            prompt_chars=len(json.dumps(payload["messages"], ensure_ascii=False))
+        )
         accumulated: dict[int, dict[str, str]] = {}
         finish: str | None = None
         current = self._state.current = []
@@ -347,7 +405,7 @@ class ChatRun:
         if completion is None:
             completion = pricing.estimate_tokens(call.completion_chars)
         cost = pricing.reported_cost_kopecks(usage)
-        if cost is None:
+        if not cost:  # not reported, or a reported 0 for a call that did use tokens
             cost = pricing.computed_cost_kopecks(prompt, completion, self._prices)
         state = self._state
         state.prompt_tokens += prompt
@@ -384,6 +442,7 @@ class ChatRun:
         part: dict[str, Any] = {"type": "tool_call", "id": call_id, "name": name}
         try:
             arguments = json.loads(call["arguments"] or "{}")
+            require_storable_json(arguments)  # NUL or a lone surrogate cannot be stored
         except ValueError:
             part["arguments"] = None
             part["raw_arguments"] = call["arguments"][:2000]
@@ -402,7 +461,7 @@ class ChatRun:
         except ToolArgumentError as error:
             return self._tool_error(call_id, name, f"invalid arguments: {error}"), False
         if spec.kind == "write":
-            return self._propose(call_id, spec, parsed), True
+            return self._propose(call_id, spec, parsed.model_dump(mode="json", exclude_none=True))
         assert spec.handler is not None  # noqa: S101 - checked at registration
         try:
             content = clip_result(
@@ -437,13 +496,16 @@ class ChatRun:
             preview=content[:PREVIEW_CHARS],
         )
 
-    def _propose(self, call_id: str, spec: ToolSpec, parsed: BaseModel) -> str:
+    def _propose(self, call_id: str, spec: ToolSpec, arguments: dict[str, Any]) -> tuple[str, bool]:
+        """``(result for the model, proposal created?)``; arguments too large to store: an error."""
+        if json_size_bytes(arguments) > PROPOSAL_ARGUMENTS_BYTES:
+            return self._tool_error(call_id, spec.name, "invalid arguments: too large"), False
         proposal = _Proposal(
             proposal_id=uuid7(),
             entity_id=uuid7(),
             tool_call_id=call_id,
             spec=spec,
-            arguments=parsed.model_dump(mode="json", exclude_none=True),
+            arguments=arguments,
         )
         self._state.proposals.append(proposal)
         self._state.parts.append(
@@ -463,13 +525,12 @@ class ChatRun:
             entity_id=str(proposal.entity_id),
             arguments=proposal.arguments,
         )
-        return json.dumps(
-            {
-                "status": "proposed",
-                "proposal_id": str(proposal.proposal_id),
-                "note": "The user must approve it; nothing is created yet.",
-            }
-        )
+        result = {
+            "status": "proposed",
+            "proposal_id": str(proposal.proposal_id),
+            "note": "The user must approve it; nothing is created yet.",
+        }
+        return json.dumps(result), True
 
     # ------------------------------------------------------------------ persistence
 
@@ -484,18 +545,11 @@ class ChatRun:
     async def _persist(self, status: str, error_code: str | None) -> None:
         self._flush_partial()
         state = self._state
-        parts = state.parts
-        text = "\n\n".join(state.texts)[:MAX_TEXT]
-        if len(json.dumps(parts, ensure_ascii=False)) > MAX_PARTS_JSON:
-            parts = [
-                {**part, "content": "[omitted: too large]"}
-                if part["type"] == "tool_result"
-                else part
-                for part in parts
-            ]
-        for part in parts:
+        text = storable("\n\n".join(state.texts)[:MAX_TEXT])
+        for part in state.parts:
             if part["type"] == "text" and len(part["text"]) > MAX_TEXT:
                 part["text"] = part["text"][:MAX_TEXT]
+        parts = fit_parts(storable(state.parts))
         chat = self.chat
         fields: dict[str, Any] = {
             "conversation_id": str(chat.request.conversation_id),

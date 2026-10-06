@@ -33,6 +33,7 @@ class LimitExceeded:
     limit_kopecks: int
     spent_kopecks: int
     month: str
+    reserved_kopecks: int = 0  # held back for the answers in progress (not yet in the ledger)
 
 
 def month_of(moment: datetime, zone: ZoneInfo) -> Month:
@@ -79,14 +80,24 @@ async def spent_in(session: AsyncSession, month: Month) -> int:
     return int(total)
 
 
-async def check_limit(session: AsyncSession, now: datetime, zone: ZoneInfo) -> LimitExceeded | None:
-    """``None`` while the user may still spend; otherwise what blocks them."""
+async def limit_status(
+    session: AsyncSession, now: datetime, zone: ZoneInfo, reserved: int = 0
+) -> tuple[int | None, LimitExceeded | None]:
+    """``(limit, blocked)``: ``reserved`` is what the answers in progress may still cost."""
     limit = await read_limit(session)
     if limit is None:
-        return None
+        return None, None
     month = month_of(now, zone)
     spent = await spent_in(session, month)
-    return LimitExceeded(limit, spent, month.label) if spent >= limit else None
+    blocked = spent + reserved >= limit
+    return limit, LimitExceeded(limit, spent, month.label, reserved) if blocked else None
+
+
+async def check_limit(
+    session: AsyncSession, now: datetime, zone: ZoneInfo, reserved: int = 0
+) -> LimitExceeded | None:
+    """``None`` while the user may still spend; otherwise what blocks them."""
+    return (await limit_status(session, now, zone, reserved))[1]
 
 
 async def record(

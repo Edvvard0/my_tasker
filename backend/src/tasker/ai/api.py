@@ -117,7 +117,7 @@ def sse_frame(event: str, data: dict[str, Any]) -> bytes:
 
 async def event_stream(run: ChatRun, ping_seconds: float) -> AsyncIterator[bytes]:
     """Relay the run's events. Whatever ends this generator (client gone, error) cancels the run."""
-    task = run.start()
+    run.start()  # a no-op when ``completions`` already started it
     try:
         while True:
             try:
@@ -129,8 +129,7 @@ async def event_stream(run: ChatRun, ping_seconds: float) -> AsyncIterator[bytes
                 return
             yield sse_frame(item.name, item.data)
     finally:
-        if not task.done():
-            task.cancel()
+        run.cancel()  # a no-op for a finished run; a second cancel never reaches the task
 
 
 @router.post("/ai/chat/completions")
@@ -139,6 +138,7 @@ async def completions(
 ) -> StreamingResponse:
     chat = await prepare(rt, ai, body)
     run = ChatRun(rt, ai, chat)
+    run.start()  # registers the run at once: the id stays claimed until it ends
     return StreamingResponse(
         event_stream(run, rt.settings.ai_sse_ping_seconds),
         media_type="text/event-stream",

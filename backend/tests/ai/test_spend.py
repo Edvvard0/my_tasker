@@ -1,5 +1,6 @@
 """Cost in kopecks, the spend ledger, the monthly limit and the usage summary."""
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -9,7 +10,15 @@ import pytest
 
 from tasker.ai import pricing, spend
 from tasker.sync.user_settings import settings_id
-from tests.ai.fake_upstream import FakeUpstream, text_reply, tool_reply
+from tests.ai.fake_upstream import (
+    MODELS,
+    FakeUpstream,
+    Reply,
+    error_reply,
+    sleep,
+    text_reply,
+    tool_reply,
+)
 from tests.ai.support import AiEnv, chat_body, make_conversation, run_chat
 from tests.api_support import DeviceClient
 
@@ -32,8 +41,10 @@ async def set_setting(device: DeviceClient, key: str, value: object) -> None:
 @pytest.mark.parametrize(
     ("usage", "expected"),
     [
-        ({"cost": 0.1234}, 12),
-        ({"cost": "0.125"}, 13),  # half up
+        ({"cost": 0.1234}, 13),  # rounded up: the ledger never undercharges
+        ({"cost": "0.125"}, 13),
+        ({"cost": "0.001"}, 1),  # a call cheaper than half a kopeck is not free
+        ({"cost": "0.12"}, 12),
         ({"cost_rub": 1}, 100),
         ({"total_cost": "2.5"}, 250),
         ({"cost": 0}, 0),
@@ -124,8 +135,8 @@ async def test_a_reported_cost_wins_over_the_catalog(aienv: AiEnv, fake: FakeUps
     conversation = await make_conversation(phone)
     fake.queue(text_reply(["a"], prompt=1_000_000, completion=1_000_000, cost=0.1234))
     sse = await run_chat(phone, chat_body(conversation))
-    assert sse.of("done")[0]["cost_kopecks"] == 12
-    assert await aienv.env.scalar("SELECT cost_kopecks FROM ai_spend") == 12
+    assert sse.of("done")[0]["cost_kopecks"] == 13
+    assert await aienv.env.scalar("SELECT cost_kopecks FROM ai_spend") == 13
 
 
 async def test_cost_from_catalog_prices_for_each_model(aienv: AiEnv, fake: FakeUpstream) -> None:
@@ -300,3 +311,145 @@ async def test_spend_survives_deleting_the_chat(aienv: AiEnv, fake: FakeUpstream
     await aienv.settle()
     await phone.push_ok([phone.op("ai_conversations", conversation, "delete", base=1)])
     assert (await phone.get("/ai/usage")).json()["spent_kopecks"] == 40
+
+
+# ------------------------------------------------------------------ review fixes: accounting
+
+
+async def test_cheap_calls_are_not_free(aienv: AiEnv, fake: FakeUpstream) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    fake.queue(*[text_reply(["a"], cost=0.001) for _ in range(3)])
+    for _ in range(3):
+        assert (await run_chat(phone, chat_body(conversation))).of("done")[0]["cost_kopecks"] == 1
+    assert await aienv.env.scalar("SELECT sum(cost_kopecks) FROM ai_spend") == 3
+
+
+async def test_a_reported_zero_cost_falls_back_to_the_catalog(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    fake.queue(text_reply(["a"], prompt=1_000_000, completion=0, cost=0))
+    sse = await run_chat(phone, chat_body(conversation))
+    assert sse.of("done")[0]["cost_kopecks"] == 25_000  # 250 rubles per 1M prompt tokens
+    fake.queue(text_reply(["a"], prompt=0, completion=0, cost=0))
+    assert (await run_chat(phone, chat_body(conversation))).of("done")[0]["cost_kopecks"] == 0
+
+
+async def test_a_cut_stream_in_cyrillic_is_estimated_by_characters(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    reply = text_reply(["я" * 300])
+    reply.steps = [s for s in reply.steps if not (s.kind == "data" and s.payload["choices"] == [])]
+    fake.queue(reply)
+    content = "ж" * 32
+
+    sse = await run_chat(
+        phone, chat_body(conversation, messages=[{"role": "user", "content": content}])
+    )
+
+    sent = fake.chat_requests[0].json["messages"]
+    characters = len(json.dumps(sent, ensure_ascii=False))
+    assert sse.of("done")[0]["prompt_tokens"] == pricing.estimate_tokens(characters)
+    assert sse.of("done")[0]["prompt_tokens"] < len(json.dumps(sent)) // 3  # not by escapes
+
+
+# ------------------------------------------------------------------ review fixes: the limit
+
+
+async def test_a_model_without_a_price_cannot_run_under_a_limit(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    priced = MODELS["data"][0]
+    free = {"id": "vendor/free", "name": "No price", "context_length": 8000}
+    fake.models_reply = Reply(body=json.dumps({"data": [priced, free]}))
+    body = chat_body(conversation, model="vendor/free")
+    fake.queue(text_reply(["без лимита можно"]))
+    assert (await run_chat(phone, body)).last[0] == "done"  # no limit: nothing to protect
+
+    await set_setting(phone, "ai.monthly_limit_kopecks", 100_000)
+    fake.requests.clear()
+    blocked = await run_chat(phone, chat_body(conversation, model="vendor/free"))
+
+    assert blocked.status == 422
+    error = json.loads(blocked.text)["error"]
+    assert error["code"] == "price_unknown"
+    assert error["details"] == {"model": "vendor/free", "catalog_available": True}
+    assert fake.chat_requests == []
+    assert aienv.ai.reserved == {}
+    fake.queue(text_reply(["a"]))  # a model with a price works under the same limit
+    assert (await run_chat(phone, chat_body(conversation))).last[0] == "done"
+
+
+async def test_an_unavailable_catalog_cannot_run_under_a_limit(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    fake.models_reply = error_reply(500)
+    fake.queue(text_reply(["a"]))
+    assert (await run_chat(phone, chat_body(conversation))).last[0] == "done"  # no limit
+    await set_setting(phone, "ai.monthly_limit_kopecks", 100_000)
+
+    blocked = await run_chat(phone, chat_body(conversation))
+
+    assert blocked.status == 422
+    error = json.loads(blocked.text)["error"]
+    assert error["code"] == "price_unknown" and error["details"]["catalog_available"] is False
+
+
+async def test_a_running_answer_holds_back_money_from_the_next_request(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    await set_setting(phone, "ai.monthly_limit_kopecks", 100)
+    # max_tokens 1000 at 1000 rubles per 1M tokens: one call may cost up to 100 kopecks
+    first_body = chat_body(conversation, params={"max_tokens": 1000})
+    slow = text_reply(["медленно"])
+    slow.steps.insert(0, sleep(0.8))
+    fake.queue(slow)
+    first = asyncio.create_task(run_chat(phone, first_body))
+    while not fake.chat_requests:
+        await asyncio.sleep(0.02)
+
+    blocked = await run_chat(phone, chat_body(conversation, params={"max_tokens": 1000}))
+
+    assert blocked.status == 402
+    details = json.loads(blocked.text)["error"]["details"]
+    assert details["limit_kopecks"] == 100 and details["spent_kopecks"] == 0
+    assert details["reserved_kopecks"] >= 100
+    assert (await first).last[0] == "done"
+    await aienv.settle()
+    assert aienv.ai.reserved == {}  # the hold ended with the answer
+    fake.queue(text_reply(["теперь можно"], cost=0.01))
+    assert (await run_chat(phone, chat_body(conversation, params={"max_tokens": 1000}))).last[
+        0
+    ] == "done"
+
+
+async def test_parallel_requests_cannot_all_pass_the_limit(
+    aienv: AiEnv, fake: FakeUpstream
+) -> None:
+    phone = await aienv.device()
+    conversation = await make_conversation(phone)
+    await set_setting(phone, "ai.monthly_limit_kopecks", 100)
+    replies = []
+    for _ in range(3):
+        reply = text_reply(["a"], cost=0.01)
+        reply.steps.insert(0, sleep(0.5))
+        replies.append(reply)
+    fake.queue(*replies)
+
+    results = await asyncio.gather(
+        *[run_chat(phone, chat_body(conversation, params={"max_tokens": 1000})) for _ in range(3)]
+    )
+
+    assert sorted(r.status for r in results) == [200, 402, 402]
+    await aienv.settle()
+    assert await aienv.env.scalar("SELECT count(*) FROM ai_spend") == 1

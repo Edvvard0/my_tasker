@@ -159,11 +159,14 @@ GET_TASKS = TOOLS.register(
 # ------------------------------------------------------------------ create_task
 
 
+NOTES_MAX_CHARS = 2000  # the proposal (UTF-8 JSON, <= 16 KiB) is then guaranteed to fit its column
+
+
 class CreateTaskArgs(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     title: str = Field(min_length=1, max_length=500)
-    notes: str | None = Field(default=None, max_length=20000)
+    notes: str | None = Field(default=None, max_length=NOTES_MAX_CHARS)
     priority: StrictInt | None = Field(default=None, ge=1, le=5)
     due_date: Day | None = None
     due_time: str | None = None
@@ -202,7 +205,7 @@ CREATE_TASK = TOOLS.register(
             "type": "object",
             "properties": {
                 "title": {"type": "string", "maxLength": 500},
-                "notes": {"type": "string"},
+                "notes": {"type": "string", "maxLength": NOTES_MAX_CHARS},
                 "priority": {"type": "integer", "minimum": 1, "maximum": 5},
                 "due_date": {"type": "string", "description": "YYYY-MM-DD"},
                 "due_time": {"type": "string", "description": "HH:MM local time; needs due_date"},
