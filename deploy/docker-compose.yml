@@ -117,7 +117,7 @@ services:
     # TODO(build phase): run as non-root (`user:`). The image is built FROM scratch and the
     # gatus_data volume is created owned by root, so a non-root user cannot write the sqlite file
     # without a one-off chown of the volume.
-    image: ${GATUS_IMAGE:-twinproduct/gatus:v5.12.1}
+    image: ${GATUS_IMAGE:-ghcr.io/twin/gatus:v5.12.1}
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
     volumes:

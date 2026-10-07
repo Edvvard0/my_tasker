@@ -11,7 +11,7 @@
 
 ## 1. Движок проверок: Gatus (решение, которое можно поменять)
 
-`04` требует «готовый движок (Uptime Kuma или Gatus) рядом с бэкендом», `01` (§6.6.1) — «свой движок»; **действует `04`**. Выбран **Gatus** (`twinproduct/gatus`, Apache-2.0):
+`04` требует «готовый движок (Uptime Kuma или Gatus) рядом с бэкендом», `01` (§6.6.1) — «свой движок»; **действует `04`**. Выбран **Gatus** (`ghcr.io/twin/gatus`, Apache-2.0):
 
 | Критерий | Gatus | Uptime Kuma |
 |---|---|---|
@@ -205,7 +205,7 @@
 
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (секреты; пусто = не настроено), `TELEGRAM_API_BASE` (по умолчанию `https://api.telegram.org`; локальный Bot API), `MONITOR_ENGINE_URL` (`http://gatus:8080`; пусто — движка нет), `MONITOR_CONFIG_PATH` (`/monitor/config.yaml`), `MONITOR_DNS_RESOLVER` (`1.1.1.1:53`), `MONITOR_TIMEZONE` (`Europe/Moscow`), `MONITOR_QUIET_START`/`MONITOR_QUIET_END` (`HH:MM`, оба или ни одного). Пустое значение в compose = «по умолчанию»/«не настроено». Значения секретов добавляются в список редактора логов (`Settings.secret_values`) и в API, и в worker.
 
-`deploy/docker-compose.yml`: сервис `gatus` (`twinproduct/gatus`, образ `GATUS_IMAGE`, по умолчанию закреплённый тег `v5.12.1` — сверить с актуальным выпуском в фазе сборки; запуск не от root требует `chown` тома `gatus_data`, образ собран из `scratch`) в **собственной сети `monitor`**, `read_only`, `cap_drop: ALL`, без портов; тома `monitor_config` (конфигурация: worker пишет, gatus читает) и `gatus_data` (sqlite движка); `api` и `worker` присоединены и к `internal`, и к `monitor`. История «Пульса» (результаты, итоги, инциденты) — в PostgreSQL и в его ежедневный дамп; том `gatus_data` в бэкап не входит.
+`deploy/docker-compose.yml`: сервис `gatus` (`ghcr.io/twin/gatus`, образ `GATUS_IMAGE`, по умолчанию закреплённый тег `v5.12.1`: реестр и тег проверены по списку тегов, в фазе сборки сверить совместимость формата ответа `/api/v1/endpoints/statuses` и ключей конфигурации (`ignore-redirect`, `[CERTIFICATE_EXPIRATION]`, `[DNS_RCODE]`, `pat()`) с живым Gatus и рассмотреть обновление до свежей версии (последний тег v5.37.0) после проверки совместимости; запуск не от root требует `chown` тома `gatus_data`, образ собран из `scratch`) в **собственной сети `monitor`**, `read_only`, `cap_drop: ALL`, без портов; тома `monitor_config` (конфигурация: worker пишет, gatus читает) и `gatus_data` (sqlite движка); `api` и `worker` присоединены и к `internal`, и к `monitor`. История «Пульса» (результаты, итоги, инциденты) — в PostgreSQL и в его ежедневный дамп; том `gatus_data` в бэкап не входит.
 
 ## 11. Тестовые векторы (`shared-test-vectors/monitoring/`)
 
