@@ -1,0 +1,178 @@
+name: Build
+
+# Сборка клиента для ручной проверки: готовые файлы лежат в артефактах запуска
+# (Actions -> Build -> запуск -> Artifacts). Ничего не публикуется и не
+# деплоится. Секретов этот workflow не требует; подпись Android — по желанию.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "claude/intelligent-planck-1i9ery"
+    # Фильтр путей действует только на ветки; на пуш тега `v*` не влияет.
+    paths:
+      - "app/**"
+      - ".github/workflows/build.yml"
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Та же версия Flutter, что в app.yml.
+  FLUTTER_VERSION: "3.47.5"
+
+# --- Как добавить MSIX позже (сейчас НЕ собирается) --------------------------
+# 1. Создать самоподписанный сертификат (PowerShell, на своём ПК):
+#      New-SelfSignedCertificate -Type Custom -Subject "CN=MyTasker" `
+#        -KeyUsage DigitalSignature -FriendlyName "My Tasker" `
+#        -CertStoreLocation "Cert:\CurrentUser\My" `
+#        -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3","2.5.29.19={text}")
+#    Экспортировать в .pfx (Export-PfxCertificate) и в .cer (для установки на ПК
+#    в «Доверенные лица»/«Trusted People»).
+# 2. Положить .pfx (base64) и пароль в GitHub Secrets (например
+#    WINDOWS_PFX_BASE64, WINDOWS_PFX_PASSWORD) — не в репозиторий.
+# 3. Добавить dev-зависимость `msix` в app/pubspec.yaml и секцию `msix_config`
+#    (display_name, publisher = Subject сертификата, identity_name, msix_version).
+# 4. В job `windows` после `flutter build windows --release` декодировать .pfx
+#    во временный файл и выполнить
+#      dart run msix:create --certificate-path <pfx> --certificate-password <пароль>
+#    затем загрузить app/build/windows/x64/runner/Release/*.msix артефактом.
+# -----------------------------------------------------------------------------
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: app
+    env:
+      # Секреты подписи (необязательны). В `if:` напрямую их читать нельзя,
+      # поэтому сверяем через env.
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Java 17 уже установлен на образе ubuntu-latest (JAVA_HOME_17_X64),
+      # отдельное действие setup-java не нужно — стороннего кода меньше.
+      - name: Use Java 17
+        shell: bash
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version && java -version
+
+      - name: Dependencies
+        run: flutter pub get
+
+      # Код Drift (`*.g.dart`) не хранится в репозитории.
+      - name: Codegen (build_runner)
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      # Keystore и key.properties создаются только на раннере, вне git
+      # (android/key.properties и *.jks в .gitignore).
+      - name: Android signing
+        id: signing
+        shell: bash
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] \
+             && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            keystore="$RUNNER_TEMP/release.jks"
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore"
+            {
+              echo "storeFile=$keystore"
+              echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+              echo "keyAlias=$ANDROID_KEY_ALIAS"
+              echo "keyPassword=$ANDROID_KEY_PASSWORD"
+            } > android/key.properties
+            echo "mode=release" >> "$GITHUB_OUTPUT"
+            echo "APK подписан release-ключом из GitHub Secrets."
+          else
+            echo "mode=debug" >> "$GITHUB_OUTPUT"
+            echo "::warning::Секреты подписи не заданы: APK подписан debug-ключом, только для проверки."
+            echo "debug-signed, только для проверки (секреты ANDROID_KEYSTORE_* не заданы)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Prepare APK
+        shell: bash
+        run: |
+          mkdir -p ../dist
+          if [ "${{ steps.signing.outputs.mode }}" = "release" ]; then
+            cp build/app/outputs/flutter-apk/app-release.apk ../dist/app-release.apk
+          else
+            cp build/app/outputs/flutter-apk/app-release.apk ../dist/app-release-debug-signed.apk
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: my-tasker-android-apk
+          path: dist/*.apk
+          retention-days: 14
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Dependencies
+        run: flutter pub get
+
+      # Код Drift (`*.g.dart`) не хранится в репозитории.
+      - name: Codegen (build_runner)
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build Windows
+        run: flutter build windows --release
+
+      # Запуск без установки: распаковать zip и открыть my_tasker.exe.
+      - name: Zip Release folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ../dist | Out-Null
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ../dist/my-tasker-windows.zip -Force
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: my-tasker-windows
+          path: dist/my-tasker-windows.zip
+          retention-days: 14
+          if-no-files-found: error
